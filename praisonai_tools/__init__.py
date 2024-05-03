@@ -1,1 +1,1 @@
-from .tools.base_tool import BaseTool, Tool, tool
+from crewai_tools import BaseTool, Tool, tool

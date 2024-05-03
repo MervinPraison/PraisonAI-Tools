@@ -754,6 +754,31 @@ files = [
 ]
 
 [[package]]
+name = "crewai-tools"
+version = "0.1.7"
+description = "Set of tools for the crewAI framework"
+optional = false
+python-versions = "<=3.13,>=3.10"
+files = [
+    {file = "crewai_tools-0.1.7-py3-none-any.whl", hash = "sha256:135a51b659fa0b58f1cf7bb6b1cdb47cccd557d98d889ed03b477b62c80ce38a"},
+    {file = "crewai_tools-0.1.7.tar.gz", hash = "sha256:8393900f6b0d37274218aaeb9ac6bcaaa6d719426a788ea45d21f993a49f283b"},
+]
+
+[package.dependencies]
+beautifulsoup4 = ">=4.12.3,<5.0.0"
+chromadb = ">=0.4.22,<0.5.0"
+embedchain = {version = ">=0.1.85,<0.2.0", extras = ["github", "youtube"]}
+lancedb = ">=0.5.4,<0.6.0"
+langchain = ">=0.1.4,<0.2.0"
+openai = ">=1.12.0,<2.0.0"
+pydantic = ">=2.6.1,<3.0.0"
+pyright = ">=1.1.350,<2.0.0"
+pytest = ">=8.0.0,<9.0.0"
+pytube = ">=15.0.0,<16.0.0"
+requests = ">=2.31.0,<3.0.0"
+selenium = ">=4.18.1,<5.0.0"
+
+[[package]]
 name = "cryptography"
 version = "42.0.5"
 description = "cryptography is a package which provides cryptographic recipes and primitives to Python developers."
@@ -4060,7 +4085,7 @@ aiomysql = ["aiomysql (>=0.2.0)", "greenlet (!=0.4.17)"]
 aioodbc = ["aioodbc", "greenlet (!=0.4.17)"]
 aiosqlite = ["aiosqlite", "greenlet (!=0.4.17)", "typing_extensions (!=3.10.0.1)"]
 asyncio = ["greenlet (!=0.4.17)"]
-asyncmy = ["asyncmy (>=0.0.1,!=0.2.4,!=0.2.6)", "greenlet (!=0.4.17)"]
+asyncmy = ["asyncmy (>=0.2.3,!=0.2.4,!=0.2.6)", "greenlet (!=0.4.17)"]
 mariadb-connector = ["mariadb (>=1.0.1,!=1.1.2,!=1.1.5)"]
 mssql = ["pyodbc"]
 mssql-pymssql = ["pymssql"]
@@ -5001,4 +5026,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<=3.13"
-content-hash = "abd659c94fbbfd671268b35e80fd2246479afd3fa422274f1fa57ba8eaed6f06"
+content-hash = "547dcd9998d1facaaf0784fbf39fe61032458bca673204b05dbefa9e466239fb"
