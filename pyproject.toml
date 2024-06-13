@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "praisonai-tools"
-version = "0.0.4"
+version = "0.0.5"
 description = "Set of tools for the PraisonAI framework"
 authors = ["Mervin Praison"]
 readme = "README.md"
@@ -19,11 +19,11 @@ pytube = "^15.0.0"
 requests = "^2.31.0"
 beautifulsoup4 = "^4.12.3"
 selenium = "^4.18.1"
-crewai-tools = "^0.1.1"
+crewai-tools = "^0.2.0"
 
 [tool.poetry.urls]
-Homepage = "https://praisonai.com"
-Repository = "https://github.com/mervinpraisoin/PraisonAI-tools"
+Homepage = "https://docs.praison.ai"
+Repository = "https://github.com/mervinpraison/PraisonAI-tools"
 
 [build-system]
 requires = ["poetry-core"]
