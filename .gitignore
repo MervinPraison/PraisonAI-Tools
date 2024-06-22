@@ -7,7 +7,7 @@ dist/
 test.py
 chroma.sqlite3
 .vscode
-crewai
+praisonai
 .cache
 __pycache__
 chroma.sqlite3
