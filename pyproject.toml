@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "PraisonAI-Tools"
-version = "0.0.7"
+version = "0.0.8"
 description = "Set of tools for the PraisonAI framework"
 authors = ["Mervin Praison"]
 readme = "README.md"
@@ -20,6 +20,7 @@ requests = "^2.31.0"
 beautifulsoup4 = "^4.12.3"
 selenium = "^4.18.1"
 docx2txt = "^0.8"
+crewai-tools = "^0.3.0"
 
 [tool.poetry.urls]
 Homepage = "https://docs.praison.ai"
