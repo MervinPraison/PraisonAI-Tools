@@ -18,7 +18,7 @@ class FixedGithubSearchToolSchema(BaseModel):
 class GithubSearchToolSchema(FixedGithubSearchToolSchema):
     """Input for GithubSearchTool."""
 
-    github_repo: str = Field(..., description="Mandatory github you want to search")
+    github_repo: str = Field(..., description="Mandatory github owner/repo you want to search")
     content_types: List[str] = Field(
         ...,
         description="Mandatory content types you want to be included search, options: [code, repo, pr, issue]",
