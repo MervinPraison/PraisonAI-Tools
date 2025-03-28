@@ -20,7 +20,7 @@ from praisonai_tools import GithubSearchTool
 # Initialize the tool for semantic searches within a specific GitHub repository
 tool = GithubSearchTool(
     gh_token='...',
-	github_repo='https://github.com/example/repo',
+	github_repo='example/repo',
 	content_types=['code', 'issue'] # Options: code, repo, pr, issue
 )
 
@@ -35,7 +35,7 @@ tool = GithubSearchTool(
 
 ## Arguments
 - `gh_token` : The GitHub token used to authenticate the search. This is a mandatory field and allows the tool to access the GitHub API for conducting searches.
-- `github_repo` : The URL of the GitHub repository where the search will be conducted. This is a mandatory field and specifies the target repository for your search.
+- `github_repo` : The GitHub repository in the format of owner/repo where the search will be conducted. This is a mandatory field and specifies the target repository for your search.
 - `content_types` : Specifies the types of content to include in your search. You must provide a list of content types from the following options: `code` for searching within the code, `repo` for searching within the repository's general information, `pr` for searching within pull requests, and `issue` for searching within issues. This field is mandatory and allows tailoring the search to specific content types within the GitHub repository.
 
 ## Custom model and embeddings
