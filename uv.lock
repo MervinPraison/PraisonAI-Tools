@@ -1,5 +1,4 @@
 version = 1
-revision = 1
 requires-python = ">=3.10, <=3.13.2"
 resolution-markers = [
     "python_full_version >= '3.13'",
@@ -2674,7 +2673,7 @@ wheels = [
 
 [[package]]
 name = "praisonai-tools"
-version = "0.0.15"
+version = "0.0.16"
 source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
@@ -2701,14 +2700,14 @@ requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.13.4,<5.0.0" },
     { name = "chromadb", specifier = ">=0.5.10,<0.6.0" },
     { name = "click", specifier = ">=8.2.0,<9.0.0" },
-    { name = "crewai", specifier = ">=0.118.0,<=0.119.0" },
-    { name = "crewai-tools", specifier = ">=0.44.0" },
+    { name = "crewai", specifier = ">=0.118.0" },
+    { name = "crewai-tools", specifier = ">=0.44.0,<0.50.0" },
     { name = "docker", specifier = ">=7.1.0,<8.0.0" },
     { name = "docx2txt", specifier = ">=0.8,<0.9" },
     { name = "embedchain", specifier = ">=0.1.128" },
-    { name = "lancedb", specifier = ">=0.22.0,<0.23.0" },
+    { name = "lancedb", specifier = ">=0.22.0,<0.25.0" },
     { name = "langchain", specifier = ">=0.3.25,<0.4.0" },
-    { name = "openai", specifier = ">=1.75.0,<1.76.0" },
+    { name = "openai", specifier = ">=1.75.0,<2.0.0" },
     { name = "pydantic", specifier = ">=2.6.1,<=2.10.1" },
     { name = "pyright", specifier = ">=1.1.400,<2.0.0" },
     { name = "pytest", specifier = ">=8.3.5,<9.0.0" },
