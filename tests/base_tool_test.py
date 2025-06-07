@@ -65,4 +65,4 @@ def test_default_cache_function_is_true():
 
 	my_tool = MyCustomTool()
 	# Assert all the right attributes were defined
-	assert my_tool.cache_function() == True
+	assert my_tool.cache_function("args", "result") == True

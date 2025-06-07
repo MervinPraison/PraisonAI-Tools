@@ -1,5 +1,5 @@
-from crewai_tools import BaseTool, Tool, tool
-from crewai_tools import (
+from praisonai_tools.tools.base_tool import BaseTool, Tool, tool
+from praisonai_tools.tools import (
 	BrowserbaseLoadTool,
 	CodeDocsSearchTool,
 	CSVSearchTool,
