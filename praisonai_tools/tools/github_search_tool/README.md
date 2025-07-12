@@ -20,7 +20,7 @@ from praisonai_tools import GithubSearchTool
 # Initialize the tool for semantic searches within a specific GitHub repository
 tool = GithubSearchTool(
     gh_token='...',
-	github_repo='https://github.com/example/repo',
+	github_repo='example/repo',
 	content_types=['code', 'issue'] # Options: code, repo, pr, issue
 )
 
