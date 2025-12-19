@@ -248,6 +248,93 @@ pytest tests/test_youdotcom.py -v -m youdotcom
 pytest tests/test_base.py -v
 ```
 
+## Integration with PraisonAI Agents
+
+PraisonAI Tools is designed to work seamlessly with [PraisonAI Agents](https://github.com/MervinPraison/PraisonAI). You can pass tools directly to agents in multiple ways:
+
+### Method 1: Plain Functions (Simplest)
+
+```python
+from praisonaiagents import Agent
+from praisonai_tools import tavily_search
+
+# Just pass the function directly - schema is auto-generated!
+agent = Agent(
+    instructions="You are a research assistant",
+    tools=[tavily_search]
+)
+
+result = agent.start("Search for latest AI news")
+```
+
+### Method 2: Tool Class Methods
+
+```python
+from praisonaiagents import Agent
+from praisonai_tools import TavilyTools, ExaTools
+
+tavily = TavilyTools()
+exa = ExaTools()
+
+agent = Agent(
+    instructions="You are a research assistant",
+    tools=[tavily.search, tavily.extract, exa.answer]
+)
+```
+
+### Method 3: Custom Tools with @tool Decorator
+
+```python
+from praisonaiagents import Agent
+from praisonai_tools import tool, tavily_search
+
+@tool
+def research(topic: str, depth: str = "basic") -> dict:
+    """Research a topic using web search.
+    
+    Args:
+        topic: The topic to research
+        depth: Search depth - 'basic' or 'advanced'
+    """
+    return tavily_search(topic, search_depth=depth, include_answer=True)
+
+agent = Agent(
+    instructions="You are a research assistant",
+    tools=[research]
+)
+```
+
+### Method 4: BaseTool Subclass
+
+```python
+from praisonaiagents import Agent
+from praisonai_tools import BaseTool, exa_search
+
+class ResearchTool(BaseTool):
+    name = "research"
+    description = "Research any topic using AI-powered search"
+    
+    def run(self, query: str, num_results: int = 5) -> dict:
+        return exa_search(query, num_results=num_results)
+
+agent = Agent(
+    instructions="You are a research assistant",
+    tools=[ResearchTool()]
+)
+```
+
+### How It Works
+
+When you pass tools to a PraisonAI Agent, it automatically:
+
+1. **Inspects the function signature** to determine parameters
+2. **Extracts type hints** to generate JSON schema
+3. **Parses docstrings** for descriptions
+4. **Generates OpenAI-compatible function definitions**
+5. **Executes tools** by matching function names
+
+This means you can write simple Python functions with type hints and docstrings, and they become fully functional agent tools!
+
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
