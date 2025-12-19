@@ -1,163 +1,31 @@
 # PraisonAI Tools
 
-A comprehensive toolkit for AI agents providing web search, content extraction, and research capabilities.
+Base classes for creating **custom tools** for [PraisonAI Agents](https://github.com/MervinPraison/PraisonAI).
 
 [![PyPI version](https://badge.fury.io/py/praisonai-tools.svg)](https://badge.fury.io/py/praisonai-tools)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
-## Features
+## What is this package?
 
-- **Tavily Tools** - AI-powered web search, content extraction, crawling, and site mapping
-- **Exa Tools** - Neural search, content retrieval, similar page discovery, and AI answers
-- **You.com Tools** - Unified web/news search, content extraction, and image search
-- **Extensible Base Classes** - Create custom tools with `BaseTool` and `@tool` decorator
+This package provides **base classes** (`BaseTool`, `@tool` decorator) for creating custom tools that work with PraisonAI Agents.
+
+> **Note:** Common tools like Tavily, Exa, You.com, DuckDuckGo, Wikipedia, arXiv, and many more are **already built into `praisonaiagents`**. You don't need this package for those - just use them directly from `praisonaiagents.tools`.
+
+**Use this package when you want to:**
+- Create your own custom tools
+- Build reusable tool plugins
+- Distribute tools as pip packages
 
 ## Installation
 
 ```bash
-# Basic installation (no external dependencies)
 pip install praisonai-tools
-
-# With specific tool support
-pip install praisonai-tools[tavily]    # Tavily tools
-pip install praisonai-tools[exa]       # Exa tools
-pip install praisonai-tools[youdotcom] # You.com tools
-
-# All tools
-pip install praisonai-tools[all]
-
-# Development
-pip install praisonai-tools[dev]
 ```
 
 ## Quick Start
 
-### Tavily Search
-
-```python
-from praisonai_tools import tavily_search
-
-# Basic search
-results = tavily_search("What is machine learning?")
-print(results)
-
-# Advanced search with answer
-results = tavily_search(
-    "Latest AI developments 2024",
-    include_answer=True,
-    topic="news",
-    max_results=5
-)
-print(results["answer"])
-```
-
-### Exa Search
-
-```python
-from praisonai_tools import exa_search, exa_answer
-
-# Search
-results = exa_search("AI startups", num_results=5)
-
-# Get AI-generated answer with citations
-answer = exa_answer("What are the benefits of Python?")
-print(answer["answer"])
-print(answer["citations"])
-```
-
-### You.com Search
-
-```python
-from praisonai_tools import ydc_search, ydc_contents
-
-# Unified search (web + news)
-results = ydc_search("technology trends", count=10)
-
-# Extract content from URLs
-content = ydc_contents("https://example.com", format="markdown")
-```
-
-## Environment Variables
-
-Set the following environment variables for the tools you want to use:
-
-```bash
-# Tavily (https://tavily.com)
-export TAVILY_API_KEY=your_tavily_api_key
-
-# Exa (https://exa.ai)
-export EXA_API_KEY=your_exa_api_key
-
-# You.com (https://you.com/api)
-export YDC_API_KEY=your_ydc_api_key
-```
-
-## Tool Classes
-
-For more control, use the tool classes directly:
-
-### TavilyTools
-
-```python
-from praisonai_tools import TavilyTools
-
-tavily = TavilyTools()
-
-# Search
-results = tavily.search("Python programming", max_results=5)
-
-# Extract content from URLs
-content = tavily.extract(["https://python.org", "https://docs.python.org"])
-
-# Crawl a website
-crawl_results = tavily.crawl("https://docs.python.org", max_depth=2, limit=20)
-
-# Get site map
-sitemap = tavily.map("https://docs.python.org", limit=50)
-```
-
-### ExaTools
-
-```python
-from praisonai_tools import ExaTools
-
-exa = ExaTools()
-
-# Basic search
-results = exa.search("machine learning papers", category="research paper")
-
-# Search with content
-results = exa.search_and_contents("AI news", text=True, highlights=True)
-
-# Find similar pages
-similar = exa.find_similar("https://openai.com", num_results=5)
-
-# Get answer with citations
-answer = exa.answer("What is GPT-4?", text=True)
-```
-
-### YouTools
-
-```python
-from praisonai_tools import YouTools
-
-you = YouTools()
-
-# Unified search
-results = you.search("latest tech news", count=10, freshness="week")
-
-# Extract content
-content = you.get_contents("https://example.com", format="markdown")
-
-# Live news
-news = you.live_news("AI developments", count=5)
-
-# Image search
-images = you.images("python programming")
-```
-
-## Creating Custom Tools
+### Creating Custom Tools
 
 ### Using BaseTool
 
@@ -199,141 +67,118 @@ print(result)  # 8
 schema = calculate.get_schema()
 ```
 
-## API Reference
+## Using with PraisonAI Agents
 
-### Tavily Functions
+### Use Built-in Tools (Recommended)
 
-| Function | Description |
-|----------|-------------|
-| `tavily_search(query, ...)` | Search the web with AI-powered ranking |
-| `tavily_extract(urls, ...)` | Extract content from URLs |
-| `tavily_crawl(url, ...)` | Crawl a website |
-| `tavily_map(url, ...)` | Get a sitemap |
-
-### Exa Functions
-
-| Function | Description |
-|----------|-------------|
-| `exa_search(query, ...)` | Neural web search |
-| `exa_search_contents(query, ...)` | Search with full content |
-| `exa_find_similar(url, ...)` | Find similar pages |
-| `exa_answer(query, ...)` | Get AI answer with citations |
-
-### You.com Functions
-
-| Function | Description |
-|----------|-------------|
-| `ydc_search(query, ...)` | Unified web and news search |
-| `ydc_contents(urls, ...)` | Extract content from URLs |
-| `ydc_news(query, ...)` | Live news search |
-| `ydc_images(query)` | Image search |
-
-## Testing
-
-Run tests with real API keys:
-
-```bash
-# Install dev dependencies
-pip install praisonai-tools[dev]
-
-# Run all tests
-pytest tests/ -v
-
-# Run specific tool tests
-pytest tests/test_tavily.py -v -m tavily
-pytest tests/test_exa.py -v -m exa
-pytest tests/test_youdotcom.py -v -m youdotcom
-
-# Run base tests (no API keys needed)
-pytest tests/test_base.py -v
-```
-
-## Integration with PraisonAI Agents
-
-PraisonAI Tools is designed to work seamlessly with [PraisonAI Agents](https://github.com/MervinPraison/PraisonAI). You can pass tools directly to agents in multiple ways:
-
-### Method 1: Plain Functions (Simplest)
+For common tools, use them directly from `praisonaiagents`:
 
 ```python
 from praisonaiagents import Agent
-from praisonai_tools import tavily_search
+from praisonaiagents.tools import tavily_search, exa_search, wiki_search
 
-# Just pass the function directly - schema is auto-generated!
 agent = Agent(
     instructions="You are a research assistant",
-    tools=[tavily_search]
+    tools=[tavily_search, exa_search, wiki_search]
 )
 
 result = agent.start("Search for latest AI news")
 ```
 
-### Method 2: Tool Class Methods
+### Use Custom Tools from praisonai-tools
+
+For your own custom tools:
 
 ```python
 from praisonaiagents import Agent
-from praisonai_tools import TavilyTools, ExaTools
-
-tavily = TavilyTools()
-exa = ExaTools()
-
-agent = Agent(
-    instructions="You are a research assistant",
-    tools=[tavily.search, tavily.extract, exa.answer]
-)
-```
-
-### Method 3: Custom Tools with @tool Decorator
-
-```python
-from praisonaiagents import Agent
-from praisonai_tools import tool, tavily_search
+from praisonai_tools import tool
 
 @tool
-def research(topic: str, depth: str = "basic") -> dict:
-    """Research a topic using web search.
+def my_custom_tool(query: str, limit: int = 10) -> dict:
+    """My custom tool that does something special.
     
     Args:
-        topic: The topic to research
-        depth: Search depth - 'basic' or 'advanced'
+        query: The search query
+        limit: Maximum results to return
     """
-    return tavily_search(topic, search_depth=depth, include_answer=True)
+    # Your custom implementation
+    return {"results": [...]}
 
 agent = Agent(
-    instructions="You are a research assistant",
-    tools=[research]
+    instructions="You are an assistant",
+    tools=[my_custom_tool]
 )
 ```
 
-### Method 4: BaseTool Subclass
+## Built-in Tools in praisonaiagents
+
+These tools are **already available** in `praisonaiagents.tools`:
+
+| Category | Tools |
+|----------|-------|
+| **Search** | `tavily_search`, `exa_search`, `ydc_search`, `internet_search` (DuckDuckGo), `searxng_search` |
+| **Wikipedia** | `wiki_search`, `wiki_summary`, `wiki_page` |
+| **arXiv** | `search_arxiv`, `get_arxiv_paper`, `get_papers_by_author` |
+| **News** | `get_article`, `get_news_sources`, `get_trending_topics` |
+| **Web Crawling** | `crawl4ai`, `scrape_page`, `extract_links` |
+| **Files** | `read_file`, `write_file`, `list_files` |
+| **Data** | `read_csv`, `read_json`, `read_excel`, `read_yaml` |
+| **Code** | `execute_code`, `analyze_code` |
+| **Shell** | `execute_command`, `list_processes` |
+| **Calculator** | `evaluate`, `solve_equation`, `convert_units` |
+| **Finance** | `get_stock_price`, `get_stock_info` |
+
+See [praisonaiagents documentation](https://docs.praison.ai) for full list.
+
+## Testing
+
+```bash
+pip install praisonai-tools[dev]
+pytest tests/test_base.py -v
+```
+
+## API Reference
+
+### BaseTool
+
+Abstract base class for creating tools:
 
 ```python
-from praisonaiagents import Agent
-from praisonai_tools import BaseTool, exa_search
+from praisonai_tools import BaseTool
 
-class ResearchTool(BaseTool):
-    name = "research"
-    description = "Research any topic using AI-powered search"
+class MyTool(BaseTool):
+    name = "my_tool"           # Required
+    description = "..."        # Required  
+    version = "1.0.0"          # Optional
     
-    def run(self, query: str, num_results: int = 5) -> dict:
-        return exa_search(query, num_results=num_results)
-
-agent = Agent(
-    instructions="You are a research assistant",
-    tools=[ResearchTool()]
-)
+    def run(self, **kwargs):   # Required
+        return result
 ```
 
-### How It Works
+### @tool Decorator
 
-When you pass tools to a PraisonAI Agent, it automatically:
+Convert functions to tools:
 
-1. **Inspects the function signature** to determine parameters
-2. **Extracts type hints** to generate JSON schema
-3. **Parses docstrings** for descriptions
-4. **Generates OpenAI-compatible function definitions**
-5. **Executes tools** by matching function names
+```python
+from praisonai_tools import tool
 
-This means you can write simple Python functions with type hints and docstrings, and they become fully functional agent tools!
+@tool
+def my_func(arg: str) -> str:
+    """Description here."""
+    return result
+
+@tool(name="custom_name", description="Custom description")
+def another_func(arg: str) -> str:
+    return result
+```
+
+### Helper Functions
+
+| Function | Description |
+|----------|-------------|
+| `is_tool(obj)` | Check if object is a tool |
+| `get_tool_schema(obj)` | Get OpenAI-compatible schema |
+| `validate_tool(obj)` | Validate tool configuration |
 
 ## License
 

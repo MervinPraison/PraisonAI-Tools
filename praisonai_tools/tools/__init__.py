@@ -1,64 +1,24 @@
 """Tools package for PraisonAI Tools.
 
-This module provides lazy loading of all available tools.
+This module provides base classes for creating custom tools.
+
+Note: Common tools (Tavily, Exa, You.com, DuckDuckGo, Wikipedia, etc.) are 
+already built into praisonaiagents. This package is for creating CUSTOM tools.
 """
 
-from praisonai_tools.tools.base import BaseTool, ToolResult, ToolValidationError
-from praisonai_tools.tools.decorator import tool, FunctionTool
-
-# Tavily Tools
-from praisonai_tools.tools.tavily_tools import (
-    TavilyTools,
-    tavily_search,
-    tavily_extract,
-    tavily_crawl,
-    tavily_map,
-)
-
-# Exa Tools
-from praisonai_tools.tools.exa_tools import (
-    ExaTools,
-    exa_search,
-    exa_search_contents,
-    exa_find_similar,
-    exa_answer,
-)
-
-# You.com Tools
-from praisonai_tools.tools.youdotcom_tools import (
-    YouTools,
-    ydc_search,
-    ydc_contents,
-    ydc_news,
-    ydc_images,
-)
+from praisonai_tools.tools.base import BaseTool, ToolResult, ToolValidationError, validate_tool
+from praisonai_tools.tools.decorator import tool, FunctionTool, is_tool, get_tool_schema
 
 __all__ = [
-    # Base
+    # Base classes
     "BaseTool",
     "ToolResult",
     "ToolValidationError",
+    "validate_tool",
+    
+    # Decorator
     "tool",
     "FunctionTool",
-    
-    # Tavily
-    "TavilyTools",
-    "tavily_search",
-    "tavily_extract",
-    "tavily_crawl",
-    "tavily_map",
-    
-    # Exa
-    "ExaTools",
-    "exa_search",
-    "exa_search_contents",
-    "exa_find_similar",
-    "exa_answer",
-    
-    # You.com
-    "YouTools",
-    "ydc_search",
-    "ydc_contents",
-    "ydc_news",
-    "ydc_images",
+    "is_tool",
+    "get_tool_schema",
 ]
