@@ -1,0 +1,50 @@
+venv
+.DS_Store
+.pytest_cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+.Python
+build/
+dist/
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Lock files
+poetry.lock
+uv.lock
+
+# Database
+*.db
+db/
+chroma.sqlite3
+
+# OS
+.DS_Store
+praisonai
+.cache
+__pycache__
+test/
+.env
+assets/*
+.idea
+.DS_Store
+.pytest_cache
+praisonAI.egg-info
+flagged
+test.yaml
+db
