@@ -533,6 +533,105 @@ agent = Agent(
 
 ---
 
+## 9. Ready-to-Use Tools from praisonai-tools
+
+This package also includes ready-to-use tools for common integrations:
+
+### Communication Tools
+
+```python
+from praisonai_tools import EmailTool, SlackTool, DiscordTool
+
+# Email (Gmail, Outlook, Yahoo)
+email = EmailTool(provider="gmail")
+email.send(to="user@example.com", subject="Hello", body="Message")
+emails = email.read(limit=10)
+
+# Slack
+slack = SlackTool()  # Uses SLACK_TOKEN env var
+slack.send_message(channel="#general", text="Hello from AI!")
+channels = slack.list_channels()
+
+# Discord (webhook or bot)
+discord = DiscordTool(webhook_url="https://discord.com/api/webhooks/...")
+discord.send_webhook(content="Hello!", embed=DiscordTool.create_embed(title="Alert"))
+```
+
+### Developer Tools
+
+```python
+from praisonai_tools import GitHubTool
+
+github = GitHubTool()  # Uses GITHUB_TOKEN env var
+repos = github.search_repos("machine learning python", limit=10)
+github.create_issue(repo="owner/repo", title="Bug", body="Description")
+prs = github.list_pull_requests(repo="owner/repo")
+```
+
+### AI/Media Tools
+
+```python
+from praisonai_tools import ImageTool, TTSTool, YouTubeTool
+
+# Image Generation (DALL-E)
+img = ImageTool(model="dall-e-3", quality="hd")
+result = img.generate("A sunset over mountains")
+
+# Text-to-Speech (OpenAI or ElevenLabs)
+tts = TTSTool(provider="openai", voice="nova")
+tts.speak("Hello world!", output_path="output.mp3")
+
+# YouTube
+yt = YouTubeTool()  # Uses YOUTUBE_API_KEY env var
+videos = yt.search("python tutorial", limit=5)
+transcript = yt.get_transcript("dQw4w9WgXcQ")
+```
+
+### Data Tools
+
+```python
+from praisonai_tools import WeatherTool
+
+weather = WeatherTool(units="metric")  # Uses OPENWEATHER_API_KEY env var
+current = weather.get_current("London")
+forecast = weather.get_forecast("New York", days=5)
+air = weather.get_air_quality("Tokyo")
+```
+
+### Environment Variables
+
+| Tool | Required Environment Variable |
+|------|------------------------------|
+| EmailTool | `EMAIL_USERNAME`, `EMAIL_PASSWORD` |
+| SlackTool | `SLACK_TOKEN` |
+| DiscordTool | `DISCORD_BOT_TOKEN` or `DISCORD_WEBHOOK_URL` |
+| GitHubTool | `GITHUB_TOKEN` |
+| ImageTool | `OPENAI_API_KEY` |
+| TTSTool | `OPENAI_API_KEY` or `ELEVENLABS_API_KEY` |
+| YouTubeTool | `YOUTUBE_API_KEY` |
+| WeatherTool | `OPENWEATHER_API_KEY` |
+
+### Using with PraisonAI Agents
+
+```python
+from praisonaiagents import Agent
+from praisonai_tools import EmailTool, SlackTool, GitHubTool, WeatherTool
+
+agent = Agent(
+    instructions="You are a helpful assistant with access to email, slack, github, and weather",
+    tools=[
+        EmailTool(provider="gmail"),
+        SlackTool(),
+        GitHubTool(),
+        WeatherTool(),
+    ]
+)
+
+agent.start("Check the weather in London and send a Slack message about it")
+```
+
+---
+
 ## Contributing
 
 We welcome contributions! To add a new tool:
@@ -548,7 +647,7 @@ We welcome contributions! To add a new tool:
 
 ```bash
 pip install praisonai-tools[dev]
-pytest tests/test_base.py -v
+pytest tests/ -v
 ```
 
 ---

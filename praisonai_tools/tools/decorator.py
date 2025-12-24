@@ -1,6 +1,7 @@
 """Tool decorator for converting functions into tools.
 
-This module provides the @tool decorator for easily creating tools from functions.
+This module re-exports the @tool decorator and related utilities from praisonaiagents.
+This ensures a single source of truth for the tool decorator infrastructure.
 
 Usage:
     from praisonai_tools import tool
@@ -16,175 +17,17 @@ Usage:
         return [...]
 """
 
-import inspect
-import functools
-import logging
-from typing import Any, Callable, Dict, Optional, Union, get_type_hints
+# Import from praisonaiagents - single source of truth
+from praisonaiagents.tools.decorator import (
+    tool,
+    FunctionTool,
+    is_tool,
+    get_tool_schema,
+)
 
-from praisonai_tools.tools.base import BaseTool
-
-
-class FunctionTool(BaseTool):
-    """A BaseTool wrapper for plain functions.
-    
-    Created automatically by the @tool decorator.
-    """
-    
-    def __init__(
-        self,
-        func: Callable,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        version: str = "1.0.0"
-    ):
-        self._func = func
-        self.name = name or func.__name__
-        self.description = description or func.__doc__ or f"Tool: {self.name}"
-        self.version = version
-        
-        # Generate schema from the original function
-        self.parameters = self._generate_schema_from_func(func)
-        
-        # Copy function metadata
-        functools.update_wrapper(self, func)
-    
-    def _generate_schema_from_func(self, func: Callable) -> Dict[str, Any]:
-        """Generate JSON Schema from the wrapped function's signature."""
-        schema = {
-            "type": "object",
-            "properties": {},
-            "required": []
-        }
-        
-        try:
-            sig = inspect.signature(func)
-            hints = get_type_hints(func) if hasattr(func, '__annotations__') else {}
-            
-            for param_name, param in sig.parameters.items():
-                if param_name in ('self', 'cls'):
-                    continue
-                
-                param_type = hints.get(param_name, Any)
-                json_type = BaseTool._python_type_to_json(param_type)
-                
-                schema["properties"][param_name] = {"type": json_type}
-                
-                if param.default is inspect.Parameter.empty:
-                    schema["required"].append(param_name)
-        except Exception as e:
-            logging.debug(f"Could not generate schema for {func.__name__}: {e}")
-        
-        return schema
-    
-    def run(self, **kwargs) -> Any:
-        """Execute the wrapped function."""
-        return self._func(**kwargs)
-    
-    def __call__(self, *args, **kwargs) -> Any:
-        """Allow calling with positional args like the original function."""
-        return self._func(*args, **kwargs)
-
-
-def tool(
-    func: Optional[Callable] = None,
-    *,
-    name: Optional[str] = None,
-    description: Optional[str] = None,
-    version: str = "1.0.0"
-) -> Union[FunctionTool, Callable[[Callable], FunctionTool]]:
-    """Decorator to convert a function into a tool.
-    
-    Can be used with or without arguments:
-    
-        @tool
-        def my_func(x: str) -> str:
-            '''Does something.'''
-            return x
-        
-        @tool(name="custom_name", description="Custom description")
-        def my_func(x: str) -> str:
-            return x
-    
-    Args:
-        func: The function to wrap (when used without parentheses)
-        name: Override the tool name (default: function name)
-        description: Override description (default: function docstring)
-        version: Tool version (default: "1.0.0")
-    
-    Returns:
-        FunctionTool instance that wraps the function
-    """
-    def decorator(fn: Callable) -> FunctionTool:
-        return FunctionTool(
-            func=fn,
-            name=name,
-            description=description,
-            version=version
-        )
-    
-    if func is not None:
-        return decorator(func)
-    else:
-        return decorator
-
-
-def is_tool(obj: Any) -> bool:
-    """Check if an object is a tool (BaseTool instance or decorated function)."""
-    if isinstance(obj, BaseTool):
-        return True
-    if isinstance(obj, FunctionTool):
-        return True
-    if hasattr(obj, 'run') and hasattr(obj, 'name'):
-        return True
-    return False
-
-
-def get_tool_schema(obj: Any) -> Optional[Dict[str, Any]]:
-    """Get OpenAI-compatible schema for any tool-like object."""
-    if isinstance(obj, BaseTool):
-        return obj.get_schema()
-    
-    if callable(obj):
-        return _schema_from_function(obj)
-    
-    return None
-
-
-def _schema_from_function(func: Callable) -> Dict[str, Any]:
-    """Generate OpenAI function schema from a plain function."""
-    name = getattr(func, '__name__', 'unknown')
-    description = func.__doc__ or f"Function: {name}"
-    
-    properties = {}
-    required = []
-    
-    try:
-        sig = inspect.signature(func)
-        hints = get_type_hints(func) if hasattr(func, '__annotations__') else {}
-        
-        for param_name, param in sig.parameters.items():
-            if param_name == 'self':
-                continue
-            
-            param_type = hints.get(param_name, Any)
-            json_type = BaseTool._python_type_to_json(param_type)
-            
-            properties[param_name] = {"type": json_type}
-            
-            if param.default is inspect.Parameter.empty:
-                required.append(param_name)
-    except Exception as e:
-        logging.debug(f"Could not generate schema for {name}: {e}")
-    
-    return {
-        "type": "function",
-        "function": {
-            "name": name,
-            "description": description.strip(),
-            "parameters": {
-                "type": "object",
-                "properties": properties,
-                "required": required
-            }
-        }
-    }
+__all__ = [
+    "tool",
+    "FunctionTool",
+    "is_tool",
+    "get_tool_schema",
+]

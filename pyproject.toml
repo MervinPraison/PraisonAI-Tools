@@ -1,9 +1,9 @@
 [project]
 name = "praisonai-tools"
-version = "0.1.1"
-description = "Base classes for creating custom tools for PraisonAI Agents"
+version = "0.1.5"
+description = "Extended tools for PraisonAI Agents"
 authors = [
-    {name = "Mervin Praison", email = "mervin@praison.ai"}
+    {name = "Mervin Praison"}
 ]
 readme = "README.md"
 license = {text = "MIT"}
@@ -20,7 +20,9 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
-dependencies = []
+dependencies = [
+    "praisonaiagents>=0.0.1",
+]
 
 [project.optional-dependencies]
 dev = [
