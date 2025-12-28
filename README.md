@@ -533,7 +533,35 @@ agent = Agent(
 
 ---
 
-## 9. Ready-to-Use Tools from praisonai-tools
+## 9. Video Editing Tools
+
+```bash
+python -m praisonai_tools.video probe input.mp4
+```
+
+```bash
+python -m praisonai_tools.video transcribe input.mp4 --output transcript.srt
+```
+
+```bash
+python -m praisonai_tools.video edit input.mp4 --output edited.mp4 --preset podcast
+```
+
+```bash
+python -m praisonai_tools.video edit input.mp4 --output edited.mp4 --preset podcast -v
+```
+
+```bash
+python -m praisonai_tools.video render input.mp4 --timeline plan.json --output output.mp4
+```
+
+| Feature | Code Docs | CLI Docs |
+|---------|-----------|----------|
+| Video Module | [docs/video-module.md](docs/video-module.md) | [docs/video-cli.md](docs/video-cli.md) |
+
+---
+
+## 10. Ready-to-Use Tools from praisonai-tools
 
 This package also includes ready-to-use tools for common integrations:
 
