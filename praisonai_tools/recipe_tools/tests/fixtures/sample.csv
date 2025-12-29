@@ -1,0 +1,11 @@
+id,name,email,age,city,score
+1,Alice,alice@example.com,28,New York,85.5
+2,Bob,bob@example.com,35,Los Angeles,92.0
+3,Charlie,charlie@example.com,42,Chicago,78.3
+4,Diana,diana@example.com,31,,88.7
+5,Eve,eve@example.com,29,Boston,95.2
+6,Frank,,45,Seattle,72.1
+7,Grace,grace@example.com,38,Denver,89.4
+8,Henry,henry@example.com,33,Miami,
+9,Ivy,ivy@example.com,27,Portland,91.8
+10,Jack,jack@example.com,40,Austin,84.6

@@ -36,7 +36,7 @@ Usage:
 from praisonai_tools.tools.base import BaseTool, ToolResult, ToolValidationError, validate_tool
 from praisonai_tools.tools.decorator import tool, FunctionTool, is_tool, get_tool_schema
 
-__version__ = "0.1.5"
+__version__ = "0.1.9"
 __author__ = "Mervin Praison"
 
 # Lazy imports for tool classes
