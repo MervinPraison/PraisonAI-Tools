@@ -33,10 +33,15 @@ Usage:
     agent = Agent(tools=[my_search, MyTool(), email, slack])
 """
 
+from importlib.metadata import version, PackageNotFoundError
+
 from praisonai_tools.tools.base import BaseTool, ToolResult, ToolValidationError, validate_tool
 from praisonai_tools.tools.decorator import tool, FunctionTool, is_tool, get_tool_schema
 
-__version__ = "0.2.1"
+try:
+    __version__ = version("praisonai-tools")
+except PackageNotFoundError:
+    __version__ = "0.0.0"
 __author__ = "Mervin Praison"
 
 # Lazy imports for tool classes
