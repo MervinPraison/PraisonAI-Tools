@@ -15,7 +15,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
-from .base import RecipeToolBase
+import sys
+import os
+_dir = os.path.dirname(os.path.abspath(__file__))
+if _dir not in sys.path:
+    sys.path.insert(0, _dir)
+
+try:
+    from .base import RecipeToolBase
+except ImportError:
+    from base import RecipeToolBase
 
 logger = logging.getLogger(__name__)
 
