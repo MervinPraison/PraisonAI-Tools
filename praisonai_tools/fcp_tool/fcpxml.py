@@ -72,19 +72,17 @@ class FCPXMLGenerator:
     def _add_format_resource(self, resources: ET.Element) -> None:
         """Add the format resource definition."""
         fmt = self.intent.project.format
-        audio = self.intent.project.audio
 
-        format_elem = ET.SubElement(
+        ET.SubElement(
             resources,
             "format",
             id="r1",
-            name=f"{fmt.width}x{fmt.height}p{fmt.fps:.2f}".rstrip("0").rstrip("."),
+            name=f"FFVideoFormat{fmt.height}p{int(fmt.fps)}",
             frameDuration=fmt.frame_duration_rational,
             width=str(fmt.width),
             height=str(fmt.height),
         )
-        format_elem.set("audioChannels", str(audio.channels))
-        format_elem.set("audioSampleRate", str(audio.rate))
+        # Note: audioChannels and audioSampleRate are NOT valid on format element per DTD
 
     def _add_asset_resources(self, resources: ET.Element) -> None:
         """Add asset resource definitions."""
@@ -95,8 +93,8 @@ class FCPXMLGenerator:
                 id=asset.id,
                 name=asset.name,
                 uid=asset.uid,
-                src=asset.get_src_url(),
             )
+            # Note: src is NOT valid on asset element per DTD - only on media-rep
 
             if asset.has_video:
                 asset_elem.set("hasVideo", "1")
@@ -109,7 +107,12 @@ class FCPXMLGenerator:
                 asset_elem.set("hasAudio", "1")
                 asset_elem.set("audioSources", "1")
                 asset_elem.set("audioChannels", str(asset.audio_channels))
-                asset_elem.set("audioRate", str(asset.audio_rate))
+                # audioRate must be one of: 32k, 44.1k, 48k, 88.2k, 96k, 176.4k, 192k
+                audio_rate_map = {
+                    32000: "32k", 44100: "44.1k", 48000: "48k",
+                    88200: "88.2k", 96000: "96k", 176400: "176.4k", 192000: "192k"
+                }
+                asset_elem.set("audioRate", audio_rate_map.get(asset.audio_rate, "48k"))
 
             if asset.duration_rational:
                 asset_elem.set("duration", asset.duration_rational)
@@ -140,13 +143,18 @@ class FCPXMLGenerator:
             tcFormat="NDF",
         )
         sequence.set("audioLayout", self.intent.project.audio.layout.value)
-        sequence.set("audioRate", f"{self.intent.project.audio.rate}/1s")
+        # audioRate must be one of: 32k, 44.1k, 48k, 88.2k, 96k, 176.4k, 192k
+        audio_rate_map = {
+            32000: "32k", 44100: "44.1k", 48000: "48k",
+            88200: "88.2k", 96000: "96k", 176400: "176.4k", 192000: "192k"
+        }
+        sequence.set("audioRate", audio_rate_map.get(self.intent.project.audio.rate, "48k"))
 
         spine = ET.SubElement(sequence, "spine")
 
         self._add_timeline_clips(spine)
-
-        self._add_markers(sequence)
+        # Note: markers are added inside asset-clips, not on sequence
+        # Sequence content must be (note?, spine, metadata?) per DTD
 
     def _add_timeline_clips(self, spine: ET.Element) -> None:
         """Add clips to the spine based on timeline segments."""
@@ -155,8 +163,8 @@ class FCPXMLGenerator:
 
         primary_segments.sort(key=lambda s: self._rational_to_frames(s.offset))
 
-        for segment in primary_segments:
-            self._add_asset_clip(spine, segment)
+        for i, segment in enumerate(primary_segments):
+            self._add_asset_clip(spine, segment, is_first=(i == 0))
 
         for segment in connected_segments:
             self._warnings.append(
@@ -165,7 +173,7 @@ class FCPXMLGenerator:
             )
             self._add_asset_clip(spine, segment)
 
-    def _add_asset_clip(self, parent: ET.Element, segment: Segment) -> None:
+    def _add_asset_clip(self, parent: ET.Element, segment: Segment, is_first: bool = False) -> None:
         """Add an asset-clip element for a segment."""
         asset = self.intent.get_asset_by_id(segment.asset_id)
         if not asset:
@@ -178,8 +186,8 @@ class FCPXMLGenerator:
             parent,
             "asset-clip",
             name=clip_name,
-            offset=segment.offset,
             ref=asset.id,
+            offset=segment.offset,
             duration=segment.duration,
             start=segment.start,
         )
@@ -191,16 +199,18 @@ class FCPXMLGenerator:
             adjust = ET.SubElement(clip, "adjust-volume")
             adjust.set("amount", f"{segment.volume * 100 - 100:+.1f}dB")
 
-    def _add_markers(self, sequence: ET.Element) -> None:
-        """Add markers to the sequence."""
-        for marker in self.intent.timeline.markers:
-            ET.SubElement(
-                sequence,
-                "marker",
-                start=marker.start,
-                duration=marker.duration,
-                value=marker.name,
-            )
+        # Add markers inside the clip (first clip gets all markers)
+        if is_first:
+            for marker in self.intent.timeline.markers:
+                ET.SubElement(
+                    clip,
+                    "marker",
+                    start=marker.start,
+                    duration=marker.duration,
+                    value=marker.name,
+                )
+
+    # Markers are now added inside asset-clips in _add_asset_clip method
 
     def _calculate_total_duration(self) -> str:
         """Calculate total timeline duration from segments."""
@@ -301,3 +311,109 @@ def validate_fcpxml_structure(xml_str: str) -> tuple[bool, Optional[str]]:
 
     except ET.ParseError as e:
         return False, f"XML parse error: {e}"
+
+
+def align_to_frame_boundary(time_str: str, fps: float = 30.0) -> str:
+    """
+    Align a rational time string to the nearest frame boundary.
+    
+    Args:
+        time_str: Rational time string like "12345/3000s"
+        fps: Frames per second (default 30.0)
+        
+    Returns:
+        Frame-aligned rational time string
+    """
+    parts = time_str.rstrip("s").split("/")
+    if len(parts) != 2:
+        return time_str
+    
+    numerator = int(parts[0])
+    timescale = int(parts[1])
+    
+    # Calculate frame duration in timescale units
+    frame_duration = int(timescale / fps)
+    
+    # Round to nearest frame boundary
+    aligned = round(numerator / frame_duration) * frame_duration
+    
+    return f"{aligned}/{timescale}s"
+
+
+def import_fcpxml_silent(fcpxml_path: str, timeout: int = 30) -> dict:
+    """
+    Import FCPXML into Final Cut Pro with automatic dialog handling.
+    
+    Args:
+        fcpxml_path: Path to the FCPXML file
+        timeout: Maximum seconds to wait for import
+        
+    Returns:
+        Dict with success status and any messages
+    """
+    import subprocess
+    import time
+    import os
+    from datetime import datetime
+    
+    result = {
+        "success": False,
+        "fcpxml_path": fcpxml_path,
+        "messages": [],
+    }
+    
+    if not os.path.exists(fcpxml_path):
+        result["messages"].append(f"File not found: {fcpxml_path}")
+        return result
+    
+    # Open FCPXML in FCP
+    subprocess.run(['open', '-a', 'Final Cut Pro', fcpxml_path])
+    time.sleep(3)
+    
+    # Auto-handle dialogs
+    auto_script = '''
+    tell application "System Events"
+        tell process "Final Cut Pro"
+            set frontmost to true
+            delay 0.5
+            
+            repeat 10 times
+                set windowNames to name of every window
+                
+                if (windowNames as string) contains "Import XML" then
+                    keystroke tab
+                    delay 0.2
+                    keystroke return
+                    delay 2
+                else if (windowNames as string) contains "Open Library" then
+                    key code 53
+                    delay 0.5
+                else if (count of windowNames) > 1 then
+                    keystroke return
+                    delay 1
+                else
+                    exit repeat
+                end if
+            end repeat
+            
+            return "done"
+        end tell
+    end tell
+    '''
+    
+    try:
+        subprocess.run(['osascript', '-e', auto_script], capture_output=True, timeout=timeout)
+        result["messages"].append("Dialog handling completed")
+    except subprocess.TimeoutExpired:
+        result["messages"].append("Dialog handling timed out")
+    
+    # Check if library was modified
+    lib_path = os.path.expanduser("~/Movies/Untitled.fcpbundle/CurrentVersion.flexolibrary")
+    if os.path.exists(lib_path):
+        mtime = datetime.fromtimestamp(os.path.getmtime(lib_path))
+        age = (datetime.now() - mtime).total_seconds()
+        if age < 60:
+            result["success"] = True
+            result["messages"].append(f"Library modified {age:.0f}s ago")
+    
+    return result

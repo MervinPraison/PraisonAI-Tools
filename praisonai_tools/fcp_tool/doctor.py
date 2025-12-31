@@ -101,6 +101,7 @@ class FCPDoctor:
         """Check if CommandPost app is installed."""
         cp_paths = [
             "/Applications/CommandPost.app",
+            "/Applications/Utilities/CommandPost.app",
             os.path.expanduser("~/Applications/CommandPost.app"),
         ]
 
