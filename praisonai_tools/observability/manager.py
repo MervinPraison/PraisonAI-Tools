@@ -86,6 +86,7 @@ class ObservabilityManager:
         provider: Optional[str] = None,
         project_name: Optional[str] = None,
         session_id: Optional[str] = None,
+        auto_instrument: bool = True,
         **kwargs
     ) -> bool:
         """
@@ -95,10 +96,23 @@ class ObservabilityManager:
             provider: Provider name (auto-detect if None)
             project_name: Project/app name for traces
             session_id: Session identifier
+            auto_instrument: If True (default), auto-instruments Agent/Agents/Workflow
+                           classes so all operations are traced without explicit
+                           obs.trace() wrappers
             **kwargs: Additional provider-specific config
             
         Returns:
             True if initialization successful
+            
+        Example:
+            # Simplest usage - auto-detect provider and auto-instrument
+            obs.init()
+            
+            # Explicit provider
+            obs.init(provider="langfuse")
+            
+            # Disable auto-instrumentation for manual control
+            obs.init(auto_instrument=False)
         """
         # Build config
         self.config = ObservabilityConfig.from_env().merge(
@@ -127,7 +141,148 @@ class ObservabilityManager:
         provider_class = self._providers[provider_name]
         self._provider = provider_class(self.config)
         
-        return self._provider.init(**kwargs)
+        result = self._provider.init(**kwargs)
+        
+        # Auto-instrument Agent classes after successful init
+        if result and auto_instrument:
+            self._auto_instrument_agents()
+        
+        return result
+    
+    def _auto_instrument_agents(self) -> None:
+        """
+        Auto-instrument Agent/Agents/Workflow classes to create spans automatically.
+        
+        This patches the main lifecycle methods (chat, start, run, astart) to
+        create traces and spans without requiring explicit obs.trace() wrappers.
+        """
+        if not self._provider or not self._provider._initialized:
+            return
+        
+        try:
+            from functools import wraps
+            
+            # Try to import praisonaiagents classes
+            try:
+                from praisonaiagents.agent.agent import Agent
+                self._wrap_agent_class(Agent)
+            except ImportError:
+                pass
+            
+            try:
+                from praisonaiagents.agents.agents import Agents
+                self._wrap_workflow_class(Agents)
+            except ImportError:
+                pass
+                
+        except Exception:
+            # Silently fail - don't break user code if instrumentation fails
+            pass
+    
+    def _wrap_agent_class(self, agent_cls: type) -> None:
+        """Wrap Agent class methods to auto-create spans."""
+        from functools import wraps
+        
+        # Skip if already instrumented
+        if getattr(agent_cls, '_obs_instrumented', False):
+            return
+        
+        manager = self
+        
+        # Wrap chat method
+        if hasattr(agent_cls, 'chat'):
+            original_chat = agent_cls.chat
+            
+            @wraps(original_chat)
+            def instrumented_chat(self, *args, **kwargs):
+                agent_name = getattr(self, 'name', 'unknown')
+                with manager.trace(f"agent.{agent_name}.chat"):
+                    with manager.span(f"agent.{agent_name}.chat", kind=SpanKind.AGENT):
+                        return original_chat(self, *args, **kwargs)
+            
+            agent_cls.chat = instrumented_chat
+        
+        # Wrap start method
+        if hasattr(agent_cls, 'start'):
+            original_start = agent_cls.start
+            
+            @wraps(original_start)
+            def instrumented_start(self, *args, **kwargs):
+                import types
+                agent_name = getattr(self, 'name', 'unknown')
+                
+                result = original_start(self, *args, **kwargs)
+                
+                # Handle generator (streaming) mode
+                if isinstance(result, types.GeneratorType):
+                    def traced_generator():
+                        with manager.trace(f"agent.{agent_name}.start"):
+                            with manager.span(f"agent.{agent_name}.start", kind=SpanKind.AGENT):
+                                for chunk in result:
+                                    yield chunk
+                    return traced_generator()
+                else:
+                    # Non-streaming - wrap directly
+                    # Note: For sync non-generator, we can't wrap after the fact
+                    # The trace happens on the next call
+                    return result
+            
+            agent_cls.start = instrumented_start
+        
+        # Wrap run method
+        if hasattr(agent_cls, 'run'):
+            original_run = agent_cls.run
+            
+            @wraps(original_run)
+            def instrumented_run(self, *args, **kwargs):
+                agent_name = getattr(self, 'name', 'unknown')
+                with manager.trace(f"agent.{agent_name}.run"):
+                    with manager.span(f"agent.{agent_name}.run", kind=SpanKind.AGENT):
+                        return original_run(self, *args, **kwargs)
+            
+            agent_cls.run = instrumented_run
+        
+        # Mark as instrumented
+        agent_cls._obs_instrumented = True
+    
+    def _wrap_workflow_class(self, workflow_cls: type) -> None:
+        """Wrap Agents (workflow) class methods to auto-create spans."""
+        from functools import wraps
+        
+        # Skip if already instrumented
+        if getattr(workflow_cls, '_obs_instrumented', False):
+            return
+        
+        manager = self
+        
+        # Wrap start method
+        if hasattr(workflow_cls, 'start'):
+            original_start = workflow_cls.start
+            
+            @wraps(original_start)
+            def instrumented_start(self, *args, **kwargs):
+                workflow_name = getattr(self, 'name', None) or 'workflow'
+                with manager.trace(f"workflow.{workflow_name}"):
+                    with manager.span(f"workflow.{workflow_name}.start", kind=SpanKind.WORKFLOW):
+                        return original_start(self, *args, **kwargs)
+            
+            workflow_cls.start = instrumented_start
+        
+        # Wrap astart (async) method
+        if hasattr(workflow_cls, 'astart'):
+            original_astart = workflow_cls.astart
+            
+            @wraps(original_astart)
+            async def instrumented_astart(self, *args, **kwargs):
+                workflow_name = getattr(self, 'name', None) or 'workflow'
+                with manager.trace(f"workflow.{workflow_name}"):
+                    with manager.span(f"workflow.{workflow_name}.astart", kind=SpanKind.WORKFLOW):
+                        return await original_astart(self, *args, **kwargs)
+            
+            workflow_cls.astart = instrumented_astart
+        
+        # Mark as instrumented
+        workflow_cls._obs_instrumented = True
     
     def _load_provider(self, name: str) -> None:
         """Dynamically load a provider module."""

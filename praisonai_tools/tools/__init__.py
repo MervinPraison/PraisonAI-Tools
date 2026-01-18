@@ -392,6 +392,10 @@ def __getattr__(name):
         # Visualization
         "VisualizationTool": "visualization_tool",
         "create_bar_chart": "visualization_tool",
+        # SQLite Vector Store (zero deps)
+        "SQLiteVectorTool": "sqlite_vector_tool",
+        "sqlite_vector_query": "sqlite_vector_tool",
+        "sqlite_vector_add": "sqlite_vector_tool",
     }
     
     if name in tool_map:
@@ -581,4 +585,8 @@ __all__ = [
     # Shopify Tool
     "ShopifyTool",
     "list_shopify_products",
+    # SQLite Vector Store (zero deps)
+    "SQLiteVectorTool",
+    "sqlite_vector_query",
+    "sqlite_vector_add",
 ]
