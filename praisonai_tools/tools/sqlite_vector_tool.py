@@ -53,11 +53,14 @@ class SQLiteVectorTool(BaseTool):
     
     @property
     def conn(self):
-        """Lazy connection initialization."""
+        """Lazy connection initialization with WAL mode for concurrency."""
         if self._conn is None:
             import sqlite3
-            self._conn = sqlite3.connect(self.path)
+            self._conn = sqlite3.connect(self.path, timeout=30.0)
             self._conn.row_factory = sqlite3.Row
+            # Enable WAL mode for better concurrent access
+            self._conn.execute("PRAGMA journal_mode=WAL")
+            self._conn.execute("PRAGMA busy_timeout=5000")  # 5s timeout
             self._init_schema()
         return self._conn
     
@@ -230,32 +233,50 @@ class SQLiteVectorTool(BaseTool):
             logger.error(f"SQLite vector delete error: {e}")
             return {"error": str(e)}
     
-    def get(self, collection: str, ids: Optional[List[str]] = None) -> List[Dict[str, Any]]:
-        """Get documents by ID."""
+    def get(self, collection: str, ids: Optional[List[str]] = None, include: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        """Get documents by ID.
+        
+        Args:
+            collection: Collection name
+            ids: Optional list of IDs to retrieve
+            include: Optional list of fields to include (e.g., ["embeddings", "metadatas"])
+        """
         if not collection:
             return [{"error": "collection is required"}]
         
+        include = include or []
+        include_embeddings = "embeddings" in include
+        
         try:
+            # Select embeddings if requested
+            select_cols = "id, document, metadata"
+            if include_embeddings:
+                select_cols = "id, document, metadata, embedding"
+            
             if ids:
                 placeholders = ",".join("?" * len(ids))
                 cursor = self.conn.execute(
-                    f"SELECT id, document, metadata FROM vectors WHERE collection = ? AND id IN ({placeholders})",
+                    f"SELECT {select_cols} FROM vectors WHERE collection = ? AND id IN ({placeholders})",
                     [collection] + ids
                 )
             else:
                 cursor = self.conn.execute(
-                    "SELECT id, document, metadata FROM vectors WHERE collection = ?",
+                    f"SELECT {select_cols} FROM vectors WHERE collection = ?",
                     (collection,)
                 )
             
-            return [
-                {
+            results = []
+            for row in cursor.fetchall():
+                item = {
                     "id": row["id"],
                     "document": row["document"],
                     "metadata": json.loads(row["metadata"]) if row["metadata"] else None,
                 }
-                for row in cursor.fetchall()
-            ]
+                if include_embeddings and "embedding" in row.keys():
+                    item["embedding"] = json.loads(row["embedding"]) if row["embedding"] else []
+                results.append(item)
+            
+            return results
             
         except Exception as e:
             logger.error(f"SQLite vector get error: {e}")

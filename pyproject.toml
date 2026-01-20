@@ -1,6 +1,6 @@
 [project]
 name = "praisonai-tools"
-version = "0.2.6"
+version = "0.2.7"
 description = "Extended tools for PraisonAI Agents"
 authors = [
     {name = "Mervin Praison"}
@@ -28,6 +28,9 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
+]
+wordpress = [
+    "praisonaiwp[ai]>=0.1.0",
 ]
 
 [project.urls]

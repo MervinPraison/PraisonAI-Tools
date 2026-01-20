@@ -392,10 +392,13 @@ def __getattr__(name):
         # Visualization
         "VisualizationTool": "visualization_tool",
         "create_bar_chart": "visualization_tool",
-        # SQLite Vector Store (zero deps)
         "SQLiteVectorTool": "sqlite_vector_tool",
         "sqlite_vector_query": "sqlite_vector_tool",
         "sqlite_vector_add": "sqlite_vector_tool",
+        # WordPress
+        "WordPressTool": "wordpress_tool",
+        "check_wp_duplicate": "wordpress_tool",
+        "create_wp_post": "wordpress_tool",
     }
     
     if name in tool_map:
@@ -589,4 +592,8 @@ __all__ = [
     "SQLiteVectorTool",
     "sqlite_vector_query",
     "sqlite_vector_add",
+    # WordPress Tool (requires praisonaiwp)
+    "WordPressTool",
+    "check_wp_duplicate",
+    "create_wp_post",
 ]
