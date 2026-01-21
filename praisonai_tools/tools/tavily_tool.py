@@ -72,7 +72,7 @@ class TavilyTool(BaseTool):
         else:
             return {"error": f"Unknown action: {action}"}
     
-    def search(self, query: str, max_results: int = 5) -> Dict[str, Any]:
+    def search(self, query: str, max_results: int = 5, include_raw_content: bool = True) -> Dict[str, Any]:
         """Search the web."""
         if not query:
             return {"error": "query is required"}
@@ -85,6 +85,7 @@ class TavilyTool(BaseTool):
                 query=query,
                 search_depth=self.search_depth,
                 include_answer=self.include_answer,
+                include_raw_content=include_raw_content,
                 max_results=max_results,
             )
             
@@ -95,12 +96,16 @@ class TavilyTool(BaseTool):
             
             results = []
             for r in response.get("results", []):
-                results.append({
+                item = {
                     "title": r.get("title"),
                     "url": r.get("url"),
                     "content": r.get("content"),
                     "score": r.get("score"),
-                })
+                }
+                # Include raw_content (full page) if available
+                if r.get("raw_content"):
+                    item["raw_content"] = r.get("raw_content")
+                results.append(item)
             result["results"] = results
             
             return result
