@@ -216,7 +216,16 @@ ICON_MAP = {
     
     # Default
     "default": "file-code",
+    "main": "home",
+    "index": "home",
+    "context": "folder-open",
+    "config": "settings",
+    "utils": "wrench",
+    "types": "tag",
+    "base": "database",
+    "decorator": "sparkles",
 }
+
 
 SKIP_MODULES = {
     "__pycache__", "_config", "_lazy", "_logging", "_warning_patch", 
@@ -255,155 +264,63 @@ def sanitize_type_for_mdx(type_str: Optional[str]) -> Optional[str]:
     """Sanitize complex type annotations for MDX compatibility.
     
     Complex types like Callable[[X], Y] or Union[A, B] cause MDX parsing issues.
-    This function simplifies them to be readable and MDX-safe.
-    
-    Strategy: Only allow simple types. Anything complex gets simplified to base type.
-    
-    Args:
-        type_str: The type annotation string to sanitize
-        
-    Returns:
-        Sanitized type string safe for MDX
+    This function simplifies them recursively.
     """
-    if type_str is None:
-        return None
     if not type_str:
-        return ""
+        return type_str
     
     result = type_str.strip()
     
-    # 1. Remove forward reference quotes: 'Agent' -> Agent
+    # Remove forward reference quotes
     result = re.sub(r"'([A-Z][a-zA-Z0-9_]*)'", r"\1", result)
     
-    # 2. Define simple types that are safe
-    simple_types = {"str", "int", "bool", "float", "Any", "None", "bytes", "object"}
-    
-    # 3. Check if it's already a simple type
-    if result in simple_types:
-        return result
-    
-    # 4. Handle Optional[X] - keep if X is simple
-    opt_match = re.match(r"Optional\[(\w+)\]$", result)
-    if opt_match:
-        inner = opt_match.group(1)
-        if inner in simple_types:
-            return f"Optional[{inner}]"
-        return "Optional"
-    
-    # 5. Handle List[X] - keep if X is simple
-    list_match = re.match(r"List\[(\w+)\]$", result)
-    if list_match:
-        inner = list_match.group(1)
-        if inner in simple_types:
-            return f"List[{inner}]"
-        return "List"
-    
-    # 6. Handle Dict[X, Y] - keep if both are simple
-    dict_match = re.match(r"Dict\[(\w+),\s*(\w+)\]$", result)
-    if dict_match:
-        key, val = dict_match.group(1), dict_match.group(2)
-        if key in simple_types and val in simple_types:
-            return f"Dict[{key}, {val}]"
-        return "Dict"
-    
-    # 7. Handle Tuple[X, Y, ...] - simplify to Tuple
-    if result.startswith("Tuple["):
-        return "Tuple"
-    
-    # 8. Handle Set[X] - keep if X is simple
-    set_match = re.match(r"Set\[(\w+)\]$", result)
-    if set_match:
-        inner = set_match.group(1)
-        if inner in simple_types:
-            return f"Set[{inner}]"
-        return "Set"
-    
-    # 9. Simplify complex types to their base name
-    complex_types = {
-        "Callable": "Callable",
-        "Union": "Union",
-        "Literal": "Literal",
-        "Coroutine": "Coroutine",
-        "Awaitable": "Awaitable",
-        "Generator": "Generator",
-        "Iterator": "Iterator",
-        "Iterable": "Iterable",
-        "Sequence": "Sequence",
-        "Mapping": "Mapping",
-        "Type": "Type",
-    }
-    
-    for prefix, replacement in complex_types.items():
-        if result.startswith(f"{prefix}["):
-            return replacement
-    
-    # 10. Handle nested Optional/List/Dict/Union - extract base type
-    # e.g., Optional[Union[str, int]] -> Optional
-    # e.g., Optional[List[str]] -> Optional[List]
-    nested_match = re.match(r"(Optional|List|Dict|Set)\[([A-Za-z]+)\[", result)
-    if nested_match:
-        outer = nested_match.group(1)
-        inner = nested_match.group(2)
-        if inner in {"List", "Dict", "Set", "Tuple"}:
-            return f"{outer}[{inner}]"
-        return outer
-    
-    # 11. If still complex (has brackets), extract just the type name
+    # Recursively simplify nested brackets
+    while "[[" in result or " Union[" in result or " Optional[" in result:
+        # Simplify [[X], Y] -> X, Y or similar
+        new_result = re.sub(r"\[\[(.*?)\]\]", r"[\1]", result)
+        if new_result == result:
+            break
+        result = new_result
+        
+    # If it's a complex type (has brackets), simplify to the base name
     if "[" in result:
-        base_match = re.match(r"([A-Za-z_][A-Za-z0-9_]*)", result)
-        if base_match:
-            return base_match.group(1)
-    
+        return result.split("[")[0]
+        
     return result
+
 
 
 def escape_mdx(text: str) -> str:
     """Escape text for MDX compatibility.
     
     MDX parses <word> as JSX components and {expr} as JSX expressions.
-    This function simplifies docstrings to avoid these issues.
-    
-    Strategy: Extract only the first few paragraphs (description) and skip
-    complex code examples. Also escape all problematic characters.
-    
-    Args:
-        text: The text to escape
-        
-    Returns:
-        MDX-safe text
+    This function protects code blocks and escapes literal text.
     """
     if not text:
         return text
-    
-    # Split into paragraphs
-    paragraphs = text.split('\n\n')
-    
-    # Take only description paragraphs
-    # Skip sections that contain code or problematic patterns
-    result_paragraphs = []
-    for para in paragraphs:
-        stripped = para.strip()
         
-        # Stop at common docstring sections that often contain problematic code
-        if stripped.startswith(('Args:', 'Returns:', 'Example:', 'Usage:', 
-                                'Raises:', 'Yields:', 'Note:', 'Warning:',
-                                'Attributes:', '>>>', '```', '    from ',
-                                '    import ', '    agent', '    result',
-                                'Config example:', '{', '  "')):
-            break
-        
-        # Skip paragraphs that look like JSON or code
-        if stripped.startswith(('{', '[', '"', "'")) or '": ' in stripped:
-            break
-            
-        if stripped:
-            # Escape ALL curly braces - they cause JSX parsing issues
-            stripped = stripped.replace('{', '&#123;').replace('}', '&#125;')
-            # Escape angle brackets that look like tags
-            stripped = re.sub(r'<([a-zA-Z_][a-zA-Z0-9_]*)>', r'&lt;\1&gt;', stripped)
-            result_paragraphs.append(stripped)
+    # Protect code blocks (fenced and inline)
+    code_blocks = []
+    def save_code_block(match):
+        code_blocks.append(match.group(0))
+        return f"__CODE_BLOCK_{len(code_blocks)-1}__"
     
-    return '\n\n'.join(result_paragraphs)
+    # Match fenced code blocks first, then inline code
+    text = re.sub(r"```.*?```", save_code_block, text, flags=re.DOTALL)
+    text = re.sub(r"`.*?`", save_code_block, text)
+    
+    # Escape ALL curly braces and angle brackets
+    text = text.replace('{', '&#123;').replace('}', '&#125;')
+    
+    # Use HTML entities for angle brackets to be safe in all MDX contexts
+    text = text.replace('<', '&lt;').replace('>', '&gt;')
+    
+    # Restore code blocks
+    for i, block in enumerate(code_blocks):
+        text = text.replace(f"__CODE_BLOCK_{i}__", block)
+        
+    return text
+
 
 
 def _escape_line(line: str, stripped: str) -> str:
@@ -562,6 +479,57 @@ def get_icon_for_module(module_name: str) -> str:
             return icon
     
     return ICON_MAP.get("default", "file-code")
+
+
+def generate_mermaid_diagram(info: ModuleInfo) -> str:
+    """Generate a Mermaid diagram for the module.
+    
+    Args:
+        info: Module information
+        
+    Returns:
+        Mermaid diagram code
+    """
+    # Color scheme: Dark Red (#8B0000) for agents/input/output, Teal (#189AB4) for tools
+    agent_color = "fill:#8B0000,stroke:#8B0000,color:#fff"
+    tool_color = "fill:#189AB4,stroke:#189AB4,color:#fff"
+    
+    lines = [
+        "```mermaid",
+        "graph TD",
+    ]
+    
+    # Identify key components
+    has_agent = any(c.name.lower() == "agent" or "agent" in c.name.lower() for c in info.classes)
+    has_task = any(c.name.lower() == "task" for c in info.classes)
+    has_tools = any("tool" in c.name.lower() or "skill" in c.name.lower() for c in info.classes + [ClassInfo(name=f.name) for f in info.functions])
+    
+    if has_agent:
+        lines.append(f'    Agent["Agent"]:::agent')
+        lines.append(f"    classDef agent {agent_color}")
+        
+        if has_tools:
+            lines.append(f'    Tools["Tools"]:::tool')
+            lines.append(f"    classDef tool {tool_color}")
+            lines.append(f"    Agent --> Tools")
+            
+        if has_task:
+            lines.append(f'    Task["Task"]:::agent')
+            lines.append(f"    Task --> Agent")
+    else:
+        # Default generic diagram for other modules
+        lines.append(f'    Module["{info.name}"]:::agent')
+        lines.append(f"    classDef agent {agent_color}")
+        if info.classes:
+            for cls in info.classes[:3]: # limit to 3 classes
+                lines.append(f'    {cls.name}["{cls.name}"]:::tool')
+            lines.append(f"    classDef tool {tool_color}")
+            for cls in info.classes[:3]:
+                lines.append(f'    Module --> {cls.name}')
+                
+    lines.append("```")
+    return "\n".join(lines)
+
 
 
 # =============================================================================
@@ -996,6 +964,12 @@ class MDXGenerator:
             "",
         ]
         
+        # Mermaid Diagram
+        lines.append("## Overview")
+        lines.append("")
+        lines.append(generate_mermaid_diagram(info))
+        lines.append("")
+        
         if safe_docstring:
             lines.append(safe_docstring)
             lines.append("")
@@ -1014,26 +988,22 @@ class MDXGenerator:
         if info.classes:
             lines.append("## Classes")
             lines.append("")
+            lines.append("<AccordionGroup>")
             for cls in info.classes:
                 lines.extend(self._render_class(cls, info.package))
+            lines.append("</AccordionGroup>")
+            lines.append("")
         
         # Functions section
         if info.functions:
             lines.append("## Functions")
             lines.append("")
+            lines.append("<AccordionGroup>")
             for func in info.functions:
                 lines.extend(self._render_function(func, info.package))
-        
-        # Constants section
-        if info.constants:
-            lines.append("## Constants")
+            lines.append("</AccordionGroup>")
             lines.append("")
-            lines.append("| Name | Value |")
-            lines.append("|------|-------|")
-            for name, value in info.constants:
-                safe_value = escape_for_table(str(value)[:50])
-                lines.append(f"| `{name}` | `{safe_value}` |")
-            lines.append("")
+
         
         return "\n".join(lines)
     
@@ -1057,48 +1027,45 @@ class MDXGenerator:
         
         # Constructor parameters
         if cls.init_params:
-            lines.append('<Accordion title="Constructor Parameters">')
+            lines.append('<Expandable title="Constructor Parameters">')
             lines.append("")
-            lines.append("| Parameter | Type | Required | Default |")
-            lines.append("|-----------|------|----------|---------|")
             for p in cls.init_params:
                 safe_type = escape_for_table(p.type)
-                default = escape_for_table(p.default) if p.default else "-"
-                required = "Yes" if p.required else "No"
-                lines.append(f"| `{p.name}` | `{safe_type}` | {required} | `{default}` |")
+                default = f" (default: `{escape_for_table(p.default)}`)" if p.default else ""
+                required = " (Required)" if p.required else ""
+                lines.append(f'<ParamField query="{p.name}" type="{safe_type}">')
+                lines.append(f"  {required}{default}")
+                lines.append('</ParamField>')
             lines.append("")
-            lines.append("</Accordion>")
+            lines.append("</Expandable>")
             lines.append("")
         
         # Properties
         if cls.properties:
-            lines.append('<Accordion title="Properties">')
+            lines.append('<Expandable title="Properties">')
             lines.append("")
-            lines.append("| Property | Type |")
-            lines.append("|----------|------|")
             for p in cls.properties:
                 safe_type = escape_for_table(p.type)
-                lines.append(f"| `{p.name}` | `{safe_type}` |")
+                lines.append(f'<ResponseField name="{p.name}" type="{safe_type}">')
+                lines.append('</ResponseField>')
             lines.append("")
-            lines.append("</Accordion>")
+            lines.append("</Expandable>")
             lines.append("")
         
         # Methods
         if cls.methods:
-            lines.append('<Accordion title="Methods">')
-            lines.append("")
+            lines.append("<AccordionGroup>")
             for m in cls.methods:
                 async_prefix = "async " if m.is_async else ""
                 safe_sig = escape_for_table(m.signature)
                 safe_ret = escape_for_table(m.return_type)
-                lines.append(f"- **{async_prefix}{m.name}**(`{safe_sig}`) → `{safe_ret}`")
+                lines.append(f'<Accordion title="{async_prefix}{m.name}({safe_sig}) -> {safe_ret}">')
                 if m.docstring:
-                    first_line = m.docstring.split('\n')[0][:80]
-                    safe_doc = escape_mdx(first_line)
-                    lines.append(f"  {safe_doc}")
+                    lines.append(f"  {escape_mdx(m.docstring)}")
+                lines.append('</Accordion>')
+            lines.append("</AccordionGroup>")
             lines.append("")
-            lines.append("</Accordion>")
-            lines.append("")
+
         
         return lines
     
@@ -1142,12 +1109,14 @@ class MDXGenerator:
             lines.append("")
             for p in func.params:
                 safe_type = escape_for_table(p.type)
-                lines.append(f"- **{p.name}** (`{safe_type}`)")
+                lines.append(f'<ParamField query="{p.name}" type="{safe_type}">')
                 if p.description:
                     lines.append(f"  {escape_mdx(p.description)}")
+                lines.append('</ParamField>')
             lines.append("")
             lines.append("</Expandable>")
             lines.append("")
+
         
         return lines
 
@@ -1268,13 +1237,26 @@ def update_docs_json(package_name: str, generated_pages: List[str], dry_run: boo
             }
             ref_group['pages'].append(package_group)
         
-        # Update pages
-        existing_pages = set(package_group.get('pages', []))
-        new_pages = set(generated_pages)
-        all_pages = sorted(existing_pages | new_pages)
-        package_group['pages'] = all_pages
+        # Update pages with icons
+        new_page_objects = []
+        # Deduplicate pages
+        unique_pages = sorted(list(set(generated_pages)))
+        for page_path in unique_pages:
+
+            module_name = page_path.split('/')[-1]
+            icon = get_icon_for_module(module_name)
+            new_page_objects.append({
+                "page": page_path,
+                "icon": icon
+            })
         
-        added_count = len(new_pages - existing_pages)
+        # Merge with existing if necessary, or just overwrite for reference docs
+        # Since these are auto-generated reference docs, overwriting is safer to keep it clean
+        package_group['pages'] = new_page_objects
+        
+        added_count = len(generated_pages)
+
+
         
         if dry_run:
             print(f"  Would update docs.json: {added_count} new pages for {package_name}")
@@ -1284,7 +1266,8 @@ def update_docs_json(package_name: str, generated_pages: List[str], dry_run: boo
         with open(DOCS_JSON_PATH, 'w') as f:
             json.dump(docs_config, f, indent=2)
         
-        print(f"  Updated docs.json: {len(all_pages)} pages for {package_name} ({added_count} new)")
+        print(f"  Updated docs.json: {len(new_page_objects)} pages for {package_name} ({added_count} new)")
+
         return True
         
     except Exception as e:
