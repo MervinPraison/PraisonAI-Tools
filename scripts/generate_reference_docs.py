@@ -108,8 +108,8 @@ ICON_MAP = {
     "guardrails": "shield",
     "policy": "scale",
     "permissions": "lock",
-    "approval": "check-circle",
-    "escalation": "alert-triangle",
+    "approval": "circle-check",
+    "escalation": "triangle-alert",
     
     # Planning and thinking
     "planning": "clipboard-list",
@@ -120,7 +120,7 @@ ICON_MAP = {
     "plugins": "puzzle",
     
     # Observability
-    "telemetry": "bar-chart-2",
+    "telemetry": "bar-chart-3",
     "trace": "activity",
     "eval": "flask-conical",
     
@@ -150,7 +150,7 @@ ICON_MAP = {
     "audio_agent": "mic",
     "ocr_agent": "scan",
     "deep_research_agent": "microscope",
-    "query_rewriter_agent": "edit",
+    "query_rewriter_agent": "pencil",
     "prompt_expander_agent": "maximize",
     "context_agent": "file-text",
     "router_agent": "route",
@@ -186,7 +186,7 @@ ICON_MAP = {
     "version": "tag",
     "upload_vision": "upload",
     "train_vision": "eye",
-    "agents_generator": "wand",
+    "agents_generator": "wand-2",
     "agent_scheduler": "calendar-clock",
     
     # TypeScript modules
@@ -194,6 +194,7 @@ ICON_MAP = {
     "cache": "database",
     "events": "bell",
     "observability": "eye",
+    "db": "database",
     
     # Misc
     "main": "home",
@@ -201,7 +202,7 @@ ICON_MAP = {
     "lsp": "code-2",
     "obs": "eye",
     "output": "file-output",
-    "compaction": "minimize",
+    "compaction": "minimize-2",
     "background": "layers",
     "models": "box",
     "result": "check-square",
@@ -216,15 +217,14 @@ ICON_MAP = {
     
     # Default
     "default": "file-code",
-    "main": "home",
     "index": "home",
-    "context": "folder-open",
-    "config": "settings",
-    "utils": "wrench",
     "types": "tag",
     "base": "database",
     "decorator": "sparkles",
+    "utils": "wrench",
 }
+
+
 
 
 SKIP_MODULES = {
@@ -456,29 +456,39 @@ def sanitize_description(text: str, max_length: int = 150) -> str:
     return first_line
 
 
+
 def get_icon_for_module(module_name: str) -> str:
-    """Get the appropriate Lucide icon for a module.
+    """Get the icon name for a module.
     
     Args:
-        module_name: The module name
+        module_name: Name of the module
         
     Returns:
-        Lucide icon name
+        String icon name (Lucide/FontAwesome)
     """
+    module_name = module_name.lower()
+    
     # Try exact match first
     if module_name in ICON_MAP:
         return ICON_MAP[module_name]
     
-    # Try lowercase
-    if module_name.lower() in ICON_MAP:
-        return ICON_MAP[module_name.lower()]
+    # Try partial match (keywords)
+    if "agent" in module_name:
+        return ICON_MAP["agent"]
+    if "tool" in module_name:
+        return ICON_MAP["tool"]
+    if "task" in module_name:
+        return ICON_MAP["task"]
+    if "llm" in module_name:
+        return ICON_MAP["llm"]
+    if "config" in module_name:
+        return ICON_MAP["config"]
+    if "memory" in module_name:
+        return ICON_MAP["memory"]
+    if "knowledge" in module_name:
+        return ICON_MAP["knowledge"]
     
-    # Try partial matches
-    for key, icon in ICON_MAP.items():
-        if key in module_name or module_name in key:
-            return icon
-    
-    return ICON_MAP.get("default", "file-code")
+    return ICON_MAP["default"]
 
 
 def generate_mermaid_diagram(info: ModuleInfo) -> str:
@@ -988,24 +998,29 @@ class MDXGenerator:
         if info.classes:
             lines.append("## Classes")
             lines.append("")
-            lines.append("<AccordionGroup>")
             for cls in info.classes:
                 lines.extend(self._render_class(cls, info.package))
-            lines.append("</AccordionGroup>")
-            lines.append("")
         
         # Functions section
         if info.functions:
             lines.append("## Functions")
             lines.append("")
-            lines.append("<AccordionGroup>")
             for func in info.functions:
                 lines.extend(self._render_function(func, info.package))
-            lines.append("</AccordionGroup>")
+        
+        # Constants section
+        if info.constants:
+            lines.append("## Constants")
             lines.append("")
-
+            lines.append("| Name | Value |")
+            lines.append("|------|-------|")
+            for name, value in info.constants:
+                safe_value = escape_for_table(str(value)[:50])
+                lines.append(f"| `{name}` | `{safe_value}` |")
+            lines.append("")
         
         return "\n".join(lines)
+
     
     def _render_class(self, cls: ClassInfo, package: str) -> List[str]:
         """Render class documentation."""
@@ -1027,47 +1042,51 @@ class MDXGenerator:
         
         # Constructor parameters
         if cls.init_params:
-            lines.append('<Expandable title="Constructor Parameters">')
+            lines.append('<Accordion title="Constructor Parameters">')
             lines.append("")
+            lines.append("| Parameter | Type | Required | Default |")
+            lines.append("|-----------|------|----------|---------|")
             for p in cls.init_params:
                 safe_type = escape_for_table(p.type)
-                default = f" (default: `{escape_for_table(p.default)}`)" if p.default else ""
-                required = " (Required)" if p.required else ""
-                lines.append(f'<ParamField query="{p.name}" type="{safe_type}">')
-                lines.append(f"  {required}{default}")
-                lines.append('</ParamField>')
+                default = escape_for_table(p.default) if p.default else "-"
+                required = "Yes" if p.required else "No"
+                lines.append(f"| `{p.name}` | `{safe_type}` | {required} | `{default}` |")
             lines.append("")
-            lines.append("</Expandable>")
+            lines.append("</Accordion>")
             lines.append("")
         
         # Properties
         if cls.properties:
-            lines.append('<Expandable title="Properties">')
+            lines.append('<Accordion title="Properties">')
             lines.append("")
+            lines.append("| Property | Type |")
+            lines.append("|----------|------|")
             for p in cls.properties:
                 safe_type = escape_for_table(p.type)
-                lines.append(f'<ResponseField name="{p.name}" type="{safe_type}">')
-                lines.append('</ResponseField>')
+                lines.append(f"| `{p.name}` | `{safe_type}` |")
             lines.append("")
-            lines.append("</Expandable>")
+            lines.append("</Accordion>")
             lines.append("")
         
         # Methods
         if cls.methods:
-            lines.append("<AccordionGroup>")
+            lines.append('<Accordion title="Methods">')
+            lines.append("")
             for m in cls.methods:
                 async_prefix = "async " if m.is_async else ""
                 safe_sig = escape_for_table(m.signature)
                 safe_ret = escape_for_table(m.return_type)
-                lines.append(f'<Accordion title="{async_prefix}{m.name}({safe_sig}) -> {safe_ret}">')
+                lines.append(f"- **{async_prefix}{m.name}**(`{safe_sig}`) → `{safe_ret}`")
                 if m.docstring:
-                    lines.append(f"  {escape_mdx(m.docstring)}")
-                lines.append('</Accordion>')
-            lines.append("</AccordionGroup>")
+                    first_line = m.docstring.split('\n')[0][:80]
+                    safe_doc = escape_mdx(first_line)
+                    lines.append(f"  {safe_doc}")
             lines.append("")
-
+            lines.append("</Accordion>")
+            lines.append("")
         
         return lines
+
     
     def _render_function(self, func: FunctionInfo, package: str) -> List[str]:
         """Render function documentation."""
@@ -1109,16 +1128,15 @@ class MDXGenerator:
             lines.append("")
             for p in func.params:
                 safe_type = escape_for_table(p.type)
-                lines.append(f'<ParamField query="{p.name}" type="{safe_type}">')
+                lines.append(f"- **{p.name}** (`{safe_type}`)")
                 if p.description:
                     lines.append(f"  {escape_mdx(p.description)}")
-                lines.append('</ParamField>')
             lines.append("")
             lines.append("</Expandable>")
             lines.append("")
-
         
         return lines
+
 
 
 # =============================================================================
@@ -1237,18 +1255,18 @@ def update_docs_json(package_name: str, generated_pages: List[str], dry_run: boo
             }
             ref_group['pages'].append(package_group)
         
-        # Update pages with icons
+        # Update pages
         new_page_objects = []
-        # Deduplicate pages
+        # Deduplicate and filter out common index/utility modules that shouldn't be in main reference
         unique_pages = sorted(list(set(generated_pages)))
         for page_path in unique_pages:
-
             module_name = page_path.split('/')[-1]
-            icon = get_icon_for_module(module_name)
-            new_page_objects.append({
-                "page": page_path,
-                "icon": icon
-            })
+            if module_name.lower() == "index" or module_name.lower() == "__init__":
+                continue
+                
+            # Use string paths to rely on MDX frontmatter icons and fix redirection issues
+            new_page_objects.append(page_path)
+
         
         # Merge with existing if necessary, or just overwrite for reference docs
         # Since these are auto-generated reference docs, overwriting is safer to keep it clean
