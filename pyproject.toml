@@ -1,6 +1,6 @@
 [project]
 name = "praisonai-tools"
-version = "0.2.10"
+version = "0.2.11"
 description = "Extended tools for PraisonAI Agents"
 authors = [
     {name = "Mervin Praison"}
