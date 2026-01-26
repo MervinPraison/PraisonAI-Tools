@@ -1,6 +1,6 @@
 [project]
 name = "praisonai-tools"
-version = "0.2.8"
+version = "0.2.9"
 description = "Extended tools for PraisonAI Agents"
 authors = [
     {name = "Mervin Praison"}
@@ -24,7 +24,11 @@ dependencies = [
     "praisonaiagents>=0.0.1",
 ]
 
+[project.scripts]
+praisonai-tools = "praisonai_tools.cli:main"
+
 [project.optional-dependencies]
+
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",

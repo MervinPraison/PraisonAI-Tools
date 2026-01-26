@@ -1,0 +1,66 @@
+name: Generate SDK Reference Docs
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'praisonai_tools/docs_generator/**'
+  repository_dispatch:
+    types: [trigger-docs-generation]
+  workflow_dispatch:
+
+jobs:
+  generate-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PraisonAI Tools
+        uses: actions/checkout@v4
+        with:
+          path: praisonai-tools
+
+      - name: Checkout PraisonAI Source Repo
+        uses: actions/checkout@v4
+        with:
+          repository: MervinPraison/PraisonAI
+          path: praisonai-source
+
+      - name: Checkout PraisonAI Docs
+        uses: actions/checkout@v4
+        with:
+          repository: MervinPraison/PraisonAIDocs
+          path: praisonai-docs
+          token: ${{ secrets.DOCS_GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PraisonAI Tools
+        run: |
+          cd praisonai-tools
+          pip install -e .
+
+      - name: Run Docs Generation
+        run: |
+          # Use the new unified CLI
+          praisonai-tools docs-generate \
+            --package all \
+            --docs-root $(pwd)/praisonai-docs \
+            --source-root $(pwd)/praisonai-source
+        env:
+          PYTHONPATH: $(pwd)/praisonai-tools
+
+      - name: Commit and Push Docs
+        run: |
+          cd praisonai-docs
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "docs: auto-generate SDK reference documentation"
+            git push
+          fi
