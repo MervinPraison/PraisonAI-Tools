@@ -1,0 +1,132 @@
+---
+title: "{{ title }}"
+description: "{{ description }}"
+icon: "{{ icon }}"
+---
+
+# {{ name }}
+
+{{ docstring | default("") }}
+
+{% if diagram %}
+## How It Works
+
+```mermaid
+{{ diagram }}
+```
+{% endif %}
+
+## Import
+
+```python
+from praisonaiagents import {{ name }}
+```
+
+{% if init_params %}
+## Constructor
+
+```python
+{{ name }}(
+{% for param in init_params %}
+    {{ param.name }}: {{ param.type | default("Any") }}{{ " = " + param.default if param.default else "" }}{{ "," if not loop.last else "" }}
+{% endfor %}
+)
+```
+
+## Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+{% for param in init_params %}
+| `{{ param.name }}` | `{{ param.type | default("Any") }}` | {{ param.default | default("None") }} | {{ param.description | default("") }} |
+{% endfor %}
+{% endif %}
+
+{% if attributes %}
+## Attributes
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+{% for attr in attributes %}
+| `{{ attr.name }}` | `{{ attr.type | default("Any") }}` | {{ attr.description | default("") }} |
+{% endfor %}
+{% endif %}
+
+{% if methods %}
+## Methods
+
+{% for method in methods %}
+### {{ method.name }}()
+
+{{ method.docstring | default("") }}
+
+```python
+def {{ method.name }}({{ method.signature }}) -> {{ method.return_type | default("None") }}
+```
+
+{% if method.params %}
+<Expandable title="Parameters">
+{% for param in method.params %}
+<ParamField path="{{ param.name }}" type="{{ param.type | default('Any') }}">
+{{ param.description | default("") }}
+</ParamField>
+{% endfor %}
+</Expandable>
+{% endif %}
+
+{% if method.returns %}
+<Info>
+**Returns:** `{{ method.return_type }}` - {{ method.returns }}
+</Info>
+{% endif %}
+
+{% if method.example %}
+<CodeGroup>
+```python Example
+{{ method.example }}
+```
+</CodeGroup>
+{% endif %}
+
+{% endfor %}
+{% endif %}
+
+{% if example %}
+## Quick Start
+
+<Steps>
+<Step title="Import">
+```python
+from praisonaiagents import {{ name }}
+```
+</Step>
+
+<Step title="Create Instance">
+```python
+{{ example }}
+```
+</Step>
+</Steps>
+{% endif %}
+
+{% if presets %}
+## Presets
+
+| Preset | Description |
+|--------|-------------|
+{% for preset in presets %}
+| `"{{ preset.name }}"` | {{ preset.description }} |
+{% endfor %}
+{% endif %}
+
+{% if see_also %}
+## See Also
+
+<CardGroup cols={2}>
+{% for link in see_also %}
+<Card title="{{ link.title }}" icon="{{ link.icon | default('book') }}" href="{{ link.href }}">
+{{ link.description | default("") }}
+</Card>
+{% endfor %}
+</CardGroup>
+{% endif %}

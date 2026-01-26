@@ -1,0 +1,144 @@
+---
+title: "{{ title }}"
+description: "{{ description }}"
+icon: "{{ icon }}"
+---
+
+# {{ name }}
+
+{{ docstring | default("") }}
+
+{% if overview_diagram %}
+## Overview
+
+```mermaid
+{{ overview_diagram }}
+```
+{% endif %}
+
+## Import
+
+```python
+from praisonaiagents import {{ name }}
+```
+
+{% if classes %}
+## Classes
+
+{% for cls in classes %}
+<Accordion title="{{ cls.name }}">
+
+{{ cls.docstring | default("") }}
+
+{% if cls.init_params %}
+### Constructor
+
+```python
+{{ cls.name }}(
+{% for param in cls.init_params %}
+    {{ param.name }}: {{ param.type | default("Any") }}{{ " = " + param.default if param.default else "" }}{{ "," if not loop.last else "" }}
+{% endfor %}
+)
+```
+
+<Expandable title="Parameters">
+{% for param in cls.init_params %}
+<ParamField path="{{ param.name }}" type="{{ param.type | default('Any') }}" {% if param.required %}required{% endif %}>
+{{ param.description | default("") }}
+{% if param.default %}Default: `{{ param.default }}`{% endif %}
+</ParamField>
+{% endfor %}
+</Expandable>
+{% endif %}
+
+{% if cls.methods %}
+### Methods
+
+{% for method in cls.methods %}
+<Accordion title="{{ method.name }}()">
+
+{{ method.docstring | default("") }}
+
+```python
+def {{ method.name }}({{ method.signature }}) -> {{ method.return_type | default("None") }}
+```
+
+{% if method.params %}
+<Expandable title="Parameters">
+{% for param in method.params %}
+<ParamField path="{{ param.name }}" type="{{ param.type | default('Any') }}">
+{{ param.description | default("") }}
+</ParamField>
+{% endfor %}
+</Expandable>
+{% endif %}
+
+{% if method.returns %}
+**Returns:** {{ method.returns }}
+{% endif %}
+
+{% if method.example %}
+```python
+{{ method.example }}
+```
+{% endif %}
+
+</Accordion>
+{% endfor %}
+{% endif %}
+
+</Accordion>
+{% endfor %}
+{% endif %}
+
+{% if functions %}
+## Functions
+
+{% for func in functions %}
+<Accordion title="{{ func.name }}()">
+
+{{ func.docstring | default("") }}
+
+```python
+def {{ func.name }}({{ func.signature }}) -> {{ func.return_type | default("None") }}
+```
+
+{% if func.params %}
+<Expandable title="Parameters">
+{% for param in func.params %}
+<ParamField path="{{ param.name }}" type="{{ param.type | default('Any') }}">
+{{ param.description | default("") }}
+</ParamField>
+{% endfor %}
+</Expandable>
+{% endif %}
+
+{% if func.returns %}
+**Returns:** {{ func.returns }}
+{% endif %}
+
+{% if func.example %}
+```python
+{{ func.example }}
+```
+{% endif %}
+
+</Accordion>
+{% endfor %}
+{% endif %}
+
+{% if example %}
+## Example
+
+```python
+{{ example }}
+```
+{% endif %}
+
+{% if see_also %}
+## See Also
+
+{% for link in see_also %}
+- [{{ link.title }}]({{ link.href }})
+{% endfor %}
+{% endif %}
