@@ -230,7 +230,13 @@ def sanitize_description(text: str, max_length: int = 150) -> str:
 SKIP_MODULES = {
     "__pycache__", "_config", "_lazy", "_logging", "_warning_patch", 
     "_resolver_helpers", "audit", "lite", "profiling", "utils", "__init__",
-    "_dev", "test", "tests", "__main__"
+    "_dev", "test", "tests", "__main__", "setup", ".ipynb_checkpoints"
+}
+SKIP_METHODS = {
+    "to_dict", "from_dict", "to_json", "from_json", "to_yaml", "from_yaml",
+    "copy", "dict", "json", "__init__", "__call__", "__str__", "__repr__",
+    "model_dump", "model_validate", "model_json_schema", "__post_init__",
+    "__enter__", "__exit__", "__iter__", "__len__", "__getitem__", "__setitem__"
 }
 
 ICON_MAP = {
@@ -565,8 +571,10 @@ class PythonDocParser:
         if not docstring:
             return result
         
-        # More robust splitting that handles optional trailing colon and optional newline
-        sections = re.split(r'\n\s*(Args|Parameters|Returns|Raises|Example|Examples|Usage):?\s*(?:\n|$)', docstring, flags=re.IGNORECASE)
+        # More robust splitting: only match sections at the start of original lines
+        # This prevents picking up 'Examples:' inside an 'Args' description
+        section_pattern = r'\n\s*(Args|Parameters|Returns|Raises|Example|Examples|Usage):?\s*\n'
+        sections = re.split(section_pattern, '\n' + docstring)
         result["description"] = sections[0].strip()
         
         for i in range(1, len(sections), 2):
@@ -601,7 +609,10 @@ class PythonDocParser:
                         result["raises"].append((match.group(1), match.group(2)))
             
             elif section_name in ("example", "examples", "usage"):
-                result["examples"].append(section_content.strip())
+                content = section_content.strip()
+                # Strip existing triple backticks if they wrap the entire example
+                content = re.sub(r'^```[a-z]*\n?(.*?)\n?```$', r'\1', content, flags=re.DOTALL)
+                result["examples"].append(content.strip())
                 
         return result
     
@@ -734,12 +745,12 @@ class TypeScriptDocParser:
 class MDXGenerator:
     """Generate MDX documentation files."""
     
-    def __init__(self, output_dir: Path, package_name: str, config: dict, layout: LayoutType = LayoutType.GRANULAR):
+    def __init__(self, output_dir: Path, package_name: str, config: Dict[str, Any], layout: LayoutType = LayoutType.LEGACY):
         self.output_dir = output_dir
         self.package_name = package_name
-        self.generated_files: List[str] = []
         self.config = config
         self.layout = layout
+        self.generated_files = set()  # Use set for faster lookups and cleanup
     
     def generate_module_doc(self, info: ModuleInfo, dry_run: bool = False) -> List[Path]:
         """Generate MDX documentation for a module (potentially multiple files)."""
@@ -784,8 +795,22 @@ class MDXGenerator:
                     self._track_file(class_file)
                 generated.append(class_file)
 
-                # 3. Class Methods (as separate function pages)
+                # 2. Class Methods (as separate function pages)
+                for m in cls.class_methods:
+                    if m.name in SKIP_METHODS:
+                        continue
+                    method_file = self.output_dir / "functions" / f"{cls.name}-{m.name}.mdx"
+                    method_content = self._render_function_page(m, info, cls_name=cls.name)
+                    if not dry_run:
+                        method_file.parent.mkdir(parents=True, exist_ok=True)
+                        method_file.write_text(method_content)
+                        self._track_file(method_file)
+                    generated.append(method_file)
+
+                # 3. Instance Methods (as separate function pages)
                 for m in cls.methods:
+                    if m.name in SKIP_METHODS:
+                        continue
                     method_file = self.output_dir / "functions" / f"{cls.name}-{m.name}.mdx"
                     method_content = self._render_function_page(m, info, cls_name=cls.name)
                     if not dry_run:
@@ -812,7 +837,7 @@ class MDXGenerator:
         docs_root = Path("/Users/praison/PraisonAIDocs")
         rel_path = str(path.relative_to(docs_root))
         nav_path = rel_path.replace('.mdx', '').replace('\\', '/')
-        self.generated_files.append(nav_path)
+        self.generated_files.add(nav_path)
     
     def _render_module(self, info: ModuleInfo) -> str:
         safe_docstring = escape_mdx(info.docstring) if info.docstring else ""
@@ -906,14 +931,16 @@ class MDXGenerator:
             lines.append("</CardGroup>\n")
 
         if info.functions:
-            lines.append("## Functions\n")
-            lines.append("<CardGroup cols={2}>")
-            for func in info.functions:
-                lines.append(f'  <Card title="{func.name}()" icon="function" href="../functions/{func.name}">')
-                func_desc = sanitize_description(func.docstring) or "Function definition."
-                lines.append(f"    {func_desc}")
-                lines.append("  </Card>")
-            lines.append("</CardGroup>\n")
+            visible_functions = [f for f in info.functions if f.name not in SKIP_METHODS]
+            if visible_functions:
+                lines.append("## Functions\n")
+                lines.append("<CardGroup cols={2}>")
+                for func in visible_functions:
+                    lines.append(f'  <Card title="{func.name}()" icon="function" href="../functions/{func.name}">')
+                    func_desc = sanitize_description(func.docstring) or "Function definition."
+                    lines.append(f"    {func_desc}")
+                    lines.append("  </Card>")
+                lines.append("</CardGroup>\n")
 
         if info.constants:
             lines.extend([
@@ -980,19 +1007,31 @@ class MDXGenerator:
                 ])
 
         if cls.methods or cls.class_methods:
-            lines.append("## Methods\n")
-            lines.append("<CardGroup cols={2}>")
-            for m in cls.class_methods:
-                lines.append(f'  <Card title="{m.name}()" icon="function" href="../functions/{cls.name}-{m.name}">')
-                m_desc = sanitize_description(m.docstring) or "Class method."
-                lines.append(f"    {m_desc}")
-                lines.append("  </Card>")
-            for m in cls.methods:
-                lines.append(f'  <Card title="{m.name}()" icon="function" href="../functions/{cls.name}-{m.name}">')
-                m_desc = sanitize_description(m.docstring) or "Instance method."
-                lines.append(f"    {m_desc}")
-                lines.append("  </Card>")
-            lines.append("</CardGroup>\n")
+            visible_class_methods = [m for m in cls.class_methods if m.name not in SKIP_METHODS]
+            visible_methods = [m for m in cls.methods if m.name not in SKIP_METHODS]
+            
+            if visible_class_methods or visible_methods:
+                lines.append("## Methods\n")
+                lines.append("<CardGroup cols={2}>")
+                for m in visible_class_methods:
+                    lines.append(f'  <Card title="{m.name}()" icon="function" href="../functions/{cls.name}-{m.name}">')
+                    m_desc = sanitize_description(m.docstring) or "Class method."
+                    lines.append(f"    {m_desc}")
+                    lines.append("  </Card>")
+                for m in visible_methods:
+                    lines.append(f'  <Card title="{m.name}()" icon="function" href="../functions/{cls.name}-{m.name}">')
+                    m_desc = sanitize_description(m.docstring) or "Instance method."
+                    lines.append(f"    {m_desc}")
+                    lines.append("  </Card>")
+                lines.append("</CardGroup>\n")
+                
+            # List skipped methods in an accordion without links for completeness
+            skipped_methods = [m for m in (cls.class_methods + cls.methods) if m.name in SKIP_METHODS]
+            if skipped_methods:
+                lines.append('<Accordion title="Internal & Generic Methods">')
+                for m in skipped_methods:
+                    lines.append(f"- **{m.name}**: {sanitize_description(m.docstring) or 'Generic utility method.'}")
+                lines.append("</Accordion>\n")
 
         if cls.examples:
             lines.append("## Usage\n")
@@ -1096,10 +1135,15 @@ class MDXGenerator:
             if len(func.examples) > 1:
                 lines.append("<CodeGroup>")
                 for i, ex in enumerate(func.examples):
-                    lines.append(f"```python Example {i+1}\n{ex}\n```")
+                    # Dedent example content for cleaner display
+                    import textwrap
+                    dedented_ex = textwrap.dedent(ex)
+                    lines.append(f"```python Example {i+1}\n{dedented_ex}\n```")
                 lines.append("</CodeGroup>\n")
             else:
-                lines.append(f"```python\n{func.examples[0]}\n```\n")
+                import textwrap
+                dedented_ex = textwrap.dedent(func.examples[0])
+                lines.append(f"```python\n{dedented_ex}\n```\n")
 
         return "\n".join(lines)
 
@@ -1151,12 +1195,14 @@ class MDXGenerator:
             lines.append("</Accordion>\n")
         
         if cls.methods:
-            lines.append('<Accordion title="Methods">')
-            for m in cls.methods:
-                lines.append(f"- **{'async ' if m.is_async else ''}{m.name}**(`{escape_for_table(m.signature, is_type=True)}`) → `{escape_for_table(m.return_type, is_type=True)}`")
-                if m.docstring:
-                    lines.append(f"  {escape_mdx(m.docstring.split('\\n')[0][:80])}")
-            lines.append("</Accordion>\n")
+            visible_methods = [m for m in cls.methods if m.name not in SKIP_METHODS]
+            if visible_methods:
+                lines.append('<Accordion title="Methods">')
+                for m in visible_methods:
+                    lines.append(f"- **{'async ' if m.is_async else ''}{m.name}**(`{escape_for_table(m.signature, is_type=True)}`) → `{escape_for_table(m.return_type, is_type=True)}`")
+                    if m.docstring:
+                        lines.append(f"  {escape_mdx(m.docstring.split('\\n')[0][:80])}")
+                lines.append("</Accordion>\n")
         
         return lines
 
@@ -1277,9 +1323,27 @@ class ReferenceDocsGenerator:
                             print(f"    Generated: {r.name}")
         
         if generator.generated_files and not dry_run:
+            print(f"\nCleaning up orphaned MDX files...")
+            self.cleanup_orphaned_files(config["output"], generator.generated_files)
+            
             print(f"\nUpdating docs.json navigation...")
-            self.update_docs_json(package_name, generator.generated_files)
-            print(f"Updated docs.json with {len(generator.generated_files)} pages")
+            self.update_docs_json(package_name, sorted(list(generator.generated_files)))
+
+    def cleanup_orphaned_files(self, output_dir: Path, current_files: set):
+        """Delete MDX files that are no longer part of the generated set."""
+        docs_root = Path("/Users/praison/PraisonAIDocs")
+        for sub_dir in ["functions", "classes", "modules"]:
+            target_dir = output_dir / sub_dir
+            if not target_dir.exists():
+                continue
+                
+            for mdx_file in target_dir.glob("*.mdx"):
+                rel_path = str(mdx_file.relative_to(docs_root))
+                nav_path = rel_path.replace('.mdx', '').replace('\\', '/')
+                if nav_path not in current_files:
+                    print(f"    Deleting orphaned file: {mdx_file.name}")
+                    mdx_file.unlink()
+            print(f"Updated package with {len(current_files)} pages")
 
 
     def update_docs_json(self, package_name: str, generated_pages: List[str]):
