@@ -54,6 +54,7 @@ class ClassInfo:
     methods: List[MethodInfo] = field(default_factory=list)
     class_methods: List[MethodInfo] = field(default_factory=list)
     properties: List[ParamInfo] = field(default_factory=list)
+    examples: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -460,10 +461,14 @@ class PythonDocParser:
     def _parse_class(self, node: ast.ClassDef) -> Optional[ClassInfo]:
         try:
             bases = [self._get_annotation(b) for b in node.bases]
+            raw_doc = ast.get_docstring(node) or ""
+            parsed_doc = self._parse_docstring(raw_doc)
+            
             info = ClassInfo(
                 name=node.name, 
-                docstring=ast.get_docstring(node) or "",
+                docstring=parsed_doc["description"],
                 bases=bases,
+                examples=parsed_doc["examples"]
             )
             
             for item in node.body:
@@ -892,21 +897,27 @@ class MDXGenerator:
 
         if info.classes:
             lines.append("## Classes\n")
+            lines.append("<CardGroup cols={2}>")
             for cls in info.classes:
-                lines.append(f"**[Dedicated Page: {cls.name}](../classes/{cls.name})**\n")
-                lines.extend(self._render_class(cls, info.package))
-                lines.append("")
+                lines.append(f'  <Card title="{cls.name}" icon="brackets-curly" href="../classes/{cls.name}">')
+                cls_desc = sanitize_description(cls.docstring) or "Class definition."
+                lines.append(f"    {cls_desc}")
+                lines.append("  </Card>")
+            lines.append("</CardGroup>\n")
 
         if info.functions:
             lines.append("## Functions\n")
+            lines.append("<CardGroup cols={2}>")
             for func in info.functions:
-                lines.append(f"**[Dedicated Page: {func.name}()](../functions/{func.name})**\n")
-                lines.extend(self._render_function(func, info.package))
-                lines.append("")
+                lines.append(f'  <Card title="{func.name}()" icon="function" href="../functions/{func.name}">')
+                func_desc = sanitize_description(func.docstring) or "Function definition."
+                lines.append(f"    {func_desc}")
+                lines.append("  </Card>")
+            lines.append("</CardGroup>\n")
 
         if info.constants:
             lines.extend([
-                "## Constants",
+                "### Constants",
                 "",
                 "| Name | Value |",
                 "|------|-------|",
@@ -924,7 +935,7 @@ class MDXGenerator:
     def _render_class_page(self, cls: ClassInfo, module_info: ModuleInfo) -> str:
         """Render a dedicated Class Blueprint page."""
         safe_docstring = escape_mdx(cls.docstring) if cls.docstring else ""
-        desc = f"Class reference for {cls.name}"
+        desc = sanitize_description(cls.docstring) or f"Class reference for {cls.name}"
         
         lines = [
             "---",
@@ -935,39 +946,63 @@ class MDXGenerator:
             "",
             f"# {cls.name}",
             "",
-            f"*Module: [{module_info.short_name}](../modules/{module_info.short_name})*",
+            f"> Defined in the [**{module_info.short_name}**](../modules/{module_info.short_name}) module.",
             "",
             safe_docstring,
             "",
         ]
 
-        if cls.init_params:
-            lines.extend([
-                "## Constructor",
-                "",
-                "| Parameter | Type | Required | Default |",
-                "|-----------|------|----------|---------|",
-            ])
-            for p in cls.init_params:
-                lines.append(f"| `{p.name}` | `{escape_for_table(p.type, is_type=True)}` | {'Yes' if p.required else 'No'} | `{escape_for_table(p.default, is_type=False) if p.default else '-'}` |")
+        # Add Mermaid Diagram if applicable
+        mermaid = self._render_mermaid_diagram(cls.name)
+        if mermaid:
+            lines.append(mermaid)
             lines.append("")
+
+        if cls.init_params:
+            lines.append("## Constructor\n")
+            for p in cls.init_params:
+                default_str = f' default="{escape_for_table(p.default)}"' if p.default and p.default != "None" else ""
+                lines.extend([
+                    f'<ParamField query="{p.name}" type="{escape_for_table(p.type, is_type=True)}" required={"{true}" if p.required else "{false}"}{default_str}>',
+                    f'  {escape_mdx(p.description) if p.description else "No description available."}',
+                    '</ParamField>',
+                    ""
+                ])
 
         if cls.properties:
-            lines.extend([
-                "## Properties",
-                "",
-                "| Property | Type |",
-                "|----------|------|",
-            ])
+            lines.append("## Properties\n")
             for p in cls.properties:
-                lines.append(f"| `{p.name}` | `{escape_for_table(p.type, is_type=True)}` |")
-            lines.append("")
+                lines.extend([
+                    f'<ResponseField name="{p.name}" type="{escape_for_table(p.type, is_type=True)}">',
+                    f'  {escape_mdx(p.description) if p.description else "No description available."}',
+                    '</ResponseField>',
+                    ""
+                ])
 
-        if cls.methods:
+        if cls.methods or cls.class_methods:
             lines.append("## Methods\n")
+            lines.append("<CardGroup cols={2}>")
+            for m in cls.class_methods:
+                lines.append(f'  <Card title="{m.name}()" icon="function" href="../functions/{cls.name}-{m.name}">')
+                m_desc = sanitize_description(m.docstring) or "Class method."
+                lines.append(f"    {m_desc}")
+                lines.append("  </Card>")
             for m in cls.methods:
-                lines.append(f"- [{m.name}()](../functions/{cls.name}-{m.name})")
-            lines.append("")
+                lines.append(f'  <Card title="{m.name}()" icon="function" href="../functions/{cls.name}-{m.name}">')
+                m_desc = sanitize_description(m.docstring) or "Instance method."
+                lines.append(f"    {m_desc}")
+                lines.append("  </Card>")
+            lines.append("</CardGroup>\n")
+
+        if cls.examples:
+            lines.append("## Usage\n")
+            if len(cls.examples) > 1:
+                lines.append("<CodeGroup>")
+                for i, ex in enumerate(cls.examples):
+                    lines.append(f"```python Example {i+1}\n{ex}\n```")
+                lines.append("</CodeGroup>\n")
+            else:
+                lines.append(f"```python\n{cls.examples[0]}\n```\n")
 
         return "\n".join(lines)
 
