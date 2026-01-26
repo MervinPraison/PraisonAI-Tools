@@ -341,23 +341,63 @@ class PythonDocParser:
         self._load_lazy_imports()
     
     def _load_lazy_imports(self):
-        """Load _LAZY_IMPORTS from __init__.py if available."""
-        init_file = self.package_path / "__init__.py"
-        if not init_file.exists():
-            return
+        """Load _LAZY_IMPORTS and _LAZY_GROUPS from all __init__.py files.
         
-        try:
-            content = init_file.read_text()
-            match = re.search(r'_LAZY_IMPORTS\s*=\s*\{([^}]+(?:\{[^}]*\}[^}]*)*)\}', content, re.DOTALL)
-            if not match:
-                return
-            
+        Recursively scans the package and all submodules for lazy import patterns.
+        Supports two patterns:
+        1. _LAZY_IMPORTS: flat dict of symbol -> (module, symbol)
+        2. _LAZY_GROUPS: nested dict of group -> {symbol: (module, symbol)}
+        """
+        # Scan all __init__.py files in the package
+        init_files = list(self.package_path.rglob("__init__.py"))
+        
+        for init_file in init_files:
+            try:
+                content = init_file.read_text()
+                self._parse_lazy_patterns(content)
+            except Exception:
+                pass
+    
+    def _parse_lazy_patterns(self, content: str):
+        """Parse various lazy loading patterns from file content.
+        
+        Supports patterns:
+        1. _LAZY_IMPORTS: flat dict of symbol -> (module, symbol)
+        2. _LAZY_GROUPS: nested dict of group -> {symbol: (module, symbol)}
+        3. TOOL_MAPPINGS: dict of symbol -> (module, class_or_none)
+        4. __all__: explicit export list (fallback for inline __getattr__)
+        """
+        # Pattern 1: _LAZY_IMPORTS (flat dict)
+        match = re.search(r'_LAZY_IMPORTS\s*=\s*\{([^}]+(?:\{[^}]*\}[^}]*)*)\}', content, re.DOTALL)
+        if match:
             dict_content = match.group(1)
             pattern = r"'(\w+)':\s*\('([^']+)',\s*'([^']+)'\)"
             for m in re.finditer(pattern, dict_content):
                 self._lazy_imports[m.group(1)] = (m.group(2), m.group(3))
-        except Exception:
-            pass
+        
+        # Pattern 2: _LAZY_GROUPS (nested dict used by hooks, etc.)
+        match = re.search(r'_LAZY_GROUPS\s*=\s*\{(.+?)\n\}', content, re.DOTALL)
+        if match:
+            groups_content = match.group(1)
+            # Parse all symbol -> (module, symbol) pairs within groups
+            pattern = r"'(\w+)':\s*\('([^']+)',\s*'([^']+)'\)"
+            for m in re.finditer(pattern, groups_content):
+                symbol_name = m.group(1)
+                module_path = m.group(2)
+                self._lazy_imports[symbol_name] = (module_path, symbol_name)
+        
+        # Pattern 3: TOOL_MAPPINGS (used by tools/__init__.py)
+        match = re.search(r'TOOL_MAPPINGS\s*=\s*\{(.+?)\n\}', content, re.DOTALL)
+        if match:
+            mappings_content = match.group(1)
+            # Parse 'symbol': ('.module', None) or 'symbol': ('.module', 'ClassName')
+            pattern = r"'(\w+)':\s*\('([^']+)',\s*(?:None|'([^']*)')\)"
+            for m in re.finditer(pattern, mappings_content):
+                symbol_name = m.group(1)
+                self._lazy_imports[symbol_name] = (m.group(2), symbol_name)
+
+
+
     
     def get_modules(self) -> List[str]:
         """Get list of modules to document."""
