@@ -6,14 +6,15 @@ Generates Mintlify-compatible MDX documentation from Python and TypeScript sourc
 
 from __future__ import annotations
 
-import ast
-import json
-import re
 import shutil
 import time
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
+import ast
+import re
+import json
 
 
 # =============================================================================
@@ -64,14 +65,26 @@ class FunctionInfo:
 
 @dataclass
 class ModuleInfo:
-    name: str
-    path: str
-    docstring: str = ""
+    name: str  # fully qualified, e.g., praisonaiagents.agent.agent
+    short_name: str  # e.g., agent
+    docstring: Optional[str] = None
     classes: List[ClassInfo] = field(default_factory=list)
     functions: List[FunctionInfo] = field(default_factory=list)
     constants: List[Tuple[str, str]] = field(default_factory=list)
-    icon: str = "file-code"
-    package: str = "praisonaiagents"
+    is_init: bool = False
+    package: str = "python"
+    
+    @property
+    def display_name(self) -> str:
+        # For __init__.py files, show the package name, not __init__
+        if self.name.endswith(".__init__"):
+            return self.name.rsplit(".", 1)[0]
+        return self.name
+
+
+class LayoutType(Enum):
+    LEGACY = "legacy"        # Consistently in one file per module
+    GRANULAR = "granular"    # Three Pillars (Modules, Classes, Functions)
 
 
 # =============================================================================
@@ -374,13 +387,12 @@ class PythonDocParser:
             source = file_path.read_text()
             tree = ast.parse(source)
             
-            module_name = module_path.split(".")[-1]
+            module_short_name = module_path.split(".")[-1]
             info = ModuleInfo(
-                name=module_name,
-                path=module_path,
+                name=module_path,
+                short_name=module_short_name,
                 docstring=ast.get_docstring(tree) or "",
-                icon=get_icon_for_module(module_name),
-                package=self.package_name,
+                is_init=file_path.name == "__init__.py"
             )
             
             for node in tree.body:
@@ -537,11 +549,11 @@ class TypeScriptDocParser:
         
         try:
             content = index_file.read_text()
+            module_short_name = module_name
             info = ModuleInfo(
-                name=module_name,
-                path=f"praisonai/{module_name}",
+                name=f"praisonai.{module_name}",
+                short_name=module_short_name,
                 docstring=self._extract_module_doc(content),
-                icon=get_icon_for_module(module_name),
                 package="typescript",
             )
             info.classes = self._parse_classes(content)
@@ -595,52 +607,100 @@ class TypeScriptDocParser:
 class MDXGenerator:
     """Generate MDX documentation files."""
     
-    def __init__(self, output_dir: Path, package_name: str, config: dict):
+    def __init__(self, output_dir: Path, package_name: str, config: dict, layout: LayoutType = LayoutType.GRANULAR):
         self.output_dir = output_dir
         self.package_name = package_name
         self.generated_files: List[str] = []
         self.config = config
+        self.layout = layout
     
-    def generate_module_doc(self, info: ModuleInfo, dry_run: bool = False) -> Optional[Path]:
-        """Generate MDX documentation for a module."""
+    def generate_module_doc(self, info: ModuleInfo, dry_run: bool = False) -> List[Path]:
+        """Generate MDX documentation for a module (potentially multiple files)."""
+        if self.layout == LayoutType.LEGACY:
+            return self._generate_legacy(info, dry_run)
+        else:
+            return self._generate_granular(info, dry_run)
+
+    def _generate_legacy(self, info: ModuleInfo, dry_run: bool = False) -> List[Path]:
+        """Original single-file generation."""
         try:
-            output_file = self.output_dir / f"{info.name}.mdx"
+            output_file = self.output_dir / f"{info.short_name}.mdx"
             content = self._render_module(info)
-            
             if not dry_run:
                 output_file.parent.mkdir(parents=True, exist_ok=True)
                 output_file.write_text(content)
-                
-                docs_root = Path("/Users/praison/PraisonAIDocs")
-                rel_path = str(output_file.relative_to(docs_root))
-                nav_path = rel_path.replace('.mdx', '').replace('\\', '/')
-                self.generated_files.append(nav_path)
-            
-            return output_file
+                self._track_file(output_file)
+            return [output_file]
         except Exception:
-            return None
+            return []
+
+    def _generate_granular(self, info: ModuleInfo, dry_run: bool = False) -> List[Path]:
+        """New multi-file generation (Three Pillars)."""
+        generated = []
+        try:
+            # 1. Module Page (Index)
+            module_file = self.output_dir / "modules" / f"{info.short_name}.mdx"
+            module_content = self._render_module_granular(info)
+            if not dry_run:
+                module_file.parent.mkdir(parents=True, exist_ok=True)
+                module_file.write_text(module_content)
+                self._track_file(module_file)
+            generated.append(module_file)
+
+            # 2. Class Pages
+            for cls in info.classes:
+                class_file = self.output_dir / "classes" / f"{cls.name}.mdx"
+                class_content = self._render_class_page(cls, info)
+                if not dry_run:
+                    class_file.parent.mkdir(parents=True, exist_ok=True)
+                    class_file.write_text(class_content)
+                    self._track_file(class_file)
+                generated.append(class_file)
+
+                # 3. Class Methods (as separate function pages)
+                for m in cls.methods:
+                    method_file = self.output_dir / "functions" / f"{cls.name}-{m.name}.mdx"
+                    method_content = self._render_function_page(m, info, cls_name=cls.name)
+                    if not dry_run:
+                        method_file.parent.mkdir(parents=True, exist_ok=True)
+                        method_file.write_text(method_content)
+                        self._track_file(method_file)
+                    generated.append(method_file)
+
+            # 4. Top-level Functions
+            for func in info.functions:
+                func_file = self.output_dir / "functions" / f"{func.name}.mdx"
+                func_content = self._render_function_page(func, info)
+                if not dry_run:
+                    func_file.parent.mkdir(parents=True, exist_ok=True)
+                    func_file.write_text(func_content)
+                    self._track_file(func_file)
+                generated.append(func_file)
+
+        except Exception as e:
+            print(f"Error generating granular: {e}")
+        return generated
+
+    def _track_file(self, path: Path):
+        docs_root = Path("/Users/praison/PraisonAIDocs")
+        rel_path = str(path.relative_to(docs_root))
+        nav_path = rel_path.replace('.mdx', '').replace('\\', '/')
+        self.generated_files.append(nav_path)
     
     def _render_module(self, info: ModuleInfo) -> str:
         safe_docstring = escape_mdx(info.docstring) if info.docstring else ""
-        desc = sanitize_description(info.docstring) or f"API reference for {info.name}"
+        desc = sanitize_description(info.docstring) or f"API reference for {info.short_name}"
         badge_color = self.config.get("badge_color", "gray")
         badge_text = self.config.get("badge_text", "Module")
         
-        if info.package == "typescript":
-            import_stmt = f"import {{ {info.name} }} from 'praisonai';"
-            lang = "typescript"
-        else:
-            import_stmt = f"from {info.package} import {info.name}"
-            lang = "python"
-        
         lines = [
             "---",
-            f'title: "{info.name}"',
+            f'title: "{info.short_name}"',
             f'description: "{desc}"',
-            f'icon: "{info.icon}"',
+            f'icon: "file-code"',
             "---",
             "",
-            f"# {info.name}",
+            f"# {info.display_name}",
             "",
             f'<Badge color="{badge_color}">{badge_text}</Badge>',
             "",
@@ -648,24 +708,24 @@ class MDXGenerator:
             "",
             "## Import",
             "",
-            f"```{lang}",
-            import_stmt,
+            "```python",
+            f"from {info.name.rsplit('.', 1)[0] if '.' in info.name else info.name} import {info.short_name}",
             "```",
             "",
         ]
-        
+
         if info.classes:
-            lines.append("## Classes")
-            lines.append("")
+            lines.append("## Classes\n")
             for cls in info.classes:
                 lines.extend(self._render_class(cls, info.package))
-        
+                lines.append("")
+
         if info.functions:
-            lines.append("## Functions")
-            lines.append("")
+            lines.append("## Functions\n")
             for func in info.functions:
                 lines.extend(self._render_function(func, info.package))
-        
+                lines.append("")
+
         if info.constants:
             lines.extend([
                 "## Constants",
@@ -681,6 +741,164 @@ class MDXGenerator:
                 lines.append(f"| `{name}` | `{escape_for_table(truncated_val, is_type=False)}` |")
             lines.append("")
         
+        return "\n".join(lines)
+
+    def _render_module_granular(self, info: ModuleInfo) -> str:
+        """Render the Module Index page for granular layout with full info."""
+        safe_docstring = escape_mdx(info.docstring) if info.docstring else ""
+        desc = sanitize_description(info.docstring) or f"Module reference for {info.short_name}"
+        badge_color = self.config.get("badge_color", "gray")
+        badge_text = self.config.get("badge_text", "Module")
+        
+        lines = [
+            "---",
+            f'title: "{info.short_name}"',
+            f'description: "{desc}"',
+            "---",
+            "",
+            f"# {info.display_name}",
+            "",
+            f'<Badge color="{badge_color}">{badge_text}</Badge>',
+            "",
+            safe_docstring,
+            "",
+            "## Overview",
+            f"This module provides components for {info.short_name}.",
+            "",
+        ]
+
+        if info.classes:
+            lines.append("## Classes\n")
+            for cls in info.classes:
+                lines.append(f"**[Dedicated Page: {cls.name}](../classes/{cls.name})**\n")
+                lines.extend(self._render_class(cls, info.package))
+                lines.append("")
+
+        if info.functions:
+            lines.append("## Functions\n")
+            for func in info.functions:
+                lines.append(f"**[Dedicated Page: {func.name}()](../functions/{func.name})**\n")
+                lines.extend(self._render_function(func, info.package))
+                lines.append("")
+
+        if info.constants:
+            lines.extend([
+                "## Constants",
+                "",
+                "| Name | Value |",
+                "|------|-------|",
+            ])
+            for name, value in info.constants:
+                val_str = str(value)
+                truncated_val = val_str[:200]
+                if len(val_str) > 200:
+                    truncated_val += "..."
+                lines.append(f"| `{name}` | `{escape_for_table(truncated_val, is_type=False)}` |")
+            lines.append("")
+        
+        return "\n".join(lines)
+
+    def _render_class_page(self, cls: ClassInfo, module_info: ModuleInfo) -> str:
+        """Render a dedicated Class Blueprint page."""
+        safe_docstring = escape_mdx(cls.docstring) if cls.docstring else ""
+        desc = f"Class reference for {cls.name}"
+        
+        lines = [
+            "---",
+            f'title: "{cls.name}"',
+            f'description: "{desc}"',
+            "---",
+            "",
+            f"# {cls.name}",
+            "",
+            f"*Module: [{module_info.short_name}](../modules/{module_info.short_name})*",
+            "",
+            safe_docstring,
+            "",
+        ]
+
+        if cls.init_params:
+            lines.extend([
+                "## Constructor",
+                "",
+                "| Parameter | Type | Required | Default |",
+                "|-----------|------|----------|---------|",
+            ])
+            for p in cls.init_params:
+                lines.append(f"| `{p.name}` | `{escape_for_table(p.type, is_type=True)}` | {'Yes' if p.required else 'No'} | `{escape_for_table(p.default, is_type=False) if p.default else '-'}` |")
+            lines.append("")
+
+        if cls.properties:
+            lines.extend([
+                "## Properties",
+                "",
+                "| Property | Type |",
+                "|----------|------|",
+            ])
+            for p in cls.properties:
+                lines.append(f"| `{p.name}` | `{escape_for_table(p.type, is_type=True)}` |")
+            lines.append("")
+
+        if cls.methods:
+            lines.append("## Methods\n")
+            for m in cls.methods:
+                lines.append(f"- [{m.name}()](../functions/{cls.name}-{m.name})")
+            lines.append("")
+
+        return "\n".join(lines)
+
+    def _render_function_page(self, func: FunctionInfo, module_info: ModuleInfo, cls_name: Optional[str] = None) -> str:
+        """Render a dedicated Function/Method Source of Truth page."""
+        safe_docstring = escape_mdx(func.docstring) if func.docstring else ""
+        display_name = f"{cls_name}.{func.name}" if cls_name else func.name
+        desc = f"API documentation for {display_name}"
+        
+        lines = [
+            "---",
+            f'title: "{display_name}"',
+            f'description: "{desc}"',
+            "---",
+            "",
+            f"# {display_name}",
+            "",
+        ]
+        
+        if cls_name:
+            lines.append(f"*Class: [{cls_name}](../classes/{cls_name})*")
+        else:
+            lines.append(f"*Module: [{module_info.short_name}](../modules/{module_info.short_name})*")
+            
+        lines.extend([
+            "",
+            safe_docstring,
+            "",
+            "## Signature",
+            "",
+            "```python",
+            f"{'async ' if func.is_async else ''}def {func.name}({func.signature}) -> {func.return_type}",
+            "```",
+            "",
+        ])
+
+        if func.params:
+            lines.extend([
+                "## Parameters",
+                "",
+                "| Parameter | Type | Description |",
+                "|-----------|------|-------------|",
+            ])
+            for p in func.params:
+                lines.append(f"| `{p.name}` | `{escape_for_table(p.type, is_type=True)}` | {escape_mdx(p.description) if p.description else '-'} |")
+            lines.append("")
+
+        if func.return_type and func.return_type != "Any":
+            lines.extend([
+                "## Returns",
+                "",
+                f"Type: `{func.return_type}`",
+                "",
+            ])
+
         return "\n".join(lines)
 
     def _render_class(self, cls: ClassInfo, package: str) -> List[str]:
@@ -753,31 +971,40 @@ class MDXGenerator:
 class ReferenceDocsGenerator:
     """Main generator class for PraisonAI reference documentation."""
     
-    def __init__(self, docs_root: str = "/Users/praison/PraisonAIDocs", source_root: Optional[str] = None):
+    def __init__(
+        self, 
+        docs_root: str = "/Users/praison/PraisonAIDocs", 
+        source_root: Optional[str] = None,
+        layout: LayoutType = LayoutType.GRANULAR
+    ):
         self.docs_root = Path(docs_root)
         self.docs_json_path = self.docs_root / "docs.json"
+        self.layout = layout
         
         # Base source root - default to local development path if not provided
         base_src = Path(source_root) if source_root else Path("/Users/praison/praisonai-package")
         
+        # Output sub-folders for Granular mode
+        self.ref_base = self.docs_root / "docs/sdk/reference"
+        
         self.paths = {
             "praisonaiagents": {
                 "source": base_src / "src/praisonai-agents/praisonaiagents",
-                "output": self.docs_root / "docs/sdk/reference/praisonaiagents",
+                "output": self.ref_base / "praisonaiagents",
                 "import_prefix": "praisonaiagents",
                 "badge_color": "blue",
                 "badge_text": "Core SDK",
             },
             "praisonai": {
                 "source": base_src / "src/praisonai/praisonai",
-                "output": self.docs_root / "docs/sdk/reference/praisonai",
+                "output": self.ref_base / "praisonai",
                 "import_prefix": "praisonai",
                 "badge_color": "purple",
                 "badge_text": "Wrapper",
             },
             "typescript": {
                 "source": base_src / "src/praisonai-ts/src",
-                "output": self.docs_root / "docs/sdk/reference/typescript",
+                "output": self.ref_base / "typescript",
                 "import_prefix": "praisonai",
                 "badge_color": "green",
                 "badge_text": "TypeScript",
@@ -810,7 +1037,7 @@ class ReferenceDocsGenerator:
         else:
             parser = PythonDocParser(config["source"], config["import_prefix"])
         
-        generator = MDXGenerator(config["output"], package_name, config)
+        generator = MDXGenerator(config["output"], package_name, config, layout=self.layout)
         modules = parser.get_modules()
         print(f"Found {len(modules)} modules")
         
@@ -823,13 +1050,14 @@ class ReferenceDocsGenerator:
             print(f"  Processing: {module}")
             info = parser.parse_module(module)
             if info:
-                result = generator.generate_module_doc(info, dry_run=dry_run)
-                if result:
+                results = generator.generate_module_doc(info, dry_run=dry_run)
+                if results:
                     generated += 1
-                    if dry_run:
-                        print(f"    Would generate: {result.name}")
-                    else:
-                        print(f"    Generated: {result.name}")
+                    for r in results:
+                        if dry_run:
+                            print(f"    Would generate: {r.name}")
+                        else:
+                            print(f"    Generated: {r.name}")
         
         if generator.generated_files and not dry_run:
             print(f"\nUpdating docs.json navigation...")
@@ -858,10 +1086,36 @@ class ReferenceDocsGenerator:
                 ref_group['pages'].append(package_group)
             
             unique_pages = sorted(list(set(generated_pages)))
-            package_group['pages'] = [p for p in unique_pages if not p.lower().endswith(('/index', '/__init__'))]
+            
+            if self.layout == LayoutType.GRANULAR:
+                modules = [p for p in unique_pages if '/modules/' in p]
+                classes = [p for p in unique_pages if '/classes/' in p]
+                functions = [p for p in unique_pages if '/functions/' in p]
+                
+                new_pages = []
+                if modules:
+                    new_pages.append({"group": "Modules", "icon": "box", "pages": modules})
+                if classes:
+                    new_pages.append({"group": "Classes", "icon": "brackets-curly", "pages": classes})
+                if functions:
+                    new_pages.append({"group": "Functions", "icon": "function", "pages": functions})
+                
+                package_group['pages'] = new_pages
+            else:
+                package_group['pages'] = [p for p in unique_pages if not p.lower().endswith(('/index', '/__init__'))]
             
             with open(self.docs_json_path, 'w') as f:
                 json.dump(docs_config, f, indent=2)
                 
         except Exception:
             pass
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="PaisonAI Reference Documentation Generator")
+    parser.add_argument("--layout", type=str, choices=["legacy", "granular"], default="granular", help="Documentation layout type")
+    args = parser.parse_args()
+    
+    layout = LayoutType.LEGACY if args.layout == "legacy" else LayoutType.GRANULAR
+    generator = ReferenceDocsGenerator(layout=layout)
+    generator.generate_all()
