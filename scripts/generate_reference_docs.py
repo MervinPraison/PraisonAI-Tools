@@ -974,11 +974,7 @@ class MDXGenerator:
             "",
         ]
         
-        # Mermaid Diagram
-        lines.append("## Overview")
-        lines.append("")
-        lines.append(generate_mermaid_diagram(info))
-        lines.append("")
+
         
         if safe_docstring:
             lines.append(safe_docstring)
