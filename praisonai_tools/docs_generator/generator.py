@@ -173,15 +173,17 @@ def validate_mdx(content: str) -> List[str]:
     return errors
 
 
-def escape_for_table(text: str) -> str:
+def escape_for_table(text: str, is_type: bool = False) -> str:
     """Escape text for use in markdown tables."""
     if not text:
         return text
     
-    text = sanitize_type_for_mdx(text) or text
+    if is_type:
+        text = sanitize_type_for_mdx(text) or text
+        
     text = text.replace('|', '\\|')
-    text = text.replace('{', '\\{').replace('}', '\\}')
-    text = re.sub(r'<([a-zA-Z_][a-zA-Z0-9_]*)>', r'&lt;\1&gt;', text)
+    # Use HTML entities for angle brackets to avoid tag confusion
+    text = text.replace('<', '&lt;').replace('>', '&gt;')
     
     return text
 
@@ -212,6 +214,7 @@ SKIP_MODULES = {
 }
 
 ICON_MAP = {
+    # Core Components
     "agent": "robot",
     "agents": "users",
     "task": "list-check",
@@ -234,60 +237,63 @@ ICON_MAP = {
     "workflows": "route",
     "telemetry": "chart-line",
     "search": "magnifying-glass",
-    "crawl": "spider",
-    "newspaper": "newspaper",
-    "firecrawl": "flame",
-    "spider": "spider",
-    "jina": "leaf",
-    "exa": "compass",
-    "acp": "server",
-    "adapters": "plug",
-    "api": "code",
-    "auto": "magic",
-    "browser": "globe",
-    "capabilities": "star",
-    "chat": "comments",
-    "cli": "terminal",
-    "code": "code",
-    "context": "brain",
-    "deploy": "cloud-arrow-up",
-    "docs_runner": "book",
-    "inbuilt_tools": "toolbox",
-    "mcp_server": "server",
-    "inc": "plus",
-    "public": "globe",
-    "version": "tag",
-    "upload_vision": "upload",
-    "train_vision": "eye",
-    "agents_generator": "wand-magic-sparkles",
-    "agent_scheduler": "calendar-day",
-    "ai": "brain",
-    "cache": "database",
-    "events": "bell",
-    "db": "database",
-    "main": "house",
-    "server": "server",
-    "lsp": "code",
-    "obs": "eye",
-    "output": "file-export",
+    
+    # Modules & Integration
+    "a2a": "network-wired",
+    "agui": "window-maximize",
+    "bus": "bus",
+    "chunking": "scissors",
     "compaction": "compress",
-    "background": "layers-group",
-    "models": "box",
-    "result": "square-check",
-    "retrieval_config": "gears",
-    "manager": "users-gear",
-    "dimensions": "ruler-combined",
+    "background": "layer-group",
+    "embedding": "layer-group",
     "embed": "layer-group",
+    "escalation": "arrow-trend-up",
+    "eval": "gauge",
+    "flow_display": "diagram-project",
+    "dimensions": "ruler-combined",
     "feature_configs": "sliders",
     "param_resolver": "code-fork",
     "parse_utils": "file-magnifying-glass",
     "presets": "bookmark",
-    "default": "file-code",
+    "main": "house",
     "index": "house",
-    "types": "tags",
+    "server": "server",
+    "mcp_server": "server",
+    "acp": "server",
+    "adapters": "plug",
+    "api": "code",
+    "lsp": "code",
+    "auto": "magic",
+    "browser": "globe",
+    "public": "globe",
+    "deploy": "cloud-arrow-up",
+    "upload_vision": "upload",
+    "train_vision": "eye",
+    "obs": "eye",
+    "ai": "brain",
+    "context": "brain",
+    "cache": "database",
+    "db": "database",
     "base": "database",
+    "events": "bell",
+    "output": "file-export",
+    "models": "box",
+    "result": "square-check",
+    "retrieval_config": "gears",
+    "manager": "users-gear",
+    "types": "tags",
+    "version": "tag",
+    "inc": "plus",
+    "video": "video",
+    "video_agent": "video",
+    "audio_agent": "microphone",
+    "ocr_agent": "file-lines",
+    "image_agent": "image",
+    "agent_scheduler": "calendar-day",
+    "agents_generator": "wand-magic-sparkles",
     "decorator": "wand-magic-sparkles",
     "utils": "screwdriver-wrench",
+    "default": "file-code",
 }
 
 def get_icon_for_module(module_name: str) -> str:
@@ -668,7 +674,11 @@ class MDXGenerator:
                 "|------|-------|",
             ])
             for name, value in info.constants:
-                lines.append(f"| `{name}` | `{escape_for_table(str(value)[:50])}` |")
+                val_str = str(value)
+                truncated_val = val_str[:200]
+                if len(val_str) > 200:
+                    truncated_val += "..."
+                lines.append(f"| `{name}` | `{escape_for_table(truncated_val, is_type=False)}` |")
             lines.append("")
         
         return "\n".join(lines)
@@ -691,7 +701,7 @@ class MDXGenerator:
                 "|-----------|------|----------|---------|",
             ])
             for p in cls.init_params:
-                lines.append(f"| `{p.name}` | `{escape_for_table(p.type)}` | {'Yes' if p.required else 'No'} | `{escape_for_table(p.default) if p.default else '-'}` |")
+                lines.append(f"| `{p.name}` | `{escape_for_table(p.type, is_type=True)}` | {'Yes' if p.required else 'No'} | `{escape_for_table(p.default, is_type=False) if p.default else '-'}` |")
             lines.append("</Accordion>\n")
         
         if cls.properties:
@@ -702,13 +712,13 @@ class MDXGenerator:
                 "|----------|------|",
             ])
             for p in cls.properties:
-                lines.append(f"| `{p.name}` | `{escape_for_table(p.type)}` |")
+                lines.append(f"| `{p.name}` | `{escape_for_table(p.type, is_type=True)}` |")
             lines.append("</Accordion>\n")
         
         if cls.methods:
             lines.append('<Accordion title="Methods">')
             for m in cls.methods:
-                lines.append(f"- **{'async ' if m.is_async else ''}{m.name}**(`{escape_for_table(m.signature)}`) → `{escape_for_table(m.return_type)}`")
+                lines.append(f"- **{'async ' if m.is_async else ''}{m.name}**(`{escape_for_table(m.signature, is_type=True)}`) → `{escape_for_table(m.return_type, is_type=True)}`")
                 if m.docstring:
                     lines.append(f"  {escape_mdx(m.docstring.split('\\n')[0][:80])}")
             lines.append("</Accordion>\n")
@@ -733,7 +743,7 @@ class MDXGenerator:
         if func.params:
             lines.append('<Expandable title="Parameters">')
             for p in func.params:
-                lines.append(f"- **{p.name}** (`{escape_for_table(p.type)}`)")
+                lines.append(f"- **{p.name}** (`{escape_for_table(p.type, is_type=True)}`)")
                 if p.description: lines.append(f"  {escape_mdx(p.description)}")
             lines.append("</Expandable>\n")
         
