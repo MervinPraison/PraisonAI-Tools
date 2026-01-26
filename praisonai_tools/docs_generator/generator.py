@@ -35,8 +35,11 @@ class MethodInfo:
     name: str
     signature: str = ""
     return_type: str = "None"
+    return_description: str = ""
     docstring: str = ""
     params: List[ParamInfo] = field(default_factory=list)
+    raises: List[Tuple[str, str]] = field(default_factory=list)
+    examples: List[str] = field(default_factory=list)
     is_async: bool = False
     is_static: bool = False
     is_classmethod: bool = False
@@ -58,8 +61,11 @@ class FunctionInfo:
     name: str
     signature: str = ""
     return_type: str = "None"
+    return_description: str = ""
     docstring: str = ""
     params: List[ParamInfo] = field(default_factory=list)
+    raises: List[Tuple[str, str]] = field(default_factory=list)
+    examples: List[str] = field(default_factory=list)
     is_async: bool = False
 
 
@@ -485,15 +491,26 @@ class PythonDocParser:
             is_static = any(isinstance(d, ast.Name) and d.id == 'staticmethod' for d in node.decorator_list)
             is_classmethod = any(isinstance(d, ast.Name) and d.id == 'classmethod' for d in node.decorator_list)
             
+            raw_doc = ast.get_docstring(node) or ""
+            parsed_doc = self._parse_docstring(raw_doc)
+            
             params = self._parse_params(node)
+            # Merge descriptions from docstring into ParamInfo
+            for p in params:
+                if p.name in parsed_doc["args"]:
+                    p.description = parsed_doc["args"][p.name]
+            
             sig_parts = [f"{p.name}: {p.type}" for p in params]
             
             return MethodInfo(
                 name=node.name,
                 signature=", ".join(sig_parts),
-                return_type=self._get_annotation(node.returns),
-                docstring=ast.get_docstring(node) or "",
+                return_type=self._get_annotation(node.returns) or parsed_doc["returns_type"] or "None",
+                return_description=parsed_doc["returns"],
+                docstring=parsed_doc["description"],
                 params=params,
+                raises=parsed_doc["raises"],
+                examples=parsed_doc["examples"],
                 is_async=is_async,
                 is_static=is_static,
                 is_classmethod=is_classmethod,
@@ -504,19 +521,84 @@ class PythonDocParser:
     def _parse_function(self, node) -> Optional[FunctionInfo]:
         try:
             is_async = isinstance(node, ast.AsyncFunctionDef)
+            raw_doc = ast.get_docstring(node) or ""
+            parsed_doc = self._parse_docstring(raw_doc)
+            
             params = self._parse_params(node)
+            # Merge descriptions from docstring into ParamInfo
+            for p in params:
+                if p.name in parsed_doc["args"]:
+                    p.description = parsed_doc["args"][p.name]
+            
             sig_parts = [f"{p.name}: {p.type}" for p in params]
             
             return FunctionInfo(
                 name=node.name,
                 signature=", ".join(sig_parts),
-                return_type=self._get_annotation(node.returns),
-                docstring=ast.get_docstring(node) or "",
+                return_type=self._get_annotation(node.returns) or parsed_doc["returns_type"] or "None",
+                return_description=parsed_doc["returns"],
+                docstring=parsed_doc["description"],
                 params=params,
+                raises=parsed_doc["raises"],
+                examples=parsed_doc["examples"],
                 is_async=is_async,
             )
         except Exception:
             return None
+    
+    def _parse_docstring(self, docstring: str) -> Dict[str, Any]:
+        """Parse Google-style docstring into sections."""
+        result = {
+            "description": "",
+            "args": {},
+            "returns": "",
+            "returns_type": "",
+            "raises": [],
+            "examples": []
+        }
+        
+        if not docstring:
+            return result
+        
+        # More robust splitting that handles optional trailing colon and optional newline
+        sections = re.split(r'\n\s*(Args|Parameters|Returns|Raises|Example|Examples|Usage):?\s*(?:\n|$)', docstring, flags=re.IGNORECASE)
+        result["description"] = sections[0].strip()
+        
+        for i in range(1, len(sections), 2):
+            section_name = sections[i].lower()
+            section_content = sections[i+1]
+            
+            if section_name in ("args", "parameters"):
+                arg_pattern = r'^\s*(\w+)(?:\s*\(([^)]+)\))?:\s*(.+)$'
+                current_arg = None
+                for line in section_content.split('\n'):
+                    match = re.match(arg_pattern, line)
+                    if match:
+                        current_arg = match.group(1)
+                        desc = match.group(3)
+                        result["args"][current_arg] = desc
+                    elif current_arg and line.strip() and (line.startswith(' ') or line.startswith('\t')):
+                        result["args"][current_arg] += " " + line.strip()
+            
+            elif section_name == "returns":
+                ret_match = re.match(r'^\s*([^:]+):\s*(.+)$', section_content, re.DOTALL)
+                if ret_match:
+                    result["returns_type"] = ret_match.group(1).strip()
+                    result["returns"] = ret_match.group(2).strip()
+                else:
+                    result["returns"] = section_content.strip()
+            
+            elif section_name == "raises":
+                raises_lines = section_content.split('\n')
+                for line in raises_lines:
+                    match = re.match(r'^\s*(\w+):\s*(.+)$', line)
+                    if match:
+                        result["raises"].append((match.group(1), match.group(2)))
+            
+            elif section_name in ("example", "examples", "usage"):
+                result["examples"].append(section_content.strip())
+                
+        return result
     
     def _parse_params(self, node) -> List[ParamInfo]:
         params = []
@@ -893,7 +975,7 @@ class MDXGenerator:
         """Render a dedicated Function/Method Source of Truth page."""
         safe_docstring = escape_mdx(func.docstring) if func.docstring else ""
         display_name = f"{cls_name}.{func.name}" if cls_name else func.name
-        desc = f"API documentation for {display_name}"
+        desc = sanitize_description(func.docstring) or f"API reference for {display_name}"
         
         lines = [
             "---",
@@ -902,19 +984,40 @@ class MDXGenerator:
             'icon: "function"',
             "---",
             "",
-            f"# {display_name}",
+            f"# {func.name}",
             "",
+            '<div className="flex items-center gap-2">',
         ]
+
+        if func.is_async:
+            lines.append('  <Badge color="blue">Async</Badge>')
         
         if cls_name:
-            lines.append(f"*Class: [{cls_name}](../classes/{cls_name})*")
+            lines.append('  <Badge color="purple">Method</Badge>')
         else:
-            lines.append(f"*Module: [{module_info.short_name}](../modules/{module_info.short_name})*")
+            lines.append('  <Badge color="teal">Function</Badge>')
+            
+        lines.append('</div>')
+        lines.append("")
+
+        if cls_name:
+            lines.append(f"> This is a method of the [**{cls_name}**](../classes/{cls_name}) class in the [**{module_info.short_name}**](../modules/{module_info.short_name}) module.")
+        else:
+            lines.append(f"> This function is defined in the [**{module_info.short_name}**](../modules/{module_info.short_name}) module.")
             
         lines.extend([
             "",
             safe_docstring,
             "",
+        ])
+
+        # Add Mermaid Diagram if applicable
+        mermaid = self._render_mermaid_diagram(func.name)
+        if mermaid:
+            lines.append(mermaid)
+            lines.append("")
+
+        lines.extend([
             "## Signature",
             "",
             "```python",
@@ -924,25 +1027,61 @@ class MDXGenerator:
         ])
 
         if func.params:
-            lines.extend([
-                "## Parameters",
-                "",
-                "| Parameter | Type | Description |",
-                "|-----------|------|-------------|",
-            ])
-            for p in func.params:
-                lines.append(f"| `{p.name}` | `{escape_for_table(p.type, is_type=True)}` | {escape_mdx(p.description) if p.description else '-'} |")
-            lines.append("")
+            lines.append("## Parameters\n")
+            for i, p in enumerate(func.params):
+                default_str = f' default="{escape_for_table(p.default)}"' if p.default and p.default != "None" else ""
+                lines.extend([
+                    f'<ParamField query="{p.name}" type="{escape_for_table(p.type, is_type=True)}" required={"{true}" if p.required else "{false}"}{default_str}>',
+                    f'  {escape_mdx(p.description) if p.description else "No description available."}',
+                    '</ParamField>',
+                    ""
+                ])
 
-        if func.return_type and func.return_type != "Any":
+        if func.return_type and func.return_type != "None":
+            ret_desc = func.return_description if func.return_description else "The result of the operation."
             lines.extend([
-                "## Returns",
-                "",
-                f"Type: `{func.return_type}`",
+                "### Returns\n",
+                f'<ResponseField name="Returns" type="{func.return_type}">',
+                f"  {escape_mdx(ret_desc)}",
+                "</ResponseField>",
                 "",
             ])
+
+        if func.raises:
+            lines.append("### Exceptions\n")
+            lines.append('<AccordionGroup>')
+            for ex_type, ex_desc in func.raises:
+                lines.append(f'  <Accordion title="{ex_type}">')
+                lines.append(f'    {ex_desc}')
+                lines.append('  </Accordion>')
+            lines.append('</AccordionGroup>\n')
+
+        if func.examples:
+            lines.append("## Usage\n")
+            if len(func.examples) > 1:
+                lines.append("<CodeGroup>")
+                for i, ex in enumerate(func.examples):
+                    lines.append(f"```python Example {i+1}\n{ex}\n```")
+                lines.append("</CodeGroup>\n")
+            else:
+                lines.append(f"```python\n{func.examples[0]}\n```\n")
 
         return "\n".join(lines)
+
+    def _render_mermaid_diagram(self, name: str) -> Optional[str]:
+        """Auto-generate a Mermaid diagram based on function name and heuristics."""
+        # Theme: Dark Red (#8B0000) for Agents/Inputs/Outputs, Teal (#189AB4) for Tools
+        theme = """
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#8B0000', 'primaryTextColor': '#fff', 'primaryBorderColor': '#710101', 'lineColor': '#189AB4', 'secondaryColor': '#189AB4', 'tertiaryColor': '#fff' }}}%%
+"""
+        name_lower = name.lower()
+        if "agent" in name_lower:
+            return f"```mermaid{theme}\ngraph LR\n    input[\"Input Data\"] --> agent[\"Agent: {name}\"]\n    agent --> output[\"Output Result\"]\n    style agent fill:#8B0000,color:#fff\n    style input fill:#8B0000,color:#fff\n    style output fill:#8B0000,color:#fff\n```"
+        if "tool" in name_lower:
+            return f"```mermaid{theme}\ngraph LR\n    agent[\"Agent\"] -- \"uses\" --> tool[\"Tool: {name}\"]\n    tool -- \"returns\" --> result[\"Result\"]\n    style tool fill:#189AB4,color:#fff\n    style agent fill:#8B0000,color:#fff\n    style result fill:#8B0000,color:#fff\n```"
+        if "hook" in name_lower:
+            return f"```mermaid{theme}\ngraph TD\n    event[\"Event Trigger\"] --> hook[\"Hook: {name}\"]\n    hook --> decision{{\"Decision\"}}\n    decision -- \"Allow\" --> proc[\"Process\"]\n    decision -- \"Deny\" --> block[\"Block\"]\n    style hook fill:#189AB4,color:#fff\n    style event fill:#8B0000,color:#fff\n    style proc fill:#8B0000,color:#fff\n    style block fill:#8B0000,color:#fff\n```"
+        return None
 
     def _render_class(self, cls: ClassInfo, package: str) -> List[str]:
         safe_docstring = escape_mdx(cls.docstring) if cls.docstring else ""
