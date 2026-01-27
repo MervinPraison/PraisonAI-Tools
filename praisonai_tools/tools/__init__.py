@@ -97,6 +97,7 @@ def __getattr__(name):
         # Tavily
         "TavilyTool": "tavily_tool",
         "tavily_search": "tavily_tool",
+        "tavily_extract": "tavily_tool",
         # Wikipedia
         "WikipediaTool": "wikipedia_tool",
         "wikipedia_search": "wikipedia_tool",
@@ -494,6 +495,7 @@ __all__ = [
     # Tavily Tool
     "TavilyTool",
     "tavily_search",
+    "tavily_extract",
     # Wikipedia Tool
     "WikipediaTool",
     "wikipedia_search",

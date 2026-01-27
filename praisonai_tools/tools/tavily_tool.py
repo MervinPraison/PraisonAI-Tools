@@ -158,3 +158,15 @@ class TavilyTool(BaseTool):
 def tavily_search(query: str, max_results: int = 5) -> Dict[str, Any]:
     """Search with Tavily."""
     return TavilyTool().search(query=query, max_results=max_results)
+
+
+def tavily_extract(urls: str) -> List[Dict[str, Any]]:
+    """Extract content from URLs using Tavily.
+    
+    Args:
+        urls: Comma-separated list of URLs to extract content from
+        
+    Returns:
+        List of dicts with url and content keys
+    """
+    return TavilyTool().extract(urls=urls)

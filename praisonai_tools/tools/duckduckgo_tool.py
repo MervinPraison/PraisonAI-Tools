@@ -51,8 +51,16 @@ class DuckDuckGoTool(BaseTool):
         else:
             return {"error": f"Unknown action: {action}"}
     
-    def search(self, query: str, max_results: int = 5) -> List[Dict[str, Any]]:
-        """Search the web."""
+    def search(self, query: str, max_results: int = 5, retries: int = 3) -> List[Dict[str, Any]]:
+        """Search the web with retry logic.
+        
+        Args:
+            query: Search query
+            max_results: Maximum results to return
+            retries: Number of retry attempts on failure
+        """
+        import time
+        
         if not query:
             return [{"error": "query is required"}]
         
@@ -61,21 +69,40 @@ class DuckDuckGoTool(BaseTool):
         except ImportError:
             return [{"error": "duckduckgo-search not installed. Install with: pip install duckduckgo-search"}]
         
-        try:
-            with DDGS(proxy=self.proxy, timeout=self.timeout) as ddgs:
-                results = list(ddgs.text(query, max_results=max_results))
-            
-            return [
-                {
-                    "title": r.get("title"),
-                    "url": r.get("href"),
-                    "snippet": r.get("body"),
-                }
-                for r in results
-            ]
-        except Exception as e:
-            logger.error(f"DuckDuckGo search error: {e}")
-            return [{"error": str(e)}]
+        last_error = None
+        retry_delay = 1.0
+        
+        for attempt in range(retries):
+            try:
+                with DDGS(proxy=self.proxy, timeout=self.timeout) as ddgs:
+                    results = list(ddgs.text(query, max_results=max_results))
+                
+                if results:
+                    return [
+                        {
+                            "title": r.get("title"),
+                            "url": r.get("href"),
+                            "snippet": r.get("body"),
+                        }
+                        for r in results
+                    ]
+                
+                # Empty results - retry
+                if attempt < retries - 1:
+                    logger.debug(f"DuckDuckGo returned empty, retrying ({attempt + 1}/{retries})...")
+                    time.sleep(retry_delay * (attempt + 1))
+                    
+            except Exception as e:
+                last_error = e
+                logger.debug(f"DuckDuckGo attempt {attempt + 1} failed: {e}")
+                if attempt < retries - 1:
+                    time.sleep(retry_delay * (attempt + 1))
+        
+        # All retries exhausted
+        if last_error:
+            logger.error(f"DuckDuckGo search error after {retries} attempts: {last_error}")
+            return [{"error": str(last_error)}]
+        return [{"error": f"No results after {retries} attempts"}]
     
     def news(self, query: str, max_results: int = 5) -> List[Dict[str, Any]]:
         """Get news articles."""
