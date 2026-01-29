@@ -219,6 +219,18 @@ def __getattr__(name):
         # WhatsApp
         "WhatsAppTool": "whatsapp_tool",
         "send_whatsapp_message": "whatsapp_tool",
+        # Signal
+        "SignalTool": "signal_tool",
+        "send_signal_message": "signal_tool",
+        "check_signal_connection": "signal_tool",
+        # LINE
+        "LineTool": "line_tool",
+        "send_line_message": "line_tool",
+        "broadcast_line_message": "line_tool",
+        # iMessage
+        "iMessageTool": "imessage_tool",
+        "send_imessage": "imessage_tool",
+        "check_imessage_availability": "imessage_tool",
         # Zoom
         "ZoomTool": "zoom_tool",
         "list_zoom_meetings": "zoom_tool",
@@ -598,4 +610,16 @@ __all__ = [
     "WordPressTool",
     "check_wp_duplicate",
     "create_wp_post",
+    # Signal Tool
+    "SignalTool",
+    "send_signal_message",
+    "check_signal_connection",
+    # LINE Tool
+    "LineTool",
+    "send_line_message",
+    "broadcast_line_message",
+    # iMessage Tool
+    "iMessageTool",
+    "send_imessage",
+    "check_imessage_availability",
 ]
