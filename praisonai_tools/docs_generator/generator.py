@@ -286,6 +286,278 @@ def friendly_title(name: str, page_type: str = "class") -> str:
 
 
 # =============================================================================
+# RELATED DOCS MAPPING
+# =============================================================================
+# Maps keywords found in class/module names to relevant documentation pages.
+# Format: keyword -> list of (title, path, icon) tuples, most relevant first.
+# Paths are relative to docs root (e.g., "/docs/concepts/agents")
+
+RELATED_DOCS = {
+    "agent": [
+        ("Agents Concept", "/docs/concepts/agents", "robot"),
+        ("Single Agent Guide", "/docs/guides/single-agent", "book-open"),
+        ("Multi-Agent Guide", "/docs/guides/multi-agent", "users"),
+        ("Agent Configuration", "/docs/configuration/agent-config", "gear"),
+        ("Auto Agents", "/docs/features/autoagents", "wand-magic-sparkles"),
+    ],
+    "team": [
+        ("AgentTeam Concept", "/docs/concepts/agentteam", "users"),
+        ("Multi-Agent Guide", "/docs/guides/multi-agent", "book-open"),
+        ("Orchestrator Worker", "/docs/features/orchestrator-worker", "sitemap"),
+    ],
+    "flow": [
+        ("AgentFlow Concept", "/docs/concepts/agentflow", "diagram-project"),
+        ("Workflow Patterns", "/docs/features/workflow-patterns", "shuffle"),
+        ("Routing", "/docs/features/routing", "route"),
+    ],
+    "task": [
+        ("Tasks Concept", "/docs/concepts/tasks", "list-check"),
+        ("Task Configuration", "/docs/configuration/task-config", "gear"),
+        ("Task Validation", "/docs/features/task-validation-feedback", "check-double"),
+    ],
+    "memory": [
+        ("Memory Concept", "/docs/concepts/memory", "brain"),
+        ("Memory Overview", "/docs/memory/overview", "database"),
+        ("Memory Configuration", "/docs/configuration/memory-config", "gear"),
+        ("Session Resume", "/docs/memory/session-resume", "rotate-right"),
+    ],
+    "knowledge": [
+        ("Knowledge Concept", "/docs/concepts/knowledge", "book"),
+        ("Knowledge Overview", "/docs/knowledge/overview", "database"),
+        ("Knowledge Configuration", "/docs/configuration/knowledge-config", "gear"),
+        ("Chat with PDF", "/docs/knowledge/chat-with-pdf", "file-pdf"),
+    ],
+    "rag": [
+        ("RAG Concept", "/docs/concepts/rag", "magnifying-glass"),
+        ("RAG Overview", "/docs/rag/overview", "database"),
+        ("Chunking Strategies", "/docs/rag/strategies/overview", "scissors"),
+    ],
+    "tool": [
+        ("Tools Concept", "/docs/concepts/tools", "wrench"),
+        ("Create Custom Tools", "/docs/guides/tools/create-custom-tools", "plus"),
+        ("Tool Development", "/docs/tutorials/advanced-tool-development", "code"),
+    ],
+    "llm": [
+        ("Models Overview", "/docs/models", "microchip"),
+        ("LLM Configuration", "/docs/configuration/llm-config", "gear"),
+        ("Model Router", "/docs/features/model-router", "route"),
+        ("Model Failover", "/docs/features/model-failover", "shield"),
+    ],
+    "hook": [
+        ("Hooks Concept", "/docs/concepts/hooks", "anchor"),
+        ("Hook Events", "/docs/features/hook-events", "bolt"),
+        ("Callbacks", "/docs/features/callbacks", "phone"),
+    ],
+    "guardrail": [
+        ("Guardrails Concept", "/docs/concepts/guardrails", "shield-halved"),
+        ("Guardrails Feature", "/docs/features/guardrails", "shield"),
+        ("Approval", "/docs/features/approval", "check"),
+    ],
+    "context": [
+        ("Context Concept", "/docs/concepts/context", "layer-group"),
+        ("Context Management", "/docs/features/context-management", "sliders"),
+        ("Context Strategies", "/docs/features/context-strategies", "diagram-project"),
+    ],
+    "session": [
+        ("Session Management", "/docs/concepts/session-management", "clock"),
+        ("Sessions Feature", "/docs/features/sessions", "folder"),
+        ("Session Persistence", "/docs/features/session-persistence", "database"),
+    ],
+    "persistence": [
+        ("Persistence Overview", "/docs/persistence/overview", "hard-drive"),
+        ("Databases Overview", "/docs/databases/overview", "database"),
+        ("Session Resume", "/docs/persistence/session-resume", "rotate-right"),
+    ],
+    "mcp": [
+        ("MCP Concept", "/docs/concepts/mcp", "server"),
+        ("MCP Lifecycle", "/docs/features/mcp-lifecycle", "rotate"),
+    ],
+    "browser": [
+        ("Browser Agent", "/docs/features/browser-agent", "globe"),
+        ("Browser Deep Dive", "/docs/features/browser-agent-deep-dive", "magnifying-glass"),
+    ],
+    "async": [
+        ("Async Feature", "/docs/features/async", "clock"),
+        ("Background Tasks", "/docs/features/background-tasks", "spinner"),
+        ("Async Jobs", "/docs/features/async-jobs", "list-check"),
+    ],
+    "workflow": [
+        ("Workflows Feature", "/docs/features/workflows", "diagram-project"),
+        ("YAML Workflows", "/docs/features/yaml-workflows", "file-code"),
+        ("Workflow Patterns", "/docs/features/workflow-patterns", "shuffle"),
+    ],
+    "display": [
+        ("Display System", "/docs/features/display-system", "display"),
+        ("Display Callbacks", "/docs/features/display-callbacks", "phone"),
+        ("Output Styles", "/docs/features/output-styles", "palette"),
+    ],
+    "config": [
+        ("Configuration Overview", "/docs/configuration/index", "gear"),
+        ("Agent Config", "/docs/configuration/agent-config", "robot"),
+    ],
+    "output": [
+        ("Output Concept", "/docs/concepts/output", "file-export"),
+        ("Output Configuration", "/docs/configuration/output-config", "gear"),
+        ("Save Output", "/docs/features/save-output", "floppy-disk"),
+    ],
+    "profil": [
+        ("Agent Profiles", "/docs/features/agent-profiles", "id-card"),
+        ("Profiling", "/docs/features/profiling", "chart-line"),
+    ],
+    "plugin": [
+        ("Plugins Feature", "/docs/features/plugins", "plug"),
+    ],
+    "recipe": [
+        ("Recipes Concept", "/docs/concepts/recipes", "book-open"),
+        ("Recipes Guide", "/docs/guides/recipes/index", "utensils"),
+        ("Modular Recipes", "/docs/features/modular-recipes", "puzzle-piece"),
+    ],
+    "sandbox": [
+        ("Sandbox Feature", "/docs/features/sandbox", "box"),
+    ],
+    "scheduler": [
+        ("Background Tasks", "/docs/features/background-tasks", "clock"),
+        ("Async Jobs", "/docs/features/async-jobs", "list-check"),
+    ],
+    "middleware": [
+        ("Middleware Feature", "/docs/features/middleware", "layer-group"),
+    ],
+    "gateway": [
+        ("Gateway Feature", "/docs/features/gateway", "tower-broadcast"),
+    ],
+    "endpoint": [
+        ("Endpoints Code", "/docs/features/endpoints-code", "code"),
+        ("Agent API Launch", "/docs/features/agent-api-launch", "rocket"),
+    ],
+    "integration": [
+        ("LangChain Integration", "/docs/features/langchain", "link"),
+        ("Langflow Integration", "/docs/integrations/langflow", "diagram-project"),
+    ],
+    "job": [
+        ("Async Jobs", "/docs/features/async-jobs", "list-check"),
+        ("Background Tasks", "/docs/features/background-tasks", "clock"),
+    ],
+    "learn": [
+        ("Agent Learn", "/docs/concepts/agent-learn", "graduation-cap"),
+        ("Learn Configuration", "/docs/configuration/learn-config", "gear"),
+    ],
+    "train": [
+        ("Agent Train", "/docs/concepts/agent-train", "dumbbell"),
+        ("Training", "/docs/train", "chart-line"),
+    ],
+    "chat": [
+        ("Chat Feature", "/docs/features/chat", "comments"),
+        ("Conversation Stores", "/docs/databases/overview", "database"),
+    ],
+    "image": [
+        ("Image Generation", "/docs/features/image-generation", "image"),
+        ("Multimodal", "/docs/features/multimodal", "photo-film"),
+    ],
+    "vision": [
+        ("Multimodal", "/docs/features/multimodal", "eye"),
+    ],
+    "audio": [
+        ("Multimodal", "/docs/features/multimodal", "volume-high"),
+    ],
+    "video": [
+        ("Multimodal", "/docs/features/multimodal", "video"),
+    ],
+    "code": [
+        ("Code Agent", "/docs/features/codeagent", "code"),
+        ("Code Feature", "/docs/features/code", "terminal"),
+    ],
+    "eval": [
+        ("Evaluation Concept", "/docs/concepts/evaluation", "gavel"),
+        ("LLM as Judge", "/docs/features/llm-as-judge", "scale-balanced"),
+        ("Evaluation Loop", "/docs/eval/evaluation-loop", "rotate"),
+    ],
+    "handoff": [
+        ("Handoffs Concept", "/docs/concepts/handoffs", "hand-holding"),
+        ("Handoffs Feature", "/docs/features/handoffs", "arrow-right-arrow-left"),
+    ],
+    "skill": [
+        ("Skills Concept", "/docs/concepts/skills", "wand-magic-sparkles"),
+        ("Skills Feature", "/docs/features/skills", "star"),
+    ],
+    "replay": [
+        ("Replay Feature", "/features/replay", "rotate-left"),
+    ],
+    "cache": [
+        ("Caching Concept", "/docs/concepts/caching", "database"),
+    ],
+    "planning": [
+        ("Planning Concept", "/docs/concepts/planning", "map"),
+        ("Planning Mode", "/docs/features/planning-mode", "diagram-project"),
+        ("Planning Configuration", "/docs/configuration/planning-config", "gear"),
+    ],
+    "reflection": [
+        ("Reflection Concept", "/docs/concepts/reflection", "mirror"),
+        ("Self Reflection", "/docs/features/selfreflection", "brain"),
+        ("Reflection Configuration", "/docs/configuration/reflection-config", "gear"),
+    ],
+    "reasoning": [
+        ("Reasoning Feature", "/docs/features/reasoning", "brain"),
+        ("Reasoning Extract", "/docs/features/reasoning-extract", "lightbulb"),
+    ],
+}
+
+
+def get_related_docs(name: str, max_items: int = 5) -> list:
+    """Find related documentation based on keywords in the name.
+    
+    Args:
+        name: Class, function, or module name to find related docs for
+        max_items: Maximum number of related docs to return
+        
+    Returns:
+        List of (title, path, icon) tuples, most relevant first
+    """
+    name_lower = name.lower()
+    related = []
+    seen_paths = set()
+    
+    # Check each keyword against the name
+    for keyword, docs in RELATED_DOCS.items():
+        if keyword in name_lower:
+            for doc in docs:
+                if doc[1] not in seen_paths:
+                    related.append(doc)
+                    seen_paths.add(doc[1])
+    
+    return related[:max_items]
+
+
+def render_related_section(name: str, max_items: int = 5) -> str:
+    """Render a CardGroup section with related documentation links.
+    
+    Args:
+        name: Class, function, or module name
+        max_items: Maximum related items to show
+        
+    Returns:
+        MDX string with CardGroup, or empty string if no related docs
+    """
+    related = get_related_docs(name, max_items)
+    if not related:
+        return ""
+    
+    cards = []
+    for title, path, icon in related:
+        cards.append(f'  <Card title="{title}" icon="{icon}" href="{path}" />')
+    
+    return f"""
+
+---
+
+## Related Documentation
+
+<CardGroup cols={{2}}>
+{chr(10).join(cards)}
+</CardGroup>
+"""
+
+
+# =============================================================================
 # CONFIGURATION
 # =============================================================================
 
@@ -976,6 +1248,10 @@ class MDXGenerator:
                     truncated_val += "..."
                 lines.append(f"| `{name}` | `{escape_for_table(truncated_val, is_type=False)}` |")
             lines.append("")
+        # Add related documentation section
+        related_section = render_related_section(info.short_name, max_items=5)
+        if related_section:
+            lines.append(related_section)
         
         return "\n".join(lines)
 
@@ -1056,6 +1332,10 @@ class MDXGenerator:
                     truncated_val += "..."
                 lines.append(f"| `{name}` | `{escape_for_table(truncated_val, is_type=False)}` |")
             lines.append("")
+        # Add related documentation section
+        related_section = render_related_section(info.short_name, max_items=5)
+        if related_section:
+            lines.append(related_section)
         
         return "\n".join(lines)
 
@@ -1131,8 +1411,9 @@ class MDXGenerator:
                 lines.append("## Constructor\n")
                 for p in cls.init_params:
                     default_str = f' default="{escape_for_table(p.default)}"' if p.default and p.default != "None" else ""
+                    required_str = "{true}" if p.required else "{false}"
                     lines.extend([
-                        f'<ParamField query="{p.name}" type="{escape_for_table(p.type, is_type=True)}" required={{"{true}" if p.required else "{false}"}}{default_str}>',
+                        f'<ParamField query="{p.name}" type="{escape_for_table(p.type, is_type=True)}" required={required_str}{default_str}>',
                         f'  {escape_mdx(p.description) if p.description else "No description available."}',
                         '</ParamField>',
                         ""
@@ -1184,6 +1465,11 @@ class MDXGenerator:
                 lines.append("</CodeGroup>\n")
             else:
                 lines.append(f"```{lang}\n{cls.examples[0]}\n```\n")
+
+        # Add related documentation section
+        related_section = render_related_section(cls.name, max_items=5)
+        if related_section:
+            lines.append(related_section)
 
         return "\n".join(lines)
 
@@ -1248,8 +1534,9 @@ class MDXGenerator:
             lines.append("## Parameters\n")
             for i, p in enumerate(func.params):
                 default_str = f' default="{escape_for_table(p.default)}"' if p.default and p.default != "None" else ""
+                required_str = "{true}" if p.required else "{false}"
                 lines.extend([
-                    f'<ParamField query="{p.name}" type="{escape_for_table(p.type, is_type=True)}" required={"{true}" if p.required else "{false}"}{default_str}>',
+                    f'<ParamField query="{p.name}" type="{escape_for_table(p.type, is_type=True)}" required={required_str}{default_str}>',
                     f'  {escape_mdx(p.description) if p.description else "No description available."}',
                     '</ParamField>',
                     ""
@@ -1288,6 +1575,11 @@ class MDXGenerator:
                 import textwrap
                 dedented_ex = textwrap.dedent(func.examples[0])
                 lines.append(f"```python\n{dedented_ex}\n```\n")
+
+        # Add related documentation section
+        related_section = render_related_section(func.name, max_items=5)
+        if related_section:
+            lines.append(related_section)
 
         return "\n".join(lines)
 
