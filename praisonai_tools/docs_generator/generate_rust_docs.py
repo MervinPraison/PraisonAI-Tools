@@ -78,49 +78,49 @@ MODULE_DESCRIPTIONS = {
 # Abbreviations to preserve in titles
 ABBREVIATIONS = {"llm", "api", "cli", "id", "url", "http", "ai", "io"}
 
-# Related documentation mapping (keyword -> list of (title, path, icon))
+# Related documentation mapping - Rust SDK only links to Rust docs
 RELATED_DOCS = {
     "agent": [
+        ("Rust Overview", "/docs/rust/overview", "book-open"),
         ("Rust Quickstart", "/docs/rust/quickstart", "rocket"),
         ("Rust Agent Guide", "/docs/rust/agent", "robot"),
-        ("Agents Concept", "/docs/concepts/agents", "brain"),
+        ("Rust Installation", "/docs/rust/installation", "download"),
     ],
     "builder": [
-        ("Rust Quickstart", "/docs/rust/quickstart", "rocket"),
         ("Rust Agent Guide", "/docs/rust/agent", "robot"),
+        ("Rust Quickstart", "/docs/rust/quickstart", "rocket"),
     ],
     "tool": [
         ("Rust Tools Guide", "/docs/rust/tools", "wrench"),
-        ("Tools Concept", "/docs/concepts/tools", "gear"),
+        ("Rust Agent Guide", "/docs/rust/agent", "robot"),
     ],
     "workflow": [
         ("Rust Agent Flow", "/docs/rust/agent-flow", "diagram-project"),
         ("Rust Agent Team", "/docs/rust/agent-team", "users"),
-        ("AgentFlow Concept", "/docs/concepts/agentflow", "route"),
     ],
     "memory": [
         ("Rust Memory Guide", "/docs/rust/memory", "brain"),
-        ("Memory Concept", "/docs/concepts/memory", "database"),
+        ("Rust Agent Guide", "/docs/rust/agent", "robot"),
     ],
     "llm": [
-        ("Models Overview", "/docs/models", "microchip"),
-        ("Model Failover", "/docs/features/model-failover", "shield"),
+        ("Rust Overview", "/docs/rust/overview", "book-open"),
+        ("Rust Agent Guide", "/docs/rust/agent", "robot"),
     ],
     "config": [
-        ("Configuration Overview", "/docs/configuration/index", "gear"),
+        ("Rust Installation", "/docs/rust/installation", "gear"),
+        ("Rust Overview", "/docs/rust/overview", "book-open"),
     ],
     "error": [
-        ("Guardrails Feature", "/docs/features/guardrails", "shield"),
+        ("Rust Overview", "/docs/rust/overview", "book-open"),
     ],
     "derive": [
         ("Rust Tools Guide", "/docs/rust/tools", "wrench"),
     ],
     "cli": [
         ("Rust CLI Guide", "/docs/rust/cli", "terminal"),
-        ("CLI Feature", "/docs/features/cli", "terminal"),
+        ("Rust Quickstart", "/docs/rust/quickstart", "rocket"),
     ],
     "chat": [
-        ("Chat Feature", "/docs/features/chat", "comments"),
         ("Rust CLI Guide", "/docs/rust/cli", "terminal"),
     ],
     "prompt": [
@@ -128,18 +128,19 @@ RELATED_DOCS = {
     ],
     "run": [
         ("Rust CLI Guide", "/docs/rust/cli", "terminal"),
-        ("Workflows Feature", "/docs/features/workflows", "diagram-project"),
+        ("Rust Agent Flow", "/docs/rust/agent-flow", "diagram-project"),
     ],
     "task": [
-        ("Tasks Concept", "/docs/concepts/tasks", "list-check"),
+        ("Rust Agent Team", "/docs/rust/agent-team", "users"),
+        ("Rust Agent Flow", "/docs/rust/agent-flow", "diagram-project"),
     ],
     "team": [
         ("Rust Agent Team", "/docs/rust/agent-team", "users"),
-        ("AgentTeam Concept", "/docs/concepts/agentteam", "users"),
+        ("Rust Agent Flow", "/docs/rust/agent-flow", "diagram-project"),
     ],
     "flow": [
         ("Rust Agent Flow", "/docs/rust/agent-flow", "diagram-project"),
-        ("AgentFlow Concept", "/docs/concepts/agentflow", "route"),
+        ("Rust Agent Team", "/docs/rust/agent-team", "users"),
     ],
 }
 

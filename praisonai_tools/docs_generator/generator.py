@@ -501,13 +501,53 @@ RELATED_DOCS = {
     ],
 }
 
+# TypeScript SDK links to TypeScript-specific docs
+TYPESCRIPT_RELATED_DOCS = {
+    "agent": [
+        ("TypeScript Overview", "/docs/typescript/overview", "book-open"),
+        ("TypeScript Quickstart", "/docs/typescript/quickstart", "rocket"),
+        ("TypeScript Agent", "/docs/typescript/agent", "robot"),
+    ],
+    "tool": [
+        ("TypeScript Tools", "/docs/typescript/tools", "wrench"),
+        ("TypeScript Agent", "/docs/typescript/agent", "robot"),
+    ],
+    "config": [
+        ("TypeScript Installation", "/docs/typescript/installation", "download"),
+        ("TypeScript Overview", "/docs/typescript/overview", "book-open"),
+    ],
+    "memory": [
+        ("TypeScript Memory", "/docs/typescript/memory", "brain"),
+    ],
+    "workflow": [
+        ("TypeScript AgentFlow", "/docs/typescript/agentflow", "diagram-project"),
+        ("TypeScript AgentTeam", "/docs/typescript/agentteam", "users"),
+    ],
+    "team": [
+        ("TypeScript AgentTeam", "/docs/typescript/agentteam", "users"),
+    ],
+    "flow": [
+        ("TypeScript AgentFlow", "/docs/typescript/agentflow", "diagram-project"),
+    ],
+    "task": [
+        ("TypeScript AgentTeam", "/docs/typescript/agentteam", "users"),
+    ],
+    "mcp": [
+        ("TypeScript MCP", "/docs/typescript/mcp", "plug"),
+    ],
+    "llm": [
+        ("TypeScript Overview", "/docs/typescript/overview", "book-open"),
+    ],
+}
 
-def get_related_docs(name: str, max_items: int = 5) -> list:
+
+def get_related_docs(name: str, max_items: int = 5, package: str = "python") -> list:
     """Find related documentation based on keywords in the name.
     
     Args:
         name: Class, function, or module name to find related docs for
         max_items: Maximum number of related docs to return
+        package: Package name to determine which mapping to use
         
     Returns:
         List of (title, path, icon) tuples, most relevant first
@@ -516,8 +556,14 @@ def get_related_docs(name: str, max_items: int = 5) -> list:
     related = []
     seen_paths = set()
     
+    # Select the appropriate mapping based on package
+    if package == "typescript":
+        docs_map = TYPESCRIPT_RELATED_DOCS
+    else:
+        docs_map = RELATED_DOCS  # Python packages use the main mapping
+    
     # Check each keyword against the name
-    for keyword, docs in RELATED_DOCS.items():
+    for keyword, docs in docs_map.items():
         if keyword in name_lower:
             for doc in docs:
                 if doc[1] not in seen_paths:
@@ -527,17 +573,18 @@ def get_related_docs(name: str, max_items: int = 5) -> list:
     return related[:max_items]
 
 
-def render_related_section(name: str, max_items: int = 5) -> str:
+def render_related_section(name: str, max_items: int = 5, package: str = "python") -> str:
     """Render a CardGroup section with related documentation links.
     
     Args:
         name: Class, function, or module name
         max_items: Maximum related items to show
+        package: Package name to determine which links to use
         
     Returns:
         MDX string with CardGroup, or empty string if no related docs
     """
-    related = get_related_docs(name, max_items)
+    related = get_related_docs(name, max_items, package)
     if not related:
         return ""
     
@@ -1249,7 +1296,7 @@ class MDXGenerator:
                 lines.append(f"| `{name}` | `{escape_for_table(truncated_val, is_type=False)}` |")
             lines.append("")
         # Add related documentation section
-        related_section = render_related_section(info.short_name, max_items=5)
+        related_section = render_related_section(info.short_name, max_items=5, package=self.package_name)
         if related_section:
             lines.append(related_section)
         
@@ -1333,7 +1380,7 @@ class MDXGenerator:
                 lines.append(f"| `{name}` | `{escape_for_table(truncated_val, is_type=False)}` |")
             lines.append("")
         # Add related documentation section
-        related_section = render_related_section(info.short_name, max_items=5)
+        related_section = render_related_section(info.short_name, max_items=5, package=self.package_name)
         if related_section:
             lines.append(related_section)
         
@@ -1467,7 +1514,7 @@ class MDXGenerator:
                 lines.append(f"```{lang}\n{cls.examples[0]}\n```\n")
 
         # Add related documentation section
-        related_section = render_related_section(cls.name, max_items=5)
+        related_section = render_related_section(cls.name, max_items=5, package=self.package_name)
         if related_section:
             lines.append(related_section)
 
@@ -1577,7 +1624,7 @@ class MDXGenerator:
                 lines.append(f"```python\n{dedented_ex}\n```\n")
 
         # Add related documentation section
-        related_section = render_related_section(func.name, max_items=5)
+        related_section = render_related_section(func.name, max_items=5, package=self.package_name)
         if related_section:
             lines.append(related_section)
 
