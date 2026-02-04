@@ -42,6 +42,7 @@ class MethodInfo:
     examples: List[str] = field(default_factory=list)
     notes: str = ""  # Notes/More Information section
     see_also: List[Tuple[str, str]] = field(default_factory=list)  # (name, description)
+    calls: List[str] = field(default_factory=list)  # Functions this method calls (Uses)
     source_file: str = ""  # Relative path to source file
     source_line: int = 0  # Line number in source
     is_async: bool = False
@@ -77,6 +78,7 @@ class FunctionInfo:
     examples: List[str] = field(default_factory=list)
     notes: str = ""  # Notes/More Information section
     see_also: List[Tuple[str, str]] = field(default_factory=list)  # (name, description)
+    calls: List[str] = field(default_factory=list)  # Functions this function calls (Uses)
     source_file: str = ""  # Relative path to source file
     source_line: int = 0  # Line number in source
     is_async: bool = False
@@ -687,6 +689,112 @@ def render_see_also_section(see_also: list) -> str:
 """
 
 
+def render_uses_section(calls: list) -> str:
+    """Render a 'Uses' section showing what functions this code calls.
+    
+    Args:
+        calls: List of function/method names that are called
+        
+    Returns:
+        MDX string with uses section, or empty string if none
+    """
+    if not calls:
+        return ""
+    
+    items = [f"- `{call}`" for call in calls]
+    
+    return f"""
+## Uses
+
+{chr(10).join(items)}
+"""
+
+
+def render_used_by_section(used_by: list) -> str:
+    """Render a 'Used By' section showing what code calls this function.
+    
+    Args:
+        used_by: List of (caller_name, caller_path) tuples
+        
+    Returns:
+        MDX string with used by section, or empty string if none
+    """
+    if not used_by:
+        return ""
+    
+    items = []
+    for caller_name, caller_path in used_by:
+        if caller_path:
+            items.append(f"- [`{caller_name}`]({caller_path})")
+        else:
+            items.append(f"- `{caller_name}`")
+    
+    return f"""
+## Used By
+
+{chr(10).join(items)}
+"""
+
+
+# =============================================================================
+# AST FUNCTION CALL EXTRACTION
+# =============================================================================
+
+class FunctionCallVisitor(ast.NodeVisitor):
+    """Extract function/method calls from an AST node."""
+    
+    def __init__(self):
+        self.calls = []
+    
+    def visit_Call(self, node):
+        """Extract the name of a function call."""
+        if isinstance(node.func, ast.Name):
+            # Simple function call: func_name()
+            self.calls.append(node.func.id)
+        elif isinstance(node.func, ast.Attribute):
+            # Method call: obj.method() or self.method()
+            if isinstance(node.func.value, ast.Name):
+                if node.func.value.id == 'self':
+                    # self.method() - just use method name
+                    self.calls.append(node.func.attr)
+                else:
+                    # obj.method()
+                    self.calls.append(f"{node.func.value.id}.{node.func.attr}")
+            else:
+                # Chained or complex: just get the attribute
+                self.calls.append(node.func.attr)
+        self.generic_visit(node)
+    
+    def get_unique_calls(self) -> List[str]:
+        """Return unique function calls, excluding common built-ins."""
+        # Filter out common built-ins and private methods
+        excluded = {
+            'print', 'len', 'str', 'int', 'float', 'bool', 'list', 'dict', 'set',
+            'tuple', 'range', 'enumerate', 'zip', 'map', 'filter', 'sorted',
+            'isinstance', 'issubclass', 'hasattr', 'getattr', 'setattr', 'delattr',
+            'super', 'type', 'id', 'repr', 'format', 'open', 'input', 'round',
+            'abs', 'min', 'max', 'sum', 'any', 'all', 'next', 'iter', 'reversed',
+            'append', 'extend', 'insert', 'remove', 'pop', 'clear', 'copy',
+            'keys', 'values', 'items', 'get', 'update', 'join', 'split', 'strip',
+            'lower', 'upper', 'replace', 'format', 'startswith', 'endswith',
+        }
+        seen = set()
+        result = []
+        for call in self.calls:
+            call_name = call.split('.')[-1] if '.' in call else call
+            if call_name not in excluded and not call_name.startswith('_') and call not in seen:
+                seen.add(call)
+                result.append(call)
+        return result[:10]  # Limit to top 10 calls
+
+
+def extract_function_calls(node) -> List[str]:
+    """Extract function calls from a function/method AST node."""
+    visitor = FunctionCallVisitor()
+    visitor.visit(node)
+    return visitor.get_unique_calls()
+
+
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
@@ -1009,6 +1117,7 @@ class PythonDocParser:
                 examples=parsed_doc["examples"],
                 notes=parsed_doc["notes"],
                 see_also=parsed_doc["see_also"],
+                calls=extract_function_calls(node),
                 source_line=node.lineno,
                 is_async=is_async,
                 is_static=is_static,
@@ -1042,6 +1151,7 @@ class PythonDocParser:
                 examples=parsed_doc["examples"],
                 notes=parsed_doc["notes"],
                 see_also=parsed_doc["see_also"],
+                calls=extract_function_calls(node),
                 source_line=node.lineno,
                 is_async=is_async,
             )
@@ -1261,6 +1371,39 @@ class MDXGenerator:
         self.config = config
         self.layout = layout
         self.generated_files = set()  # Use set for faster lookups and cleanup
+        # Index for "Used By" cross-references: {function_name: [(caller_name, caller_path), ...]}
+        self.used_by_index: Dict[str, List[Tuple[str, str]]] = {}
+    
+    def _build_used_by_index(self, modules: List[ModuleInfo]) -> None:
+        """Build reverse index of function calls for 'Used By' section."""
+        for mod in modules:
+            for cls in mod.classes:
+                for method in cls.methods + cls.class_methods:
+                    caller_name = f"{cls.name}.{method.name}"
+                    caller_path = f"../functions/{cls.name}-{method.name}"
+                    for called in method.calls:
+                        # Get just the function name (without module prefix)
+                        call_name = called.split(".")[-1] if "." in called else called
+                        if call_name not in self.used_by_index:
+                            self.used_by_index[call_name] = []
+                        self.used_by_index[call_name].append((caller_name, caller_path))
+            
+            for func in mod.functions:
+                caller_name = func.name
+                caller_path = f"../functions/{func.name}"
+                for called in func.calls:
+                    call_name = called.split(".")[-1] if "." in called else called
+                    if call_name not in self.used_by_index:
+                        self.used_by_index[call_name] = []
+                    self.used_by_index[call_name].append((caller_name, caller_path))
+    
+    def get_used_by(self, func_name: str) -> List[Tuple[str, str]]:
+        """Get list of callers for a function."""
+        # Try exact match first, then short name
+        if func_name in self.used_by_index:
+            return self.used_by_index[func_name][:5]  # Limit to top 5
+        short_name = func_name.split(".")[-1] if "." in func_name else func_name
+        return self.used_by_index.get(short_name, [])[:5]
     
     def generate_module_doc(self, info: ModuleInfo, dry_run: bool = False) -> List[Path]:
         """Generate MDX documentation for a module (potentially multiple files)."""
@@ -1760,6 +1903,11 @@ class MDXGenerator:
                 dedented_ex = textwrap.dedent(func.examples[0])
                 lines.append(f"```python\n{dedented_ex}\n```\n")
 
+        # Add Uses section if function calls other functions
+        uses_section = render_uses_section(func.calls)
+        if uses_section:
+            lines.append(uses_section)
+
         # Add Notes section if available
         notes_section = render_notes_section(func.notes)
         if notes_section:
@@ -1769,6 +1917,13 @@ class MDXGenerator:
         see_also_section = render_see_also_section(func.see_also)
         if see_also_section:
             lines.append(see_also_section)
+
+        # Add Used By section (what calls this function)
+        used_by = self.get_used_by(func.name)
+        if used_by:
+            used_by_section = render_used_by_section(used_by)
+            if used_by_section:
+                lines.append(used_by_section)
 
         # Add Source link
         github_repo = self.config.get("github_repo", "")
@@ -1986,23 +2141,35 @@ class ReferenceDocsGenerator:
         modules = parser.get_modules()
         print(f"Found {len(modules)} modules")
         
-        generated = 0
+        # Two-pass generation for Used By cross-references:
+        # Pass 1: Parse all modules and build the index
+        print(f"  Pass 1: Building cross-reference index...")
+        parsed_modules = []
         for module in modules:
             module_name = module.split(".")[-1] if "." in module else module
             if module_name in SKIP_MODULES:
                 continue
-            
-            print(f"  Processing: {module}")
             info = parser.parse_module(module)
             if info:
-                results = generator.generate_module_doc(info, dry_run=dry_run)
-                if results:
-                    generated += 1
-                    for r in results:
-                        if dry_run:
-                            print(f"    Would generate: {r.name}")
-                        else:
-                            print(f"    Generated: {r.name}")
+                parsed_modules.append(info)
+        
+        # Build the Used By index from all parsed modules
+        generator._build_used_by_index(parsed_modules)
+        print(f"  Built index with {len(generator.used_by_index)} functions tracked")
+        
+        # Pass 2: Generate documentation with cross-references
+        print(f"  Pass 2: Generating documentation...")
+        generated = 0
+        for info in parsed_modules:
+            print(f"  Processing: {info.name}")
+            results = generator.generate_module_doc(info, dry_run=dry_run)
+            if results:
+                generated += 1
+                for r in results:
+                    if dry_run:
+                        print(f"    Would generate: {r.name}")
+                    else:
+                        print(f"    Generated: {r.name}")
         
         if generator.generated_files and not dry_run:
             # NOTE: Cleanup disabled - was incorrectly deleting valid files
