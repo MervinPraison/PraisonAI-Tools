@@ -209,18 +209,80 @@ def escape_for_table(text: str, is_type: bool = False) -> str:
 
 
 def sanitize_description(text: str, max_length: int = 150) -> str:
-    """Sanitize description for YAML frontmatter."""
+    """Sanitize description for YAML frontmatter. Truncates at word boundary."""
     if not text:
         return ""
     
     first_line = text.split('\n')[0].strip()
-    if len(first_line) > max_length:
-        first_line = first_line[:max_length-3] + "..."
-    
     first_line = first_line.replace('"', "'")
     first_line = re.sub(r'[<>{}]', '', first_line)
     
+    if len(first_line) > max_length:
+        # Truncate at word boundary
+        truncated = first_line[:max_length].rsplit(' ', 1)[0]
+        first_line = truncated + "..."
+    
     return first_line
+
+
+# Abbreviations to preserve in uppercase for SEO
+SEO_ABBREVIATIONS = {"llm", "api", "cli", "id", "url", "http", "ai", "a2a", "mcp", "rag", "os", "db", "gui", "io"}
+
+def friendly_title(name: str, page_type: str = "class") -> str:
+    """Convert a code name to a friendly, SEO-optimized title.
+    
+    Examples:
+        audio_agent -> Audio Agent
+        AfterAgentInput -> After Agent Input
+        BaseLLM -> Base LLM
+    """
+    if not name:
+        return name
+    
+    # Convert snake_case to Title Case
+    if "_" in name:
+        parts = name.split("_")
+        titled_parts = []
+        for part in parts:
+            if part.lower() in SEO_ABBREVIATIONS:
+                titled_parts.append(part.upper())
+            else:
+                titled_parts.append(part.capitalize())
+        return " ".join(titled_parts)
+    
+    # Convert PascalCase/camelCase to Title Case with spaces
+    result = []
+    current_word = []
+    
+    for i, char in enumerate(name):
+        if char.isupper():
+            if current_word:
+                word = "".join(current_word)
+                if word.lower() in SEO_ABBREVIATIONS:
+                    result.append(word.upper())
+                else:
+                    result.append(word)
+                current_word = []
+            current_word.append(char)
+        else:
+            current_word.append(char)
+    
+    # Don't forget the last word
+    if current_word:
+        word = "".join(current_word)
+        if word.lower() in SEO_ABBREVIATIONS:
+            result.append(word.upper())
+        else:
+            result.append(word)
+    
+    # Join and fix spaced abbreviations (L L M -> LLM)
+    title = " ".join(result)
+    for abbr in SEO_ABBREVIATIONS:
+        spaced = " ".join(abbr.upper())
+        if spaced in title:
+            title = title.replace(spaced, abbr.upper())
+    
+    return title
 
 
 # =============================================================================
@@ -852,15 +914,17 @@ class MDXGenerator:
         desc = sanitize_description(info.docstring) or f"API reference for {info.short_name}"
         badge_color = self.config.get("badge_color", "gray")
         badge_text = self.config.get("badge_text", "Module")
+        title_suffix = self.config.get("title_suffix", "")
         
         lines = [
             "---",
-            f'title: "{info.short_name}"',
+            f'title: "{friendly_title(info.short_name, "module")}{title_suffix}"',
+            f'sidebarTitle: "{friendly_title(info.short_name, "module")}"',
             f'description: "{desc}"',
             f'icon: "{get_icon_for_module(info.short_name)}"',
             "---",
             "",
-            f"# {info.display_name}",
+            f"# {info.short_name}",
             "",
             f'<Badge color="{badge_color}">{badge_text}</Badge>',
             "",
@@ -921,15 +985,17 @@ class MDXGenerator:
         desc = sanitize_description(info.docstring) or f"Module reference for {info.short_name}"
         badge_color = self.config.get("badge_color", "gray")
         badge_text = self.config.get("badge_text", "Module")
+        title_suffix = self.config.get("title_suffix", "")
         
         lines = [
             "---",
-            f'title: "{info.short_name}"',
+            f'title: "{friendly_title(info.short_name, "module")}{title_suffix}"',
+            f'sidebarTitle: "{friendly_title(info.short_name, "module")}"',
             f'description: "{desc}"',
             f'icon: "{get_icon_for_module(info.short_name)}"',
             "---",
             "",
-            f"# {info.display_name}",
+            f"# {info.short_name}",
             "",
             f'<Badge color="{badge_color}">{badge_text}</Badge>',
             "",
@@ -999,19 +1065,21 @@ class MDXGenerator:
         desc = sanitize_description(cls.docstring) or f"Class reference for {cls.name}"
         badge_color = self.config.get("badge_color", "gray")
         badge_text = self.config.get("badge_text", "Module")
+        title_suffix = self.config.get("title_suffix", "")
         is_rust = module_info.package == "rust"
         lang = "rust" if is_rust else "python"
         
         lines = [
             "---",
-            f'title: "{cls.name}"',
-            f'description: "{desc}"',
+            f'title: "{friendly_title(cls.name, "class")}{title_suffix}"',
+            f'sidebarTitle: "{friendly_title(cls.name, "class")}"',
+            f'description: "{cls.name}: {desc}"',
             'icon: "brackets-curly"',
             "---",
             "",
             f"# {cls.name}",
             "",
-            f"> Defined in the [**{module_info.short_name}**](../modules/{module_info.short_name}) module.",
+            f"> Defined in the [**{friendly_title(module_info.short_name, 'module')}**](../modules/{module_info.short_name}) module.",
             "",
             f'<Badge color="{badge_color}">{badge_text}</Badge>',
             "",
@@ -1124,11 +1192,13 @@ class MDXGenerator:
         safe_docstring = escape_mdx(func.docstring) if func.docstring else ""
         display_name = f"{cls_name}.{func.name}" if cls_name else func.name
         desc = sanitize_description(func.docstring) or f"API reference for {display_name}"
+        title_suffix = self.config.get("title_suffix", "")
         
         lines = [
             "---",
-            f'title: "{func.name}"',
-            f'description: "{desc}"',
+            f'title: "{friendly_title(func.name, "function")}{title_suffix}"',
+            f'sidebarTitle: "{friendly_title(func.name, "function")}"',
+            f'description: "{func.name}: {desc}"',
             'icon: "function"',
             "---",
             "",
@@ -1275,7 +1345,8 @@ class MDXGenerator:
                 for m in visible_methods:
                     lines.append(f"- **{'async ' if m.is_async else ''}{m.name}**(`{escape_for_table(m.signature, is_type=True)}`) → `{escape_for_table(m.return_type, is_type=True)}`")
                     if m.docstring:
-                        lines.append(f"  {escape_mdx(m.docstring.split('\\n')[0][:80])}")
+                        first_line = m.docstring.split('\n')[0][:80]
+                        lines.append(f"  {escape_mdx(first_line)}")
                 lines.append("</Accordion>\n")
         
         return lines
@@ -1331,28 +1402,32 @@ class ReferenceDocsGenerator:
                 "output": self.ref_base / "praisonaiagents",
                 "import_prefix": "praisonaiagents",
                 "badge_color": "blue",
-                "badge_text": "Core SDK",
+                "badge_text": "AI Agent",
+                "title_suffix": " • AI Agent SDK",
             },
             "praisonai": {
                 "source": base_src / "src/praisonai/praisonai",
                 "output": self.ref_base / "praisonai",
                 "import_prefix": "praisonai",
                 "badge_color": "purple",
-                "badge_text": "Wrapper",
+                "badge_text": "AI Agent",
+                "title_suffix": " • AI Agent SDK",
             },
             "typescript": {
                 "source": base_src / "src/praisonai-ts/src",
                 "output": self.ref_base / "typescript",
                 "import_prefix": "praisonai",
                 "badge_color": "green",
-                "badge_text": "TypeScript",
+                "badge_text": "TypeScript AI Agent",
+                "title_suffix": " • TypeScript AI Agent SDK",
             },
             "rust": {
                 "source": base_src / "src/praisonai-rust",
                 "output": self.ref_base / "rust",
                 "import_prefix": "praisonai",
                 "badge_color": "orange",
-                "badge_text": "Rust SDK",
+                "badge_text": "Rust AI Agent SDK",
+                "title_suffix": " • Rust AI Agent SDK",
                 "language": "rust",
             },
         }
@@ -1434,8 +1509,9 @@ class ReferenceDocsGenerator:
                             print(f"    Generated: {r.name}")
         
         if generator.generated_files and not dry_run:
-            print(f"\nCleaning up orphaned MDX files...")
-            self.cleanup_orphaned_files(config["output"], generator.generated_files)
+            # NOTE: Cleanup disabled - was incorrectly deleting valid files
+            # print(f"\nCleaning up orphaned MDX files...")
+            # self.cleanup_orphaned_files(config["output"], generator.generated_files)
             
             print(f"\nUpdating docs.json navigation...")
             self.update_docs_json(package_name, sorted(list(generator.generated_files)))

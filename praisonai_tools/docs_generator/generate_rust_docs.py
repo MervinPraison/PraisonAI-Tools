@@ -22,11 +22,16 @@ def escape_mdx(text: str) -> str:
     return text.replace('<', '&lt;').replace('>', '&gt;').replace('{', '&#123;').replace('}', '&#125;')
 
 
-def sanitize_description(text: str) -> str:
-    """Sanitize description for frontmatter."""
+def sanitize_description(text: str, max_len: int = 150) -> str:
+    """Sanitize description for frontmatter. Truncates at word boundary."""
     if not text:
         return ""
-    return text.replace('"', "'").replace('\n', ' ')[:150]
+    clean = text.replace('"', "'").replace('\n', ' ').strip()
+    if len(clean) <= max_len:
+        return clean
+    # Truncate at word boundary
+    truncated = clean[:max_len].rsplit(' ', 1)[0]
+    return truncated + "..."
 
 
 # Icon map
@@ -38,6 +43,110 @@ ICON_MAP = {
     "commands": "terminal", "default": "file-code"
 }
 
+# Friendly title mappings for modules
+MODULE_TITLES = {
+    "agent": "Agent",
+    "builder": "Agent Builder",
+    "config": "Configuration",
+    "error": "Error Handling",
+    "llm": "LLM Providers",
+    "memory": "Memory",
+    "tools": "Tools",
+    "workflows": "Workflows",
+    "praisonai_derive": "Derive Macros",
+    "chat": "Chat Command",
+    "prompt": "Prompt Command",
+    "run": "Run Command",
+}
+
+# Rich descriptions for modules (used when docstring is empty or as fallback)
+MODULE_DESCRIPTIONS = {
+    "agent": "Core AI Agent implementation for building intelligent agents in Rust",
+    "builder": "Fluent builder pattern for constructing Rust AI agents",
+    "config": "Configuration types for PraisonAI Rust AI agents",
+    "error": "Error handling utilities for Rust AI agent operations",
+    "llm": "LLM provider abstractions for Rust AI agents (OpenAI, Anthropic, Ollama)",
+    "memory": "Memory and conversation history for Rust AI agents",
+    "tools": "Tool system for extending Rust AI agent capabilities",
+    "workflows": "Multi-agent workflow patterns for Rust AI orchestration",
+    "praisonai_derive": "Procedural macros for defining Rust AI agent tools",
+    "chat": "Interactive chat command for Rust AI agents",
+    "prompt": "Single-shot prompt execution for Rust AI agents",
+    "run": "Workflow execution command for Rust AI agents",
+}
+
+# Abbreviations to preserve in titles
+ABBREVIATIONS = {"llm", "api", "cli", "id", "url", "http", "ai", "io"}
+
+
+def friendly_title(name: str, page_type: str = "class") -> str:
+    """Convert a name to a friendly, human-readable title.
+    
+    Args:
+        name: The raw name (e.g., "AgentBuilder", "praisonai_derive")
+        page_type: One of "module", "class", "function"
+    """
+    # Check for explicit module title mapping
+    if page_type == "module" and name.lower() in MODULE_TITLES:
+        return MODULE_TITLES[name.lower()]
+    
+    # For functions, add parentheses
+    if page_type == "function":
+        # Special case for macros
+        if name == "tool":
+            return "#[tool] Macro"
+        return f"{name}()"
+    
+    # Convert snake_case to Title Case
+    if "_" in name:
+        parts = name.split("_")
+        titled_parts = []
+        for part in parts:
+            if part.lower() in ABBREVIATIONS:
+                titled_parts.append(part.upper())
+            else:
+                titled_parts.append(part.capitalize())
+        return " ".join(titled_parts)
+    
+    # Convert PascalCase to Title Case with spaces
+    # e.g., "AgentBuilder" -> "Agent Builder", "LlmConfig" -> "LLM Config"
+    result = []
+    current_word = []
+    
+    for i, char in enumerate(name):
+        if char.isupper():
+            # Check if this is part of an abbreviation
+            if current_word:
+                word = "".join(current_word)
+                # If previous chars form an abbreviation, keep them together
+                if word.lower() in ABBREVIATIONS:
+                    result.append(word.upper())
+                else:
+                    result.append(word)
+                current_word = []
+            current_word.append(char)
+        else:
+            current_word.append(char)
+    
+    # Don't forget the last word
+    if current_word:
+        word = "".join(current_word)
+        if word.lower() in ABBREVIATIONS:
+            result.append(word.upper())
+        else:
+            result.append(word)
+    
+    # Join and fix common patterns
+    title = " ".join(result)
+    
+    # Fix cases like "L L M" -> "LLM"
+    for abbr in ABBREVIATIONS:
+        spaced = " ".join(abbr.upper())
+        if spaced in title:
+            title = title.replace(spaced, abbr.upper())
+    
+    return title
+
 
 def get_icon(name: str) -> str:
     """Get icon for module name."""
@@ -47,17 +156,21 @@ def get_icon(name: str) -> str:
 def generate_module_page(info, output_dir: Path, dry_run: bool = False) -> str:
     """Generate a module hub page."""
     short_name = info.short_name or info.name.split('.')[-1]
-    desc = sanitize_description(info.docstring) or f"Rust module {short_name}"
+    title = friendly_title(short_name, "module")
+    title_suffix = " • Rust AI Agent SDK"
+    # Use docstring if available, otherwise use our rich descriptions
+    desc = sanitize_description(info.docstring) or MODULE_DESCRIPTIONS.get(short_name.lower(), f"Rust AI Agent SDK - {title}")
     
     content = f'''---
-title: "{short_name}"
+title: "{title}{title_suffix}"
+sidebarTitle: "{title}"
 description: "{desc}"
 icon: "{get_icon(short_name)}"
 ---
 
-# {info.name}
+# {short_name}
 
-<Badge color="orange">Rust SDK</Badge>
+<Badge color="orange">Rust AI Agent SDK</Badge>
 
 {escape_mdx(info.docstring) if info.docstring else ""}
 
@@ -72,8 +185,9 @@ use {info.name.replace('.', '::')}::*;
     if info.classes:
         content += "## Types\n\n<CardGroup cols={2}>\n"
         for cls in info.classes:
+            cls_title = friendly_title(cls.name, "class")
             cls_desc = sanitize_description(cls.docstring) or "Type definition."
-            content += f'  <Card title="{cls.name}" icon="brackets-curly" href="../classes/{cls.name}">\n'
+            content += f'  <Card title="{cls_title}" icon="brackets-curly" href="../classes/{cls.name}">\n'
             content += f"    {cls_desc}\n"
             content += "  </Card>\n"
         content += "</CardGroup>\n\n"
@@ -81,8 +195,9 @@ use {info.name.replace('.', '::')}::*;
     if info.functions:
         content += "## Functions\n\n<CardGroup cols={2}>\n"
         for func in info.functions:
+            func_title = friendly_title(func.name, "function")
             func_desc = sanitize_description(func.docstring) or "Function definition."
-            content += f'  <Card title="{func.name}()" icon="function" href="../functions/{func.name}">\n'
+            content += f'  <Card title="{func_title}" icon="function" href="../functions/{func.name}">\n'
             content += f"    {func_desc}\n"
             content += "  </Card>\n"
         content += "</CardGroup>\n\n"
@@ -98,19 +213,25 @@ use {info.name.replace('.', '::')}::*;
 def generate_class_page(cls, module_info, output_dir: Path, dry_run: bool = False) -> str:
     """Generate a class/struct page."""
     short_name = module_info.short_name or module_info.name.split('.')[-1]
-    desc = sanitize_description(cls.docstring) or f"Class {cls.name}"
+    module_title = friendly_title(short_name, "module")
+    title = friendly_title(cls.name, "class")
+    title_suffix = " • Rust AI Agent SDK"
+    # Include original name in description for searchability
+    base_desc = sanitize_description(cls.docstring) if cls.docstring else f"{cls.name} struct for Rust AI agents"
+    desc = f"{base_desc}" if cls.name in base_desc else f"{cls.name}: {base_desc}"
     
     content = f'''---
-title: "{cls.name}"
+title: "{title}{title_suffix}"
+sidebarTitle: "{title}"
 description: "{desc}"
 icon: "brackets-curly"
 ---
 
 # {cls.name}
 
-> Defined in the [**{short_name}**](../modules/{short_name}) module.
+> Defined in the [**{module_title}**](../modules/{short_name}) module.
 
-<Badge color="orange">Rust SDK</Badge>
+<Badge color="orange">Rust AI Agent SDK</Badge>
 
 {escape_mdx(cls.docstring) if cls.docstring else ""}
 
@@ -156,21 +277,27 @@ icon: "brackets-curly"
 def generate_function_page(func, module_info, output_dir: Path, dry_run: bool = False) -> str:
     """Generate a function page."""
     short_name = module_info.short_name or module_info.name.split('.')[-1]
-    desc = sanitize_description(func.docstring) or f"Function {func.name}"
+    module_title = friendly_title(short_name, "module")
+    title = friendly_title(func.name, "function")
+    title_suffix = " • Rust AI Agent SDK"
+    # Include original name in description for searchability
+    base_desc = sanitize_description(func.docstring) if func.docstring else f"{func.name} function for Rust AI agents"
+    desc = f"{base_desc}" if func.name in base_desc else f"{func.name}: {base_desc}"
     async_prefix = "async " if hasattr(func, 'is_async') and func.is_async else ""
     ret_type = func.return_type if hasattr(func, 'return_type') and func.return_type else "()"
     
     content = f'''---
-title: "{func.name}"
+title: "{title}{title_suffix}"
+sidebarTitle: "{title}"
 description: "{desc}"
 icon: "function"
 ---
 
-# {func.name}()
+# {func.name}
 
-> Defined in the [**{short_name}**](../modules/{short_name}) module.
+> Defined in the [**{module_title}**](../modules/{short_name}) module.
 
-<Badge color="orange">Rust SDK</Badge>
+<Badge color="orange">Rust AI Agent SDK</Badge>
 
 ```rust
 {async_prefix}fn {func.name}({func.signature}) -> {ret_type}
