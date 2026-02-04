@@ -320,6 +320,14 @@ ICON_MAP = {
     "decorator": "wand-magic-sparkles",
     "utils": "screwdriver-wrench",
     "default": "file-code",
+    
+    # Rust-specific
+    "derive": "wand-magic-sparkles",
+    "cli": "terminal",
+    "crate": "cube",
+    "error": "circle-exclamation",
+    "prelude": "star",
+    "builder": "hammer",
 }
 
 def get_icon_for_module(module_name: str) -> str:
@@ -860,11 +868,23 @@ class MDXGenerator:
             "",
             "## Import",
             "",
-            "```python",
-            f"from {info.name.rsplit('.', 1)[0] if '.' in info.name else info.name} import {info.short_name}",
-            "```",
-            "",
         ]
+        
+        # Language-specific import syntax
+        if info.package == "rust":
+            lines.extend([
+                "```rust",
+                f"use {info.name.replace('.', '::')}::*;",
+                "```",
+                "",
+            ])
+        else:
+            lines.extend([
+                "```python",
+                f"from {info.name.rsplit('.', 1)[0] if '.' in info.name else info.name} import {info.short_name}",
+                "```",
+                "",
+            ])
 
         if info.classes:
             lines.append("## Classes\n")
@@ -915,10 +935,24 @@ class MDXGenerator:
             "",
             safe_docstring,
             "",
-            "## Overview",
-            f"This module provides components for {info.short_name}.",
-            "",
         ]
+        
+        # Add import section with language-specific syntax
+        lines.append("## Import")
+        lines.append("")
+        if info.package == "rust":
+            lines.append("```rust")
+            lines.append(f"use {info.name.replace('.', '::')}::*;")
+            lines.append("```")
+        elif info.package == "typescript":
+            lines.append("```typescript")
+            lines.append(f"import {{ {info.short_name} }} from 'praisonai';")
+            lines.append("```")
+        else:
+            lines.append("```python")
+            lines.append(f"from {info.name.rsplit('.', 1)[0] if '.' in info.name else info.name} import {info.short_name}")
+            lines.append("```")
+        lines.append("")
 
         if info.classes:
             lines.append("## Classes\n")
@@ -963,6 +997,10 @@ class MDXGenerator:
         """Render a dedicated Class Blueprint page."""
         safe_docstring = escape_mdx(cls.docstring) if cls.docstring else ""
         desc = sanitize_description(cls.docstring) or f"Class reference for {cls.name}"
+        badge_color = self.config.get("badge_color", "gray")
+        badge_text = self.config.get("badge_text", "Module")
+        is_rust = module_info.package == "rust"
+        lang = "rust" if is_rust else "python"
         
         lines = [
             "---",
@@ -975,6 +1013,8 @@ class MDXGenerator:
             "",
             f"> Defined in the [**{module_info.short_name}**](../modules/{module_info.short_name}) module.",
             "",
+            f'<Badge color="{badge_color}">{badge_text}</Badge>',
+            "",
             safe_docstring,
             "",
         ]
@@ -985,63 +1025,97 @@ class MDXGenerator:
             lines.append(mermaid)
             lines.append("")
 
-        if cls.init_params:
-            lines.append("## Constructor\n")
-            for p in cls.init_params:
-                default_str = f' default="{escape_for_table(p.default)}"' if p.default and p.default != "None" else ""
-                lines.extend([
-                    f'<ParamField query="{p.name}" type="{escape_for_table(p.type, is_type=True)}" required={"{true}" if p.required else "{false}"}{default_str}>',
-                    f'  {escape_mdx(p.description) if p.description else "No description available."}',
-                    '</ParamField>',
-                    ""
-                ])
-
-        if cls.properties:
-            lines.append("## Properties\n")
-            for p in cls.properties:
-                lines.extend([
-                    f'<ResponseField name="{p.name}" type="{escape_for_table(p.type, is_type=True)}">',
-                    f'  {escape_mdx(p.description) if p.description else "No description available."}',
-                    '</ResponseField>',
-                    ""
-                ])
-
-        if cls.methods or cls.class_methods:
-            visible_class_methods = [m for m in cls.class_methods if m.name not in SKIP_METHODS]
-            visible_methods = [m for m in cls.methods if m.name not in SKIP_METHODS]
+        # For Rust: show Fields (properties) first, then Methods inline
+        if is_rust:
+            if cls.properties:
+                lines.append("## Fields\n")
+                lines.append("| Name | Type | Description |")
+                lines.append("|------|------|-------------|")
+                for p in cls.properties:
+                    p_type = escape_mdx(p.type) if p.type else "-"
+                    p_desc = escape_mdx(p.description)[:80] if p.description else "-"
+                    lines.append(f"| `{p.name}` | `{p_type}` | {p_desc} |")
+                lines.append("")
             
-            if visible_class_methods or visible_methods:
-                lines.append("## Methods\n")
-                lines.append("<CardGroup cols={2}>")
-                for m in visible_class_methods:
-                    lines.append(f'  <Card title="{m.name}()" icon="function" href="../functions/{cls.name}-{m.name}">')
-                    m_desc = sanitize_description(m.docstring) or "Class method."
-                    lines.append(f"    {m_desc}")
-                    lines.append("  </Card>")
-                for m in visible_methods:
-                    lines.append(f'  <Card title="{m.name}()" icon="function" href="../functions/{cls.name}-{m.name}">')
-                    m_desc = sanitize_description(m.docstring) or "Instance method."
-                    lines.append(f"    {m_desc}")
-                    lines.append("  </Card>")
-                lines.append("</CardGroup>\n")
+            if cls.methods:
+                visible_methods = [m for m in cls.methods if m.name not in SKIP_METHODS]
+                if visible_methods:
+                    lines.append("## Methods\n")
+                    for m in visible_methods:
+                        async_prefix = "async " if getattr(m, 'is_async', False) else ""
+                        ret_type = m.return_type if m.return_type else "()"
+                        lines.append(f"### `{m.name}`\n")
+                        lines.append(f"```rust\n{async_prefix}fn {m.name}({m.signature}) -> {ret_type}\n```\n")
+                        if m.docstring:
+                            lines.append(escape_mdx(m.docstring))
+                            lines.append("")
+                        if m.params:
+                            lines.append("**Parameters:**\n")
+                            lines.append("| Name | Type |")
+                            lines.append("|------|------|")
+                            for p in m.params:
+                                p_type = escape_mdx(p.type) if p.type else "-"
+                                lines.append(f"| `{p.name}` | `{p_type}` |")
+                            lines.append("")
+        else:
+            # Python/TypeScript class page rendering
+            if cls.init_params:
+                lines.append("## Constructor\n")
+                for p in cls.init_params:
+                    default_str = f' default="{escape_for_table(p.default)}"' if p.default and p.default != "None" else ""
+                    lines.extend([
+                        f'<ParamField query="{p.name}" type="{escape_for_table(p.type, is_type=True)}" required={{"{true}" if p.required else "{false}"}}{default_str}>',
+                        f'  {escape_mdx(p.description) if p.description else "No description available."}',
+                        '</ParamField>',
+                        ""
+                    ])
+
+            if cls.properties:
+                lines.append("## Properties\n")
+                for p in cls.properties:
+                    lines.extend([
+                        f'<ResponseField name="{p.name}" type="{escape_for_table(p.type, is_type=True)}">',
+                        f'  {escape_mdx(p.description) if p.description else "No description available."}',
+                        '</ResponseField>',
+                        ""
+                    ])
+
+            if cls.methods or cls.class_methods:
+                visible_class_methods = [m for m in cls.class_methods if m.name not in SKIP_METHODS]
+                visible_methods = [m for m in cls.methods if m.name not in SKIP_METHODS]
                 
-            # List skipped methods in an accordion without links for completeness
-            skipped_methods = [m for m in (cls.class_methods + cls.methods) if m.name in SKIP_METHODS]
-            if skipped_methods:
-                lines.append('<Accordion title="Internal & Generic Methods">')
-                for m in skipped_methods:
-                    lines.append(f"- **{m.name}**: {sanitize_description(m.docstring) or 'Generic utility method.'}")
-                lines.append("</Accordion>\n")
+                if visible_class_methods or visible_methods:
+                    lines.append("## Methods\n")
+                    lines.append("<CardGroup cols={2}>")
+                    for m in visible_class_methods:
+                        lines.append(f'  <Card title="{m.name}()" icon="function" href="../functions/{cls.name}-{m.name}">')
+                        m_desc = sanitize_description(m.docstring) or "Class method."
+                        lines.append(f"    {m_desc}")
+                        lines.append("  </Card>")
+                    for m in visible_methods:
+                        lines.append(f'  <Card title="{m.name}()" icon="function" href="../functions/{cls.name}-{m.name}">')
+                        m_desc = sanitize_description(m.docstring) or "Instance method."
+                        lines.append(f"    {m_desc}")
+                        lines.append("  </Card>")
+                    lines.append("</CardGroup>\n")
+                    
+                # List skipped methods in an accordion without links for completeness
+                skipped_methods = [m for m in (cls.class_methods + cls.methods) if m.name in SKIP_METHODS]
+                if skipped_methods:
+                    lines.append('<Accordion title="Internal & Generic Methods">')
+                    for m in skipped_methods:
+                        lines.append(f"- **{m.name}**: {sanitize_description(m.docstring) or 'Generic utility method.'}")
+                    lines.append("</Accordion>\n")
 
         if cls.examples:
             lines.append("## Usage\n")
             if len(cls.examples) > 1:
                 lines.append("<CodeGroup>")
                 for i, ex in enumerate(cls.examples):
-                    lines.append(f"```python Example {i+1}\n{ex}\n```")
+                    lines.append(f"```{lang} Example {i+1}\n{ex}\n```")
                 lines.append("</CodeGroup>\n")
             else:
-                lines.append(f"```python\n{cls.examples[0]}\n```\n")
+                lines.append(f"```{lang}\n{cls.examples[0]}\n```\n")
 
         return "\n".join(lines)
 
@@ -1209,17 +1283,18 @@ class MDXGenerator:
     def _render_function(self, func: FunctionInfo, package: str) -> List[str]:
         safe_docstring = escape_mdx(func.docstring) if func.docstring else ""
         async_prefix = "async " if func.is_async else ""
-        lang = "typescript" if package == "typescript" else "python"
         
         lines = [f"### {func.name}()", ""]
         if safe_docstring:
             lines.append(safe_docstring)
             lines.append("")
         
-        if lang == "python":
-            lines.append(f"```python\n{async_prefix}def {func.name}({func.signature}) -> {func.return_type}\n```\n")
-        else:
+        if package == "rust":
+            lines.append(f"```rust\n{async_prefix}fn {func.name}({func.signature}) -> {func.return_type}\n```\n")
+        elif package == "typescript":
             lines.append(f"```typescript\n{async_prefix}function {func.name}({func.signature}): {func.return_type}\n```\n")
+        else:
+            lines.append(f"```python\n{async_prefix}def {func.name}({func.signature}) -> {func.return_type}\n```\n")
         
         if func.params:
             lines.append('<Expandable title="Parameters">')
@@ -1272,6 +1347,14 @@ class ReferenceDocsGenerator:
                 "badge_color": "green",
                 "badge_text": "TypeScript",
             },
+            "rust": {
+                "source": base_src / "src/praisonai-rust",
+                "output": self.ref_base / "rust",
+                "import_prefix": "praisonai",
+                "badge_color": "orange",
+                "badge_text": "Rust SDK",
+                "language": "rust",
+            },
         }
 
 
@@ -1297,6 +1380,34 @@ class ReferenceDocsGenerator:
         
         if package_name == "typescript":
             parser = TypeScriptDocParser(config["source"])
+        elif package_name == "rust":
+            from .rust_parser import RustWorkspaceParser
+            workspace_parser = RustWorkspaceParser(config["source"])
+            # Parse all crates in the workspace
+            all_modules = workspace_parser.parse_all()
+            generator = MDXGenerator(config["output"], package_name, config, layout=self.layout)
+            generated = 0
+            for crate_name, modules in all_modules.items():
+                print(f"  Crate: {crate_name} ({len(modules)} modules)")
+                for info in modules:
+                    if info.short_name in SKIP_MODULES:
+                        continue
+                    print(f"    Processing: {info.name}")
+                    results = generator.generate_module_doc(info, dry_run=dry_run)
+                    if results:
+                        generated += 1
+                        for r in results:
+                            if dry_run:
+                                print(f"      Would generate: {r.name}")
+                            else:
+                                print(f"      Generated: {r.name}")
+            
+            if generator.generated_files and not dry_run:
+                print(f"\nCleaning up orphaned MDX files...")
+                self.cleanup_orphaned_files(config["output"], generator.generated_files)
+                print(f"\nUpdating docs.json navigation...")
+                self.update_docs_json(package_name, sorted(list(generator.generated_files)))
+            return
         else:
             parser = PythonDocParser(config["source"], config["import_prefix"])
         

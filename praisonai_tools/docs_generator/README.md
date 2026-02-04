@@ -10,6 +10,31 @@ pip install praisonai-tools
 
 ## Quick Start
 
+### Generate Rust SDK Documentation (Standalone)
+
+The Rust documentation generator works without dependencies:
+
+```bash
+# Direct execution (recommended for Rust)
+cd praisonai_tools/docs_generator
+python3 __main__.py --package rust
+
+# Or use the standalone script
+python3 generate_rust_docs.py --rust-path /path/to/praisonai-rust
+
+# Dry run
+python3 __main__.py --package rust --dry-run
+```
+
+### Generate All SDK Documentation
+
+For Python/TypeScript docs, install the full package first:
+
+```bash
+pip install praisonaiagents
+python -m praisonai_tools.docs_generator --package all
+```
+
 ### Using CLI
 
 ```bash
@@ -23,16 +48,6 @@ praisonai-tools docs-generate --layout granular
 praisonai-tools docs-generate --output /path/to/docs
 ```
 
-### Using Python Module
-
-```bash
-# Run as module
-python -m praisonai_tools.docs_generator
-
-# With options
-python -m praisonai_tools.docs_generator --layout granular
-```
-
 ### Direct Script Execution
 
 ```bash
@@ -44,7 +59,9 @@ python generator.py --layout granular
 | Option | Description | Default |
 |--------|-------------|---------|
 | `--layout` | Documentation layout: `compact` or `granular` | `granular` |
-| `--output` | Output directory path | Auto-detected |
+| `--package` | Package to generate: `praisonaiagents`, `praisonai`, `typescript`, `rust`, `all` | `all` |
+| `--docs-root` | Root directory of the documentation repository | Auto-detected |
+| `--dry-run` | Show what would be generated without writing files | `false` |
 
 ## Layouts
 
@@ -64,12 +81,14 @@ python generator.py --layout granular
 - **MDX output**: Mintlify-compatible MDX format
 - **Navigation generation**: Auto-updates `docs.json` navigation
 - **Icon support**: Maps modules to Font Awesome icons
+- **Multi-language support**: Python, TypeScript, and Rust
 
 ## Supported Packages
 
 - `praisonaiagents` (Python Core SDK)
 - `praisonai` (Python Wrapper)
 - TypeScript SDK (`praisonai-ts`)
+- **Rust SDK** (`praisonai-rust`) - Agent, Tools, Workflows, Memory, LLM
 
 ## Output Structure
 
@@ -81,6 +100,10 @@ docs/sdk/reference/
 │   └── functions/    # Function pages
 ├── praisonai/
 │   └── ...
-└── typescript/
-    └── ...
+├── typescript/
+│   └── ...
+└── rust/
+    ├── modules/      # praisonai.agent, praisonai.tools, etc.
+    ├── classes/      # Agent, ToolRegistry, AgentTeam, etc.
+    └── functions/    # Standalone functions
 ```
