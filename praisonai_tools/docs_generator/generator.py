@@ -1410,8 +1410,8 @@ class ReferenceDocsGenerator:
                 "output": self.ref_base / "praisonai",
                 "import_prefix": "praisonai",
                 "badge_color": "purple",
-                "badge_text": "AI Agent",
-                "title_suffix": " • AI Agent SDK",
+                "badge_text": "AI Agents Framework",
+                "title_suffix": " • AI Agents Framework",
             },
             "typescript": {
                 "source": base_src / "src/praisonai-ts/src",
