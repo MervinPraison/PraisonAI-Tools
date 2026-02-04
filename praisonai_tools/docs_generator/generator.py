@@ -40,6 +40,10 @@ class MethodInfo:
     params: List[ParamInfo] = field(default_factory=list)
     raises: List[Tuple[str, str]] = field(default_factory=list)
     examples: List[str] = field(default_factory=list)
+    notes: str = ""  # Notes/More Information section
+    see_also: List[Tuple[str, str]] = field(default_factory=list)  # (name, description)
+    source_file: str = ""  # Relative path to source file
+    source_line: int = 0  # Line number in source
     is_async: bool = False
     is_static: bool = False
     is_classmethod: bool = False
@@ -55,6 +59,10 @@ class ClassInfo:
     class_methods: List[MethodInfo] = field(default_factory=list)
     properties: List[ParamInfo] = field(default_factory=list)
     examples: List[str] = field(default_factory=list)
+    notes: str = ""  # Notes/More Information section
+    see_also: List[Tuple[str, str]] = field(default_factory=list)  # (name, description)
+    source_file: str = ""  # Relative path to source file
+    source_line: int = 0  # Line number in source
 
 
 @dataclass
@@ -67,6 +75,10 @@ class FunctionInfo:
     params: List[ParamInfo] = field(default_factory=list)
     raises: List[Tuple[str, str]] = field(default_factory=list)
     examples: List[str] = field(default_factory=list)
+    notes: str = ""  # Notes/More Information section
+    see_also: List[Tuple[str, str]] = field(default_factory=list)  # (name, description)
+    source_file: str = ""  # Relative path to source file
+    source_line: int = 0  # Line number in source
     is_async: bool = False
 
 
@@ -604,6 +616,77 @@ def render_related_section(name: str, max_items: int = 5, package: str = "python
 """
 
 
+def render_source_link(source_file: str, source_line: int, github_repo: str) -> str:
+    """Render a 'View Source on GitHub' link.
+    
+    Args:
+        source_file: Relative path to source file
+        source_line: Line number in source
+        github_repo: Base GitHub repo URL
+        
+    Returns:
+        MDX string with source link, or empty string if no source info
+    """
+    if not source_file or not github_repo:
+        return ""
+    
+    line_anchor = f"#L{source_line}" if source_line > 0 else ""
+    github_url = f"{github_repo}/{source_file}{line_anchor}"
+    
+    return f"""
+## Source
+
+<Card title="View on GitHub" icon="github" href="{github_url}">
+  `{source_file}` at line {source_line}
+</Card>
+"""
+
+
+def render_notes_section(notes: str) -> str:
+    """Render a Notes/More Information section.
+    
+    Args:
+        notes: Notes text from docstring
+        
+    Returns:
+        MDX string with notes section, or empty string if no notes
+    """
+    if not notes:
+        return ""
+    
+    return f"""
+## Notes
+
+{notes}
+"""
+
+
+def render_see_also_section(see_also: list) -> str:
+    """Render a See Also section with cross-references.
+    
+    Args:
+        see_also: List of (name, description) tuples
+        
+    Returns:
+        MDX string with see also section, or empty string if none
+    """
+    if not see_also:
+        return ""
+    
+    items = []
+    for name, desc in see_also:
+        if desc:
+            items.append(f"- **`{name}`**: {desc}")
+        else:
+            items.append(f"- **`{name}`**")
+    
+    return f"""
+## See Also
+
+{chr(10).join(items)}
+"""
+
+
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
@@ -829,6 +912,9 @@ class PythonDocParser:
             source = file_path.read_text()
             tree = ast.parse(source)
             
+            # Calculate relative source file path for GitHub links
+            source_file_rel = str(file_path.relative_to(self.package_path.parent))
+            
             module_short_name = module_path.split(".")[-1]
             info = ModuleInfo(
                 name=module_path,
@@ -840,10 +926,17 @@ class PythonDocParser:
             for node in tree.body:
                 if isinstance(node, ast.ClassDef) and not node.name.startswith("_"):
                     class_info = self._parse_class(node)
-                    if class_info: info.classes.append(class_info)
+                    if class_info:
+                        class_info.source_file = source_file_rel
+                        # Also set source_file on methods
+                        for method in class_info.methods + class_info.class_methods:
+                            method.source_file = source_file_rel
+                        info.classes.append(class_info)
                 elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and not node.name.startswith("_"):
                     func_info = self._parse_function(node)
-                    if func_info: info.functions.append(func_info)
+                    if func_info:
+                        func_info.source_file = source_file_rel
+                        info.functions.append(func_info)
                 elif isinstance(node, ast.Assign):
                     for target in node.targets:
                         if isinstance(target, ast.Name) and target.id.isupper():
@@ -863,7 +956,10 @@ class PythonDocParser:
                 name=node.name, 
                 docstring=parsed_doc["description"],
                 bases=bases,
-                examples=parsed_doc["examples"]
+                examples=parsed_doc["examples"],
+                notes=parsed_doc["notes"],
+                see_also=parsed_doc["see_also"],
+                source_line=node.lineno,
             )
             
             for item in node.body:
@@ -911,6 +1007,9 @@ class PythonDocParser:
                 params=params,
                 raises=parsed_doc["raises"],
                 examples=parsed_doc["examples"],
+                notes=parsed_doc["notes"],
+                see_also=parsed_doc["see_also"],
+                source_line=node.lineno,
                 is_async=is_async,
                 is_static=is_static,
                 is_classmethod=is_classmethod,
@@ -941,6 +1040,9 @@ class PythonDocParser:
                 params=params,
                 raises=parsed_doc["raises"],
                 examples=parsed_doc["examples"],
+                notes=parsed_doc["notes"],
+                see_also=parsed_doc["see_also"],
+                source_line=node.lineno,
                 is_async=is_async,
             )
         except Exception:
@@ -954,7 +1056,9 @@ class PythonDocParser:
             "returns": "",
             "returns_type": "",
             "raises": [],
-            "examples": []
+            "examples": [],
+            "notes": "",
+            "see_also": []
         }
         
         if not docstring:
@@ -962,7 +1066,7 @@ class PythonDocParser:
         
         # More robust splitting: only match sections at the start of original lines
         # This prevents picking up 'Examples:' inside an 'Args' description
-        section_pattern = r'\n\s*(Args|Parameters|Returns|Raises|Example|Examples|Usage):?\s*\n'
+        section_pattern = r'\n\s*(Args|Parameters|Returns|Raises|Example|Examples|Usage|Notes?|See Also|Warning|Caution):?\s*\n'
         sections = re.split(section_pattern, '\n' + docstring)
         result["description"] = sections[0].strip()
         
@@ -1002,6 +1106,23 @@ class PythonDocParser:
                 # Strip existing triple backticks if they wrap the entire example
                 content = re.sub(r'^```[a-z]*\n?(.*?)\n?```$', r'\1', content, flags=re.DOTALL)
                 result["examples"].append(content.strip())
+            
+            elif section_name in ("note", "notes", "warning", "caution"):
+                result["notes"] = section_content.strip()
+            
+            elif section_name == "see also":
+                # Parse "See Also" section - format: "name : description" or just "name"
+                see_also_lines = section_content.strip().split('\n')
+                for line in see_also_lines:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    # Match "name : description" or "name: description"
+                    match = re.match(r'^(\w+(?:\.\w+)*)\s*:?\s*(.*)$', line)
+                    if match:
+                        name = match.group(1).strip()
+                        desc = match.group(2).strip() if match.group(2) else ""
+                        result["see_also"].append((name, desc))
                 
         return result
     
@@ -1513,6 +1634,22 @@ class MDXGenerator:
             else:
                 lines.append(f"```{lang}\n{cls.examples[0]}\n```\n")
 
+        # Add Notes section if available
+        notes_section = render_notes_section(cls.notes)
+        if notes_section:
+            lines.append(notes_section)
+
+        # Add See Also section if available
+        see_also_section = render_see_also_section(cls.see_also)
+        if see_also_section:
+            lines.append(see_also_section)
+
+        # Add Source link
+        github_repo = self.config.get("github_repo", "")
+        source_section = render_source_link(cls.source_file, cls.source_line, github_repo)
+        if source_section:
+            lines.append(source_section)
+
         # Add related documentation section
         related_section = render_related_section(cls.name, max_items=5, package=self.package_name)
         if related_section:
@@ -1622,6 +1759,22 @@ class MDXGenerator:
                 import textwrap
                 dedented_ex = textwrap.dedent(func.examples[0])
                 lines.append(f"```python\n{dedented_ex}\n```\n")
+
+        # Add Notes section if available
+        notes_section = render_notes_section(func.notes)
+        if notes_section:
+            lines.append(notes_section)
+
+        # Add See Also section if available
+        see_also_section = render_see_also_section(func.see_also)
+        if see_also_section:
+            lines.append(see_also_section)
+
+        # Add Source link
+        github_repo = self.config.get("github_repo", "")
+        source_section = render_source_link(func.source_file, func.source_line, github_repo)
+        if source_section:
+            lines.append(source_section)
 
         # Add related documentation section
         related_section = render_related_section(func.name, max_items=5, package=self.package_name)
@@ -1743,6 +1896,7 @@ class ReferenceDocsGenerator:
                 "badge_color": "blue",
                 "badge_text": "AI Agent",
                 "title_suffix": " • AI Agent SDK",
+                "github_repo": "https://github.com/MervinPraison/PraisonAI/blob/main/src/praisonai-agents",
             },
             "praisonai": {
                 "source": base_src / "src/praisonai/praisonai",
@@ -1751,6 +1905,7 @@ class ReferenceDocsGenerator:
                 "badge_color": "purple",
                 "badge_text": "AI Agents Framework",
                 "title_suffix": " • AI Agents Framework",
+                "github_repo": "https://github.com/MervinPraison/PraisonAI/blob/main/src/praisonai",
             },
             "typescript": {
                 "source": base_src / "src/praisonai-ts/src",
@@ -1759,6 +1914,7 @@ class ReferenceDocsGenerator:
                 "badge_color": "green",
                 "badge_text": "TypeScript AI Agent",
                 "title_suffix": " • TypeScript AI Agent SDK",
+                "github_repo": "https://github.com/MervinPraison/PraisonAI/blob/main/src/praisonai-ts/src",
             },
             "rust": {
                 "source": base_src / "src/praisonai-rust",
@@ -1768,6 +1924,7 @@ class ReferenceDocsGenerator:
                 "badge_text": "Rust AI Agent SDK",
                 "title_suffix": " • Rust AI Agent SDK",
                 "language": "rust",
+                "github_repo": "https://github.com/ARC-Solutions/praisonai-rust/blob/main",
             },
         }
 
