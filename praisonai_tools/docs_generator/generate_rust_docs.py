@@ -78,6 +78,109 @@ MODULE_DESCRIPTIONS = {
 # Abbreviations to preserve in titles
 ABBREVIATIONS = {"llm", "api", "cli", "id", "url", "http", "ai", "io"}
 
+# Related documentation mapping (keyword -> list of (title, path, icon))
+RELATED_DOCS = {
+    "agent": [
+        ("Rust Quickstart", "/docs/rust/quickstart", "rocket"),
+        ("Rust Agent Guide", "/docs/rust/agent", "robot"),
+        ("Agents Concept", "/docs/concepts/agents", "brain"),
+    ],
+    "builder": [
+        ("Rust Quickstart", "/docs/rust/quickstart", "rocket"),
+        ("Rust Agent Guide", "/docs/rust/agent", "robot"),
+    ],
+    "tool": [
+        ("Rust Tools Guide", "/docs/rust/tools", "wrench"),
+        ("Tools Concept", "/docs/concepts/tools", "gear"),
+    ],
+    "workflow": [
+        ("Rust Agent Flow", "/docs/rust/agent-flow", "diagram-project"),
+        ("Rust Agent Team", "/docs/rust/agent-team", "users"),
+        ("AgentFlow Concept", "/docs/concepts/agentflow", "route"),
+    ],
+    "memory": [
+        ("Rust Memory Guide", "/docs/rust/memory", "brain"),
+        ("Memory Concept", "/docs/concepts/memory", "database"),
+    ],
+    "llm": [
+        ("Models Overview", "/docs/models", "microchip"),
+        ("Model Failover", "/docs/features/model-failover", "shield"),
+    ],
+    "config": [
+        ("Configuration Overview", "/docs/configuration/index", "gear"),
+    ],
+    "error": [
+        ("Guardrails Feature", "/docs/features/guardrails", "shield"),
+    ],
+    "derive": [
+        ("Rust Tools Guide", "/docs/rust/tools", "wrench"),
+    ],
+    "cli": [
+        ("Rust CLI Guide", "/docs/rust/cli", "terminal"),
+        ("CLI Feature", "/docs/features/cli", "terminal"),
+    ],
+    "chat": [
+        ("Chat Feature", "/docs/features/chat", "comments"),
+        ("Rust CLI Guide", "/docs/rust/cli", "terminal"),
+    ],
+    "prompt": [
+        ("Rust CLI Guide", "/docs/rust/cli", "terminal"),
+    ],
+    "run": [
+        ("Rust CLI Guide", "/docs/rust/cli", "terminal"),
+        ("Workflows Feature", "/docs/features/workflows", "diagram-project"),
+    ],
+    "task": [
+        ("Tasks Concept", "/docs/concepts/tasks", "list-check"),
+    ],
+    "team": [
+        ("Rust Agent Team", "/docs/rust/agent-team", "users"),
+        ("AgentTeam Concept", "/docs/concepts/agentteam", "users"),
+    ],
+    "flow": [
+        ("Rust Agent Flow", "/docs/rust/agent-flow", "diagram-project"),
+        ("AgentFlow Concept", "/docs/concepts/agentflow", "route"),
+    ],
+}
+
+
+def get_related_docs(name: str, max_items: int = 5) -> list:
+    """Find related documentation based on keywords in the name."""
+    name_lower = name.lower()
+    related = []
+    seen_paths = set()
+    
+    for keyword, docs in RELATED_DOCS.items():
+        if keyword in name_lower:
+            for doc in docs:
+                if doc[1] not in seen_paths:
+                    related.append(doc)
+                    seen_paths.add(doc[1])
+    
+    return related[:max_items]
+
+
+def render_related_section(name: str, max_items: int = 5) -> str:
+    """Render a CardGroup section with related documentation links."""
+    related = get_related_docs(name, max_items)
+    if not related:
+        return ""
+    
+    cards = []
+    for title, path, icon in related:
+        cards.append(f'  <Card title="{title}" icon="{icon}" href="{path}" />')
+    
+    return f"""
+
+---
+
+## Related Documentation
+
+<CardGroup cols={{2}}>
+{chr(10).join(cards)}
+</CardGroup>
+"""
+
 
 def friendly_title(name: str, page_type: str = "class") -> str:
     """Convert a name to a friendly, human-readable title.
@@ -202,6 +305,11 @@ use {info.name.replace('.', '::')}::*;
             content += "  </Card>\n"
         content += "</CardGroup>\n\n"
     
+    # Add related documentation section
+    related = render_related_section(short_name, max_items=5)
+    if related:
+        content += related
+    
     module_file = output_dir / 'modules' / f'{short_name}.mdx'
     if not dry_run:
         module_file.parent.mkdir(parents=True, exist_ok=True)
@@ -266,6 +374,11 @@ icon: "brackets-curly"
                     content += f"| `{p.name}` | `{p_type}` |\n"
                 content += "\n"
     
+    # Add related documentation section
+    related = render_related_section(cls.name, max_items=5)
+    if related:
+        content += related
+    
     class_file = output_dir / 'classes' / f'{cls.name}.mdx'
     if not dry_run:
         class_file.parent.mkdir(parents=True, exist_ok=True)
@@ -316,6 +429,11 @@ icon: "function"
             p_desc = escape_mdx(p.description) if hasattr(p, 'description') and p.description else "-"
             content += f"| `{p.name}` | `{p_type}` | {p_desc} |\n"
         content += "\n"
+    
+    # Add related documentation section
+    related = render_related_section(func.name, max_items=5)
+    if related:
+        content += related
     
     func_file = output_dir / 'functions' / f'{func.name}.mdx'
     if not dry_run:
