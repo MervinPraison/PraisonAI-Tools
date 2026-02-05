@@ -94,6 +94,7 @@ class ModuleInfo:
     constants: List[Tuple[str, str]] = field(default_factory=list)
     is_init: bool = False
     package: str = "python"
+    source_file: str = ""  # For GitHub source links
     
     @property
     def display_name(self) -> str:
@@ -812,6 +813,89 @@ def extract_function_calls(node) -> List[str]:
     return visitor.get_unique_calls()
 
 
+def extract_ts_function_calls(source_code: str) -> List[str]:
+    """Extract function calls from TypeScript source code using regex.
+    
+    Args:
+        source_code: TypeScript function body source code
+        
+    Returns:
+        List of unique function names called
+    """
+    # Match function calls: functionName( or obj.method(
+    call_pattern = r'\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\('
+    method_pattern = r'\.([a-zA-Z_][a-zA-Z0-9_]*)\s*\('
+    
+    calls = re.findall(call_pattern, source_code)
+    methods = re.findall(method_pattern, source_code)
+    
+    # Combine and filter
+    excluded = {
+        'if', 'for', 'while', 'switch', 'catch', 'function', 'class', 'new',
+        'return', 'throw', 'typeof', 'instanceof', 'constructor', 'async', 'await',
+        'console', 'log', 'error', 'warn', 'info', 'debug',
+        'push', 'pop', 'shift', 'unshift', 'slice', 'splice', 'map', 'filter',
+        'reduce', 'forEach', 'find', 'some', 'every', 'includes', 'indexOf',
+        'toString', 'valueOf', 'hasOwnProperty', 'length', 'split', 'join',
+        'trim', 'toLowerCase', 'toUpperCase', 'replace', 'match', 'test',
+        'parseInt', 'parseFloat', 'isNaN', 'isFinite', 'String', 'Number', 'Boolean',
+        'Array', 'Object', 'Promise', 'Date', 'Math', 'JSON', 'Error',
+    }
+    
+    seen = set()
+    result = []
+    for call in calls + methods:
+        if call not in excluded and not call.startswith('_') and call not in seen:
+            seen.add(call)
+            result.append(call)
+    
+    return result[:10]
+
+
+def extract_rust_function_calls(source_code: str) -> List[str]:
+    """Extract function calls from Rust source code using regex.
+    
+    Args:
+        source_code: Rust function body source code
+        
+    Returns:
+        List of unique function names called
+    """
+    # Match function calls: function_name( or Type::method(
+    call_pattern = r'\b([a-z_][a-z0-9_]*)\s*\('
+    method_pattern = r'\.([a-z_][a-z0-9_]*)\s*\('
+    type_method_pattern = r'([A-Z][a-zA-Z0-9_]*)::([a-z_][a-z0-9_]*)\s*\('
+    
+    calls = re.findall(call_pattern, source_code)
+    methods = re.findall(method_pattern, source_code)
+    type_methods = re.findall(type_method_pattern, source_code)
+    
+    # Combine type methods as Type::method
+    type_method_calls = [f"{t}::{m}" for t, m in type_methods]
+    
+    # Filter out common Rust keywords and built-ins
+    excluded = {
+        'if', 'for', 'while', 'match', 'loop', 'fn', 'let', 'mut', 'const',
+        'return', 'break', 'continue', 'impl', 'struct', 'enum', 'trait',
+        'pub', 'mod', 'use', 'crate', 'self', 'super', 'async', 'await',
+        'println', 'print', 'eprintln', 'eprint', 'format', 'panic', 'assert',
+        'vec', 'Box', 'Rc', 'Arc', 'RefCell', 'Cell', 'Option', 'Result',
+        'Ok', 'Err', 'Some', 'None', 'unwrap', 'expect', 'map', 'and_then',
+        'or_else', 'clone', 'into', 'from', 'default', 'new', 'push', 'pop',
+        'len', 'is_empty', 'iter', 'collect', 'to_string', 'as_str',
+    }
+    
+    seen = set()
+    result = []
+    for call in calls + methods + type_method_calls:
+        call_name = call.split("::")[-1] if "::" in call else call
+        if call_name not in excluded and not call_name.startswith('_') and call not in seen:
+            seen.add(call)
+            result.append(call)
+    
+    return result[:10]
+
+
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
@@ -1325,14 +1409,17 @@ class TypeScriptDocParser:
         try:
             content = index_file.read_text()
             module_short_name = module_name
+            # Get relative source path for GitHub links
+            source_file = str(index_file.relative_to(self.source_path.parent))
             info = ModuleInfo(
                 name=f"praisonai.{module_name}",
                 short_name=module_short_name,
                 docstring=self._extract_module_doc(content),
                 package="typescript",
+                source_file=source_file,
             )
-            info.classes = self._parse_classes(content)
-            info.functions = self._parse_functions(content)
+            info.classes = self._parse_classes(content, source_file)
+            info.functions = self._parse_functions(content, source_file)
             return info
         except Exception:
             return None
@@ -1346,33 +1433,66 @@ class TypeScriptDocParser:
             return doc.strip()
         return ""
     
-    def _parse_classes(self, content: str) -> List[ClassInfo]:
+    def _parse_classes(self, content: str, source_file: str = "") -> List[ClassInfo]:
         classes = []
         pattern = r'export\s+(?:class|interface)\s+(\w+)(?:\s+extends\s+(\w+))?'
         for match in re.finditer(pattern, content):
             name = match.group(1)
             base = match.group(2)
+            # Find line number
+            line_no = content[:match.start()].count('\n') + 1
+            # Extract class body for function calls
+            class_body = self._extract_block(content, match.end())
             classes.append(ClassInfo(
                 name=name,
                 bases=[base] if base else [],
                 docstring=f"TypeScript {name} class",
+                source_file=source_file,
+                source_line=line_no,
             ))
         return classes
     
-    def _parse_functions(self, content: str) -> List[FunctionInfo]:
+    def _parse_functions(self, content: str, source_file: str = "") -> List[FunctionInfo]:
         functions = []
         pattern = r'export\s+(?:async\s+)?function\s+(\w+)\s*\(([^)]*)\)(?:\s*:\s*([^{]+))?'
         for match in re.finditer(pattern, content):
             name = match.group(1)
             params_str = match.group(2)
             return_type = match.group(3) or "void"
+            # Find line number
+            line_no = content[:match.start()].count('\n') + 1
+            # Extract function body for calls extraction
+            func_body = self._extract_block(content, match.end())
+            calls = extract_ts_function_calls(func_body) if func_body else []
             functions.append(FunctionInfo(
                 name=name,
                 signature=params_str.strip(),
                 return_type=return_type.strip(),
                 is_async='async' in match.group(0),
+                source_file=source_file,
+                source_line=line_no,
+                calls=calls,
             ))
         return functions
+    
+    def _extract_block(self, content: str, start_pos: int) -> str:
+        """Extract a code block (between { and }) from start position."""
+        # Find opening brace
+        brace_start = content.find('{', start_pos)
+        if brace_start == -1:
+            return ""
+        
+        # Count braces to find matching close
+        depth = 1
+        pos = brace_start + 1
+        while pos < len(content) and depth > 0:
+            if content[pos] == '{':
+                depth += 1
+            elif content[pos] == '}':
+                depth -= 1
+            pos += 1
+        
+        return content[brace_start:pos] if depth == 0 else ""
 
 
 # =============================================================================

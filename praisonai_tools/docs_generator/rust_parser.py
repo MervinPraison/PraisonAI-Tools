@@ -22,6 +22,7 @@ try:
         ModuleInfo,
         SKIP_MODULES,
         SKIP_METHODS,
+        extract_rust_function_calls,
     )
 except ImportError:
     # Define minimal fallback classes when run standalone
@@ -57,6 +58,8 @@ except ImportError:
         properties: List[ParamInfo] = field(default_factory=list)
         init_params: List[ParamInfo] = field(default_factory=list)
         examples: List[str] = field(default_factory=list)
+        source_file: str = ""
+        source_line: int = 0
     
     @dataclass
     class FunctionInfo:
@@ -67,6 +70,9 @@ except ImportError:
         params: List[ParamInfo] = field(default_factory=list)
         is_async: bool = False
         examples: List[str] = field(default_factory=list)
+        source_file: str = ""
+        source_line: int = 0
+        calls: List[str] = field(default_factory=list)
     
     @dataclass 
     class ModuleInfo:
@@ -79,6 +85,11 @@ except ImportError:
         classes: List[ClassInfo] = field(default_factory=list)
         functions: List[FunctionInfo] = field(default_factory=list)
         constants: List[Tuple[str, str]] = field(default_factory=list)
+        source_file: str = ""
+    
+    def extract_rust_function_calls(source_code: str) -> List[str]:
+        """Fallback when run standalone - return empty list."""
+        return []
     
     SKIP_MODULES = {"tests", "__pycache__", "conftest"}
     SKIP_METHODS = {"__init__", "__repr__", "__str__"}
@@ -103,6 +114,8 @@ class TraitInfo:
     docstring: str = ""
     methods: List[MethodInfo] = field(default_factory=list)
     supertraits: List[str] = field(default_factory=list)
+    source_file: str = ""
+    source_line: int = 0
 
 
 @dataclass
@@ -111,6 +124,8 @@ class EnumInfo:
     name: str
     docstring: str = ""
     variants: List[Tuple[str, str]] = field(default_factory=list)  # (name, docstring)
+    source_file: str = ""
+    source_line: int = 0
 
 
 @dataclass
@@ -151,6 +166,7 @@ class RustDocParser:
         self.crate_path = crate_path
         self.crate_name = crate_name
         self.src_path = crate_path / "src"
+        self.workspace_root = crate_path.parent  # Parent of crate for relative paths
         
         # Cache for parsed files
         self._file_cache: Dict[Path, str] = {}
@@ -217,16 +233,23 @@ class RustDocParser:
             parts = module_path.split(".")
             short_name = parts[-1] if len(parts) > 1 else module_path
             
+            # Get relative source path for GitHub links
+            try:
+                source_file = str(file_path.relative_to(self.workspace_root))
+            except ValueError:
+                source_file = str(file_path)
+            
             info = ModuleInfo(
                 name=module_path,
                 short_name=short_name,
                 docstring=module_doc,
                 is_init=file_path.name in ("lib.rs", "mod.rs"),
                 package="rust",
+                source_file=source_file,
             )
             
             # Parse structs as classes
-            info.classes = self._parse_structs(content)
+            info.classes = self._parse_structs(content, source_file)
             
             # Parse traits (also as classes with special handling)
             traits = self._parse_traits(content)
@@ -236,6 +259,7 @@ class RustDocParser:
                     docstring=trait.docstring,
                     bases=trait.supertraits,
                     methods=trait.methods,
+                    source_file=source_file,
                 ))
             
             # Parse enums
@@ -248,10 +272,11 @@ class RustDocParser:
                         ParamInfo(name=v[0], description=v[1], type="variant")
                         for v in enum.variants
                     ],
+                    source_file=source_file,
                 ))
             
             # Parse standalone functions
-            info.functions = self._parse_functions(content)
+            info.functions = self._parse_functions(content, source_file)
             
             # Parse impl blocks and attach methods to structs
             self._parse_impl_blocks(content, info)
@@ -353,7 +378,7 @@ class RustDocParser:
         
         return "\n".join(lines)
     
-    def _parse_structs(self, content: str) -> List[ClassInfo]:
+    def _parse_structs(self, content: str, source_file: str = "") -> List[ClassInfo]:
         """Parse struct definitions."""
         structs = []
         
@@ -363,6 +388,9 @@ class RustDocParser:
         for match in re.finditer(pattern, content, re.DOTALL):
             name = match.group(1)
             fields_str = match.group(2) or ""
+            
+            # Calculate line number
+            line_no = content[:match.start()].count('\n') + 1
             
             # Extract doc comments
             doc = self._extract_doc_comments(content, match.start())
@@ -392,6 +420,8 @@ class RustDocParser:
                 docstring=self._clean_docstring(doc),
                 properties=properties,
                 examples=examples,
+                source_file=source_file,
+                source_line=line_no,
             ))
         
         return structs
@@ -489,7 +519,7 @@ class RustDocParser:
         
         return enums
     
-    def _parse_functions(self, content: str) -> List[FunctionInfo]:
+    def _parse_functions(self, content: str, source_file: str = "") -> List[FunctionInfo]:
         """Parse standalone public functions."""
         functions = []
         
@@ -510,6 +540,9 @@ class RustDocParser:
             if impl_count > close_brace_count:
                 continue
             
+            # Calculate line number
+            line_no = content[:match.start()].count('\n') + 1
+            
             # Extract doc comments
             doc = self._extract_doc_comments(content, match.start())
             
@@ -519,6 +552,13 @@ class RustDocParser:
             # Check if async
             is_async = "async" in match.group(0)
             
+            # Extract function body for calls
+            func_body = self._extract_brace_content(content, match.end() - 1)
+            try:
+                calls = extract_rust_function_calls(func_body) if func_body else []
+            except:
+                calls = []
+            
             functions.append(FunctionInfo(
                 name=name,
                 signature=params_str,
@@ -527,6 +567,9 @@ class RustDocParser:
                 params=params,
                 is_async=is_async,
                 examples=self._extract_examples(doc),
+                source_file=source_file,
+                source_line=line_no,
+                calls=calls,
             ))
         
         return functions
