@@ -572,6 +572,79 @@ TYPESCRIPT_RELATED_DOCS = {
     ],
 }
 
+# Rust SDK links to Rust-specific docs
+RUST_RELATED_DOCS = {
+    "agent": [
+        ("Rust Overview", "/docs/rust/overview", "book-open"),
+        ("Rust Quickstart", "/docs/rust/quickstart", "rocket"),
+        ("Rust Agent Guide", "/docs/rust/agent", "robot"),
+        ("Rust Installation", "/docs/rust/installation", "download"),
+    ],
+    "tool": [
+        ("Rust Tools", "/docs/rust/tools", "wrench"),
+        ("Rust Overview", "/docs/rust/overview", "book-open"),
+    ],
+    "memory": [
+        ("Rust Memory", "/docs/rust/memory", "database"),
+        ("Rust Session", "/docs/rust/session", "clock"),
+    ],
+    "workflow": [
+        ("Rust Agent Flow", "/docs/rust/agent-flow", "diagram-project"),
+        ("Rust Agent Team", "/docs/rust/agent-team", "users"),
+    ],
+    "team": [
+        ("Rust Agent Team", "/docs/rust/agent-team", "users"),
+    ],
+    "flow": [
+        ("Rust Agent Flow", "/docs/rust/agent-flow", "diagram-project"),
+    ],
+    "task": [
+        ("Rust Tasks", "/docs/rust/tasks", "list-check"),
+    ],
+    "hook": [
+        ("Rust Hooks", "/docs/rust/hooks", "anchor"),
+    ],
+    "guardrail": [
+        ("Rust Guardrails", "/docs/rust/guardrails", "shield"),
+    ],
+    "guard": [
+        ("Rust Guardrails", "/docs/rust/guardrails", "shield"),
+    ],
+    "mcp": [
+        ("Rust MCP", "/docs/rust/mcp", "plug"),
+    ],
+    "llm": [
+        ("Rust LLM Providers", "/docs/rust/llm-providers", "microchip"),
+    ],
+    "provider": [
+        ("Rust LLM Providers", "/docs/rust/llm-providers", "microchip"),
+    ],
+    "context": [
+        ("Rust Context", "/docs/rust/context", "layer-group"),
+    ],
+    "handoff": [
+        ("Rust Handoffs", "/docs/rust/handoffs", "arrow-right-arrow-left"),
+    ],
+    "streaming": [
+        ("Rust Streaming", "/docs/rust/streaming", "wave-square"),
+    ],
+    "trace": [
+        ("Rust Tracing", "/docs/rust/tracing", "chart-line"),
+    ],
+    "telemetry": [
+        ("Rust Tracing", "/docs/rust/tracing", "chart-line"),
+    ],
+    "config": [
+        ("Rust Configuration", "/docs/rust/configuration", "gear"),
+    ],
+    "cli": [
+        ("Rust CLI Guide", "/docs/rust/cli", "terminal"),
+    ],
+    "command": [
+        ("Rust CLI Guide", "/docs/rust/cli", "terminal"),
+    ],
+}
+
 
 def get_related_docs(name: str, max_items: int = 5, package: str = "python") -> list:
     """Find related documentation based on keywords in the name.
@@ -591,6 +664,8 @@ def get_related_docs(name: str, max_items: int = 5, package: str = "python") -> 
     # Select the appropriate mapping based on package
     if package == "typescript":
         docs_map = TYPESCRIPT_RELATED_DOCS
+    elif package == "rust":
+        docs_map = RUST_RELATED_DOCS
     else:
         docs_map = RELATED_DOCS  # Python packages use the main mapping
     
