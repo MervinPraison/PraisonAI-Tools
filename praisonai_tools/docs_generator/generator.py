@@ -517,131 +517,572 @@ RELATED_DOCS = {
 }
 
 # TypeScript SDK links to TypeScript-specific docs
+# TypeScript SDK links to TypeScript-specific docs - Comprehensive mapping for 19 pages
 TYPESCRIPT_RELATED_DOCS = {
+    # Core Agent
     "agent": [
         ("TypeScript SDK", "/docs/sdk/typescript/index", "book-open"),
         ("Auto Agents", "/docs/sdk/typescript/auto-agents", "robot"),
         ("Context Agent", "/docs/sdk/typescript/context-agent", "message-circle"),
+        ("Router Agent", "/docs/sdk/typescript/router-agent", "arrows-split"),
+        ("Research Agent", "/docs/sdk/typescript/research-agent", "search"),
+        ("Image Agent", "/docs/sdk/typescript/image-agent", "image"),
     ],
+    # Auto & Team
+    "auto": [
+        ("Auto Agents", "/docs/sdk/typescript/auto-agents", "robot"),
+        ("TypeScript SDK", "/docs/sdk/typescript/index", "book-open"),
+    ],
+    "team": [
+        ("Auto Agents", "/docs/sdk/typescript/auto-agents", "users"),
+        ("Handoff", "/docs/sdk/typescript/handoff", "arrow-right-arrow-left"),
+    ],
+    # Tools
     "tool": [
         ("TypeScript SDK", "/docs/sdk/typescript/index", "book-open"),
         ("Planning", "/docs/sdk/typescript/planning", "diagram-project"),
     ],
-    "config": [
-        ("TypeScript SDK", "/docs/sdk/typescript/index", "book-open"),
-        ("Observability", "/docs/sdk/typescript/observability", "eye"),
-    ],
-    "memory": [
-        ("Vector Stores", "/docs/sdk/typescript/vector-stores", "database"),
-        ("Cache", "/docs/sdk/typescript/cache", "hard-drive"),
+    # Planning & Workflow
+    "planning": [
+        ("Planning", "/docs/sdk/typescript/planning", "diagram-project"),
+        ("Router Agent", "/docs/sdk/typescript/router-agent", "arrows-split"),
     ],
     "workflow": [
         ("Planning", "/docs/sdk/typescript/planning", "diagram-project"),
         ("Router Agent", "/docs/sdk/typescript/router-agent", "arrows-split"),
-    ],
-    "team": [
-        ("Auto Agents", "/docs/sdk/typescript/auto-agents", "users"),
+        ("Handoff", "/docs/sdk/typescript/handoff", "arrow-right-arrow-left"),
     ],
     "flow": [
         ("Planning", "/docs/sdk/typescript/planning", "diagram-project"),
+        ("Router Agent", "/docs/sdk/typescript/router-agent", "arrows-split"),
     ],
-    "task": [
+    # Routing
+    "router": [
+        ("Router Agent", "/docs/sdk/typescript/router-agent", "arrows-split"),
+        ("Planning", "/docs/sdk/typescript/planning", "diagram-project"),
+    ],
+    "rout": [
+        ("Router Agent", "/docs/sdk/typescript/router-agent", "arrows-split"),
+    ],
+    # Handoffs
+    "handoff": [
+        ("Handoff", "/docs/sdk/typescript/handoff", "arrow-right-arrow-left"),
         ("Auto Agents", "/docs/sdk/typescript/auto-agents", "users"),
     ],
+    # Context
+    "context": [
+        ("Context Agent", "/docs/sdk/typescript/context-agent", "message-circle"),
+        ("TypeScript SDK", "/docs/sdk/typescript/index", "book-open"),
+    ],
+    # Memory & Cache
+    "memory": [
+        ("Vector Stores", "/docs/sdk/typescript/vector-stores", "database"),
+        ("Cache", "/docs/sdk/typescript/cache", "hard-drive"),
+        ("DB Adapters", "/docs/sdk/typescript/db-adapters", "database"),
+    ],
+    "cache": [
+        ("Cache", "/docs/sdk/typescript/cache", "hard-drive"),
+        ("Vector Stores", "/docs/sdk/typescript/vector-stores", "database"),
+    ],
+    "session": [
+        ("Cache", "/docs/sdk/typescript/cache", "hard-drive"),
+        ("DB Adapters", "/docs/sdk/typescript/db-adapters", "database"),
+    ],
+    # Database
+    "database": [
+        ("DB Adapters", "/docs/sdk/typescript/db-adapters", "database"),
+        ("Vector Stores", "/docs/sdk/typescript/vector-stores", "database"),
+    ],
+    "db": [
+        ("DB Adapters", "/docs/sdk/typescript/db-adapters", "database"),
+    ],
+    "adapter": [
+        ("DB Adapters", "/docs/sdk/typescript/db-adapters", "database"),
+    ],
+    # RAG & Knowledge
+    "rag": [
+        ("Graph RAG", "/docs/sdk/typescript/graph-rag", "git-branch"),
+        ("Vector Stores", "/docs/sdk/typescript/vector-stores", "database"),
+        ("Reranker", "/docs/sdk/typescript/reranker", "list-ol"),
+        ("Query Rewriter", "/docs/sdk/typescript/query-rewriter", "pen"),
+    ],
+    "graph": [
+        ("Graph RAG", "/docs/sdk/typescript/graph-rag", "git-branch"),
+        ("Vector Stores", "/docs/sdk/typescript/vector-stores", "database"),
+    ],
+    "vector": [
+        ("Vector Stores", "/docs/sdk/typescript/vector-stores", "database"),
+        ("Graph RAG", "/docs/sdk/typescript/graph-rag", "git-branch"),
+    ],
+    "embed": [
+        ("Vector Stores", "/docs/sdk/typescript/vector-stores", "database"),
+    ],
+    "knowledge": [
+        ("Graph RAG", "/docs/sdk/typescript/graph-rag", "git-branch"),
+        ("Vector Stores", "/docs/sdk/typescript/vector-stores", "database"),
+    ],
+    # Reranking & Query
+    "rerank": [
+        ("Reranker", "/docs/sdk/typescript/reranker", "list-ol"),
+        ("Query Rewriter", "/docs/sdk/typescript/query-rewriter", "pen"),
+    ],
+    "query": [
+        ("Query Rewriter", "/docs/sdk/typescript/query-rewriter", "pen"),
+        ("Reranker", "/docs/sdk/typescript/reranker", "list-ol"),
+    ],
+    "retriev": [
+        ("Vector Stores", "/docs/sdk/typescript/vector-stores", "database"),
+        ("Reranker", "/docs/sdk/typescript/reranker", "list-ol"),
+    ],
+    # Prompts
+    "prompt": [
+        ("Prompt Expander", "/docs/sdk/typescript/prompt-expander", "expand"),
+        ("TypeScript SDK", "/docs/sdk/typescript/index", "book-open"),
+    ],
+    "expand": [
+        ("Prompt Expander", "/docs/sdk/typescript/prompt-expander", "expand"),
+    ],
+    # Guardrails
+    "guard": [
+        ("Guardrails", "/docs/sdk/typescript/guardrails", "shield"),
+    ],
+    "guardrail": [
+        ("Guardrails", "/docs/sdk/typescript/guardrails", "shield"),
+    ],
+    "security": [
+        ("Guardrails", "/docs/sdk/typescript/guardrails", "shield"),
+    ],
+    # Observability
+    "observ": [
+        ("Observability", "/docs/sdk/typescript/observability", "eye"),
+        ("Telemetry", "/docs/sdk/typescript/telemetry", "signal"),
+    ],
+    "telemetry": [
+        ("Telemetry", "/docs/sdk/typescript/telemetry", "signal"),
+        ("Observability", "/docs/sdk/typescript/observability", "eye"),
+    ],
+    "trace": [
+        ("Telemetry", "/docs/sdk/typescript/telemetry", "signal"),
+        ("Observability", "/docs/sdk/typescript/observability", "eye"),
+    ],
+    "monitor": [
+        ("Observability", "/docs/sdk/typescript/observability", "eye"),
+        ("Telemetry", "/docs/sdk/typescript/telemetry", "signal"),
+    ],
+    # Configuration
+    "config": [
+        ("TypeScript SDK", "/docs/sdk/typescript/index", "book-open"),
+        ("Observability", "/docs/sdk/typescript/observability", "eye"),
+    ],
+    # Voice & Multimodal
+    "voice": [
+        ("Voice", "/docs/sdk/typescript/voice", "mic"),
+    ],
+    "audio": [
+        ("Voice", "/docs/sdk/typescript/voice", "mic"),
+    ],
+    "speech": [
+        ("Voice", "/docs/sdk/typescript/voice", "mic"),
+    ],
+    # Image
+    "image": [
+        ("Image Agent", "/docs/sdk/typescript/image-agent", "image"),
+    ],
+    "vision": [
+        ("Image Agent", "/docs/sdk/typescript/image-agent", "image"),
+    ],
+    # Research
+    "research": [
+        ("Research Agent", "/docs/sdk/typescript/research-agent", "search"),
+    ],
+    "search": [
+        ("Research Agent", "/docs/sdk/typescript/research-agent", "search"),
+        ("Query Rewriter", "/docs/sdk/typescript/query-rewriter", "pen"),
+    ],
+    # MCP & LLM
     "mcp": [
         ("TypeScript SDK", "/docs/sdk/typescript/index", "plug"),
     ],
     "llm": [
         ("TypeScript SDK", "/docs/sdk/typescript/index", "book-open"),
     ],
-    "guard": [
-        ("Guardrails", "/docs/sdk/typescript/guardrails", "shield"),
+    "model": [
+        ("TypeScript SDK", "/docs/sdk/typescript/index", "book-open"),
     ],
-    "rag": [
-        ("Graph RAG", "/docs/sdk/typescript/graph-rag", "git-branch"),
-        ("Vector Stores", "/docs/sdk/typescript/vector-stores", "database"),
+    "provider": [
+        ("TypeScript SDK", "/docs/sdk/typescript/index", "book-open"),
     ],
-    "voice": [
-        ("Voice", "/docs/sdk/typescript/voice", "mic"),
-    ],
-    "image": [
-        ("Image Agent", "/docs/sdk/typescript/image-agent", "image"),
-    ],
-    "research": [
-        ("Research Agent", "/docs/sdk/typescript/research-agent", "search"),
+    # Task
+    "task": [
+        ("Auto Agents", "/docs/sdk/typescript/auto-agents", "users"),
+        ("Planning", "/docs/sdk/typescript/planning", "diagram-project"),
     ],
 }
 
-# Rust SDK links to Rust-specific docs
+# Rust SDK links to Rust-specific docs - Comprehensive mapping for 89 pages
 RUST_RELATED_DOCS = {
+    # Core Agent
     "agent": [
+        ("Rust Agent", "/docs/rust/agent", "robot"),
         ("Rust Overview", "/docs/rust/overview", "book-open"),
         ("Rust Quickstart", "/docs/rust/quickstart", "rocket"),
-        ("Rust Agent Guide", "/docs/rust/agent", "robot"),
         ("Rust Installation", "/docs/rust/installation", "download"),
+        ("Rust Autonomy", "/docs/rust/autonomy", "wand-magic-sparkles"),
     ],
+    # Tools
     "tool": [
         ("Rust Tools", "/docs/rust/tools", "wrench"),
-        ("Rust Overview", "/docs/rust/overview", "book-open"),
+        ("Rust Code Execution", "/docs/rust/code-execution", "terminal"),
+        ("Rust Web Search", "/docs/rust/web-search", "search"),
     ],
+    # Memory & Knowledge
     "memory": [
         ("Rust Memory", "/docs/rust/memory", "database"),
-        ("Rust Session", "/docs/rust/session", "clock"),
+        ("Rust Sessions", "/docs/rust/sessions", "clock"),
+        ("Rust Knowledge", "/docs/rust/knowledge", "book"),
     ],
+    "knowledge": [
+        ("Rust Knowledge", "/docs/rust/knowledge", "book"),
+        ("Rust Documents", "/docs/rust/documents", "file-lines"),
+        ("Rust RAG", "/docs/rust/rag", "magnifying-glass"),
+    ],
+    # Workflow & Orchestration
     "workflow": [
-        ("Rust Agent Flow", "/docs/rust/agent-flow", "diagram-project"),
+        ("Rust Workflows", "/docs/rust/workflows", "diagram-project"),
+        ("Rust Agent Flow", "/docs/rust/agent-flow", "route"),
         ("Rust Agent Team", "/docs/rust/agent-team", "users"),
+        ("Rust Process", "/docs/rust/process", "gears"),
     ],
     "team": [
         ("Rust Agent Team", "/docs/rust/agent-team", "users"),
+        ("Rust Handoffs", "/docs/rust/handoffs", "arrow-right-arrow-left"),
+        ("Rust A2A", "/docs/rust/a2a", "arrows-left-right"),
     ],
     "flow": [
         ("Rust Agent Flow", "/docs/rust/agent-flow", "diagram-project"),
+        ("Rust Routing", "/docs/rust/routing", "route"),
+        ("Rust Conditions", "/docs/rust/conditions", "code-branch"),
     ],
     "task": [
         ("Rust Tasks", "/docs/rust/tasks", "list-check"),
+        ("Rust Execution", "/docs/rust/execution", "play"),
     ],
+    # Safety & Hooks
     "hook": [
         ("Rust Hooks", "/docs/rust/hooks", "anchor"),
+        ("Rust Events", "/docs/rust/events", "bolt"),
+        ("Rust Callbacks", "/docs/rust/callbacks", "phone"),
     ],
     "guardrail": [
         ("Rust Guardrails", "/docs/rust/guardrails", "shield"),
+        ("Rust Approval", "/docs/rust/approval", "check"),
+        ("Rust Security", "/docs/rust/security", "lock"),
     ],
     "guard": [
         ("Rust Guardrails", "/docs/rust/guardrails", "shield"),
     ],
+    "approval": [
+        ("Rust Approval", "/docs/rust/approval", "check"),
+        ("Rust Guardrails", "/docs/rust/guardrails", "shield"),
+    ],
+    "security": [
+        ("Rust Security", "/docs/rust/security", "lock"),
+        ("Rust Sandbox", "/docs/rust/sandbox", "box"),
+    ],
+    # MCP & Integrations
     "mcp": [
         ("Rust MCP", "/docs/rust/mcp", "plug"),
+        ("Rust Resources", "/docs/rust/resources", "folder"),
     ],
+    # LLM & Providers
     "llm": [
-        ("Rust LLM Providers", "/docs/rust/llm-providers", "microchip"),
+        ("Rust LLM", "/docs/rust/llm", "microchip"),
+        ("Rust Providers", "/docs/rust/providers", "server"),
+        ("Rust Failover", "/docs/rust/failover", "shield"),
     ],
     "provider": [
-        ("Rust LLM Providers", "/docs/rust/llm-providers", "microchip"),
+        ("Rust Providers", "/docs/rust/providers", "server"),
+        ("Rust LLM", "/docs/rust/llm", "microchip"),
     ],
+    "model": [
+        ("Rust LLM", "/docs/rust/llm", "microchip"),
+        ("Rust Providers", "/docs/rust/providers", "server"),
+    ],
+    # Context & Session
     "context": [
-        ("Rust Context", "/docs/rust/context", "layer-group"),
+        ("Rust Context Management", "/docs/rust/context-management", "layer-group"),
+        ("Rust Token Management", "/docs/rust/token-management", "coins"),
     ],
+    "session": [
+        ("Rust Sessions", "/docs/rust/sessions", "clock"),
+        ("Rust Memory", "/docs/rust/memory", "database"),
+    ],
+    # Handoffs & A2A
     "handoff": [
         ("Rust Handoffs", "/docs/rust/handoffs", "arrow-right-arrow-left"),
+        ("Rust A2A", "/docs/rust/a2a", "arrows-left-right"),
     ],
+    "a2a": [
+        ("Rust A2A", "/docs/rust/a2a", "arrows-left-right"),
+        ("Rust Agent-to-Agent", "/docs/rust/agent-to-agent-a2a", "users"),
+    ],
+    # Streaming & Real-time
     "streaming": [
         ("Rust Streaming", "/docs/rust/streaming", "wave-square"),
+        ("Rust Realtime", "/docs/rust/realtime", "clock"),
+        ("Rust Display", "/docs/rust/display", "display"),
     ],
+    "realtime": [
+        ("Rust Realtime", "/docs/rust/realtime", "clock"),
+        ("Rust Streaming", "/docs/rust/streaming", "wave-square"),
+    ],
+    # Observability
     "trace": [
         ("Rust Tracing", "/docs/rust/tracing", "chart-line"),
+        ("Rust Telemetry", "/docs/rust/telemetry", "signal"),
     ],
     "telemetry": [
+        ("Rust Telemetry", "/docs/rust/telemetry", "signal"),
         ("Rust Tracing", "/docs/rust/tracing", "chart-line"),
     ],
+    # Configuration
     "config": [
         ("Rust Configuration", "/docs/rust/configuration", "gear"),
+        ("Rust Installation", "/docs/rust/installation", "download"),
     ],
+    # CLI
     "cli": [
-        ("Rust CLI Guide", "/docs/rust/cli", "terminal"),
+        ("Rust CLI", "/docs/rust/cli", "terminal"),
+        ("Rust Quickstart", "/docs/rust/quickstart", "rocket"),
     ],
     "command": [
-        ("Rust CLI Guide", "/docs/rust/cli", "terminal"),
+        ("Rust CLI", "/docs/rust/cli", "terminal"),
+    ],
+    # Multimodal
+    "image": [
+        ("Rust Image", "/docs/rust/image", "image"),
+        ("Rust Vision", "/docs/rust/vision", "eye"),
+    ],
+    "vision": [
+        ("Rust Vision", "/docs/rust/vision", "eye"),
+        ("Rust Image", "/docs/rust/image", "image"),
+    ],
+    "audio": [
+        ("Rust Audio", "/docs/rust/audio", "volume-high"),
+    ],
+    "video": [
+        ("Rust Video", "/docs/rust/video", "video"),
+    ],
+    # RAG & Knowledge
+    "rag": [
+        ("Rust RAG", "/docs/rust/rag", "magnifying-glass"),
+        ("Rust Retrieval", "/docs/rust/retrieval", "search"),
+        ("Rust Vector Store", "/docs/rust/vector-store", "database"),
+        ("Rust Chunking", "/docs/rust/chunking", "scissors"),
+    ],
+    "embed": [
+        ("Rust Embeddings", "/docs/rust/embeddings", "code"),
+        ("Rust Embedding", "/docs/rust/embedding", "code"),
+        ("Rust Vector Store", "/docs/rust/vector-store", "database"),
+    ],
+    "vector": [
+        ("Rust Vector Store", "/docs/rust/vector-store", "database"),
+        ("Rust Embeddings", "/docs/rust/embeddings", "code"),
+    ],
+    "chunk": [
+        ("Rust Chunking", "/docs/rust/chunking", "scissors"),
+        ("Rust RAG", "/docs/rust/rag", "magnifying-glass"),
+    ],
+    "retriev": [
+        ("Rust Retrieval", "/docs/rust/retrieval", "search"),
+        ("Rust Query", "/docs/rust/query", "magnifying-glass"),
+    ],
+    "query": [
+        ("Rust Query", "/docs/rust/query", "magnifying-glass"),
+        ("Rust RAG", "/docs/rust/rag", "magnifying-glass"),
+    ],
+    # Planning & Reasoning
+    "planning": [
+        ("Rust Planning", "/docs/rust/planning", "map"),
+        ("Rust Reasoning", "/docs/rust/reasoning", "brain"),
+    ],
+    "reason": [
+        ("Rust Reasoning", "/docs/rust/reasoning", "brain"),
+        ("Rust Thinking", "/docs/rust/thinking", "lightbulb"),
+    ],
+    "think": [
+        ("Rust Thinking", "/docs/rust/thinking", "lightbulb"),
+        ("Rust Reasoning", "/docs/rust/reasoning", "brain"),
+    ],
+    "reflect": [
+        ("Rust Reflection", "/docs/rust/reflection", "mirror"),
+        ("Rust Self-Reflection", "/docs/rust/self-reflection", "brain"),
+    ],
+    # Evaluation
+    "eval": [
+        ("Rust Evaluation", "/docs/rust/evaluation", "gavel"),
+        ("Rust Criteria", "/docs/rust/criteria", "check-double"),
+    ],
+    "criteria": [
+        ("Rust Criteria", "/docs/rust/criteria", "check-double"),
+        ("Rust Evaluation", "/docs/rust/evaluation", "gavel"),
+    ],
+    # Output & Display
+    "output": [
+        ("Rust Output", "/docs/rust/output", "file-export"),
+        ("Rust Structured Output", "/docs/rust/structured-output", "code"),
+        ("Rust Display", "/docs/rust/display", "display"),
+    ],
+    "display": [
+        ("Rust Display", "/docs/rust/display", "display"),
+        ("Rust Output", "/docs/rust/output", "file-export"),
+    ],
+    "structured": [
+        ("Rust Structured Output", "/docs/rust/structured-output", "code"),
+    ],
+    # Error Handling
+    "error": [
+        ("Rust Error Handling", "/docs/rust/error-handling", "triangle-exclamation"),
+        ("Rust Retry", "/docs/rust/retry", "rotate-right"),
+        ("Rust Failover", "/docs/rust/failover", "shield"),
+    ],
+    "retry": [
+        ("Rust Retry", "/docs/rust/retry", "rotate-right"),
+        ("Rust Failover", "/docs/rust/failover", "shield"),
+    ],
+    "failover": [
+        ("Rust Failover", "/docs/rust/failover", "shield"),
+        ("Rust Retry", "/docs/rust/retry", "rotate-right"),
+    ],
+    # Execution Modes
+    "parallel": [
+        ("Rust Parallel Execution", "/docs/rust/parallel-execution", "arrows-split"),
+        ("Rust Process", "/docs/rust/process", "gears"),
+    ],
+    "async": [
+        ("Rust Execution", "/docs/rust/execution", "play"),
+        ("Rust Parallel Execution", "/docs/rust/parallel-execution", "arrows-split"),
+    ],
+    "loop": [
+        ("Rust Loops", "/docs/rust/loops", "rotate"),
+        ("Rust Conditions", "/docs/rust/conditions", "code-branch"),
+    ],
+    # Routing
+    "rout": [
+        ("Rust Routing", "/docs/rust/routing", "route"),
+        ("Rust Router", "/docs/rust/router", "arrows-split"),
+        ("Rust Conditions", "/docs/rust/conditions", "code-branch"),
+    ],
+    "condition": [
+        ("Rust Conditions", "/docs/rust/conditions", "code-branch"),
+        ("Rust Routing", "/docs/rust/routing", "route"),
+    ],
+    # Web & Browser
+    "web": [
+        ("Rust Web", "/docs/rust/web", "globe"),
+        ("Rust Web Search", "/docs/rust/web-search", "search"),
+    ],
+    "search": [
+        ("Rust Web Search", "/docs/rust/web-search", "search"),
+        ("Rust Query", "/docs/rust/query", "magnifying-glass"),
+    ],
+    # Files & Documents
+    "file": [
+        ("Rust Files", "/docs/rust/files", "file"),
+        ("Rust Documents", "/docs/rust/documents", "file-lines"),
+    ],
+    "document": [
+        ("Rust Documents", "/docs/rust/documents", "file-lines"),
+        ("Rust Files", "/docs/rust/files", "file"),
+        ("Rust OCR", "/docs/rust/ocr", "file-image"),
+    ],
+    "ocr": [
+        ("Rust OCR", "/docs/rust/ocr", "file-image"),
+        ("Rust Documents", "/docs/rust/documents", "file-lines"),
+    ],
+    # Prompts & Templates
+    "prompt": [
+        ("Rust Prompts", "/docs/rust/prompts", "message"),
+        ("Rust Templates", "/docs/rust/templates", "file-code"),
+    ],
+    "template": [
+        ("Rust Templates", "/docs/rust/templates", "file-code"),
+        ("Rust Prompts", "/docs/rust/prompts", "message"),
+    ],
+    # Database
+    "database": [
+        ("Rust Database", "/docs/rust/database", "database"),
+        ("Rust Vector Store", "/docs/rust/vector-store", "database"),
+    ],
+    "db": [
+        ("Rust Database", "/docs/rust/database", "database"),
+    ],
+    # Plugins & Skills
+    "plugin": [
+        ("Rust Plugins", "/docs/rust/plugins", "plug"),
+    ],
+    "skill": [
+        ("Rust Skills", "/docs/rust/skills", "wand-magic-sparkles"),
+    ],
+    # Sandbox & Code
+    "sandbox": [
+        ("Rust Sandbox", "/docs/rust/sandbox", "box"),
+        ("Rust Code Execution", "/docs/rust/code-execution", "terminal"),
+    ],
+    "code": [
+        ("Rust Code Execution", "/docs/rust/code-execution", "terminal"),
+        ("Rust Sandbox", "/docs/rust/sandbox", "box"),
+    ],
+    # Gateway & API
+    "gateway": [
+        ("Rust Gateway", "/docs/rust/gateway", "tower-broadcast"),
+    ],
+    "api": [
+        ("Rust Gateway", "/docs/rust/gateway", "tower-broadcast"),
+        ("Rust Quickstart", "/docs/rust/quickstart", "rocket"),
+    ],
+    # Bots & UI
+    "bot": [
+        ("Rust Bots", "/docs/rust/bots", "robot"),
+        ("Rust AGUI", "/docs/rust/agui", "display"),
+    ],
+    "agui": [
+        ("Rust AGUI", "/docs/rust/agui", "display"),
+        ("Rust Agent UI", "/docs/rust/agent-ui-agui", "display"),
+    ],
+    "ui": [
+        ("Rust Agent UI", "/docs/rust/agent-ui-agui", "display"),
+        ("Rust AGUI", "/docs/rust/agui", "display"),
+    ],
+    # Budget & Resources
+    "budget": [
+        ("Rust Budget", "/docs/rust/budget", "wallet"),
+        ("Rust Token Management", "/docs/rust/token-management", "coins"),
+    ],
+    "token": [
+        ("Rust Token Management", "/docs/rust/token-management", "coins"),
+        ("Rust Budget", "/docs/rust/budget", "wallet"),
+    ],
+    # Optimizer
+    "optim": [
+        ("Rust Optimizer", "/docs/rust/optimizer", "chart-line"),
+    ],
+    # Auto & Generation
+    "auto": [
+        ("Rust Auto Generation", "/docs/rust/auto-generation", "wand-magic-sparkles"),
+        ("Rust Autonomy", "/docs/rust/autonomy", "robot"),
+    ],
+    "generat": [
+        ("Rust Auto Generation", "/docs/rust/auto-generation", "wand-magic-sparkles"),
+    ],
+    # Policy
+    "policy": [
+        ("Rust Policy", "/docs/rust/policy", "file-shield"),
+        ("Rust Security", "/docs/rust/security", "lock"),
+    ],
+    # Citations
+    "citat": [
+        ("Rust Citations", "/docs/rust/citations", "quote-left"),
     ],
 }
 
