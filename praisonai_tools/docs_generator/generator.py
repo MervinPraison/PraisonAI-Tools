@@ -2206,7 +2206,7 @@ class ReferenceDocsGenerator:
                 "badge_color": "green",
                 "badge_text": "TypeScript AI Agent",
                 "title_suffix": " • TypeScript AI Agent SDK",
-                "github_repo": "https://github.com/MervinPraison/PraisonAI/blob/main/src/praisonai-ts/src",
+                "github_repo": "https://github.com/MervinPraison/PraisonAI/blob/main/src/praisonai-ts",
             },
             "rust": {
                 "source": base_src / "src/praisonai-rust",
@@ -2216,7 +2216,7 @@ class ReferenceDocsGenerator:
                 "badge_text": "Rust AI Agent SDK",
                 "title_suffix": " • Rust AI Agent SDK",
                 "language": "rust",
-                "github_repo": "https://github.com/ARC-Solutions/praisonai-rust/blob/main",
+                "github_repo": "https://github.com/MervinPraison/PraisonAI/blob/main/src/praisonai-rust",
             },
         }
 
