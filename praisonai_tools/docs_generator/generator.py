@@ -515,207 +515,407 @@ RELATED_DOCS = {
         ("Reasoning Extract", "/docs/features/reasoning-extract", "lightbulb"),
     ],
 }
-
-# TypeScript SDK links to TypeScript-specific docs
-# TypeScript SDK links to TypeScript-specific docs - Comprehensive mapping for 19 pages
+# TypeScript SDK links - Comprehensive mapping for 143+ JS/TS pages
 TYPESCRIPT_RELATED_DOCS = {
-    # Core Agent
+    # Core Agent - links to main JS guides
     "agent": [
-        ("TypeScript SDK", "/docs/sdk/typescript/index", "book-open"),
-        ("Auto Agents", "/docs/sdk/typescript/auto-agents", "robot"),
-        ("Context Agent", "/docs/sdk/typescript/context-agent", "message-circle"),
-        ("Router Agent", "/docs/sdk/typescript/router-agent", "arrows-split"),
-        ("Research Agent", "/docs/sdk/typescript/research-agent", "search"),
-        ("Image Agent", "/docs/sdk/typescript/image-agent", "image"),
+        ("JS Agent Guide", "/docs/js/agent", "robot"),
+        ("JS Agents", "/docs/js/agents", "users"),
+        ("JS Auto Agents", "/docs/js/auto-agents", "wand-magic-sparkles"),
+        ("JS Agent Team", "/docs/js/agent-team", "users"),
+        ("JS Agent Flow", "/docs/js/agent-flow", "diagram-project"),
     ],
     # Auto & Team
     "auto": [
-        ("Auto Agents", "/docs/sdk/typescript/auto-agents", "robot"),
-        ("TypeScript SDK", "/docs/sdk/typescript/index", "book-open"),
+        ("JS Auto Agents", "/docs/js/auto-agents", "robot"),
+        ("TS Auto Agents CLI", "/docs/js/auto-agents-cli", "terminal"),
     ],
     "team": [
-        ("Auto Agents", "/docs/sdk/typescript/auto-agents", "users"),
-        ("Handoff", "/docs/sdk/typescript/handoff", "arrow-right-arrow-left"),
+        ("JS Agent Team", "/docs/js/agent-team", "users"),
+        ("JS Teams", "/docs/js/teams", "users"),
+        ("JS Handoffs", "/docs/js/handoffs", "arrow-right-arrow-left"),
     ],
     # Tools
     "tool": [
-        ("TypeScript SDK", "/docs/sdk/typescript/index", "book-open"),
-        ("Planning", "/docs/sdk/typescript/planning", "diagram-project"),
-    ],
-    # Planning & Workflow
-    "planning": [
-        ("Planning", "/docs/sdk/typescript/planning", "diagram-project"),
-        ("Router Agent", "/docs/sdk/typescript/router-agent", "arrows-split"),
-    ],
-    "workflow": [
-        ("Planning", "/docs/sdk/typescript/planning", "diagram-project"),
-        ("Router Agent", "/docs/sdk/typescript/router-agent", "arrows-split"),
-        ("Handoff", "/docs/sdk/typescript/handoff", "arrow-right-arrow-left"),
-    ],
-    "flow": [
-        ("Planning", "/docs/sdk/typescript/planning", "diagram-project"),
-        ("Router Agent", "/docs/sdk/typescript/router-agent", "arrows-split"),
-    ],
-    # Routing
-    "router": [
-        ("Router Agent", "/docs/sdk/typescript/router-agent", "arrows-split"),
-        ("Planning", "/docs/sdk/typescript/planning", "diagram-project"),
-    ],
-    "rout": [
-        ("Router Agent", "/docs/sdk/typescript/router-agent", "arrows-split"),
-    ],
-    # Handoffs
-    "handoff": [
-        ("Handoff", "/docs/sdk/typescript/handoff", "arrow-right-arrow-left"),
-        ("Auto Agents", "/docs/sdk/typescript/auto-agents", "users"),
-    ],
-    # Context
-    "context": [
-        ("Context Agent", "/docs/sdk/typescript/context-agent", "message-circle"),
-        ("TypeScript SDK", "/docs/sdk/typescript/index", "book-open"),
+        ("JS Tools", "/docs/js/tools", "wrench"),
+        ("JS Tools CLI", "/docs/js/tools-cli", "terminal"),
+        ("JS Custom Tools", "/docs/js/customtools", "plus"),
+        ("JS MCP Tools", "/docs/js/mcp-tools", "plug"),
     ],
     # Memory & Cache
     "memory": [
-        ("Vector Stores", "/docs/sdk/typescript/vector-stores", "database"),
-        ("Cache", "/docs/sdk/typescript/cache", "hard-drive"),
-        ("DB Adapters", "/docs/sdk/typescript/db-adapters", "database"),
+        ("JS Memory", "/docs/js/memory", "database"),
+        ("JS Memory CLI", "/docs/js/memory-cli", "terminal"),
+        ("JS Memory Hooks", "/docs/js/memory-hooks", "anchor"),
+        ("JS Cache", "/docs/js/cache-cli", "hard-drive"),
     ],
     "cache": [
-        ("Cache", "/docs/sdk/typescript/cache", "hard-drive"),
-        ("Vector Stores", "/docs/sdk/typescript/vector-stores", "database"),
+        ("JS Cache CLI", "/docs/js/cache-cli", "hard-drive"),
+        ("JS Memory", "/docs/js/memory", "database"),
     ],
     "session": [
-        ("Cache", "/docs/sdk/typescript/cache", "hard-drive"),
-        ("DB Adapters", "/docs/sdk/typescript/db-adapters", "database"),
+        ("JS Sessions", "/docs/js/sessions", "clock"),
+        ("JS Sessions CLI", "/docs/js/sessions-cli", "terminal"),
+        ("JS Hierarchy Session", "/docs/js/hierarchy-session", "sitemap"),
     ],
     # Database
     "database": [
-        ("DB Adapters", "/docs/sdk/typescript/db-adapters", "database"),
-        ("Vector Stores", "/docs/sdk/typescript/vector-stores", "database"),
+        ("JS Database", "/docs/js/database", "database"),
+        ("JS Database CLI", "/docs/js/database-cli", "terminal"),
+        ("JS Postgres", "/docs/js/postgres", "database"),
+        ("JS Redis", "/docs/js/redis", "database"),
     ],
     "db": [
-        ("DB Adapters", "/docs/sdk/typescript/db-adapters", "database"),
+        ("JS Database", "/docs/js/database", "database"),
+        ("JS NL Postgres", "/docs/js/nl-postgres", "database"),
     ],
-    "adapter": [
-        ("DB Adapters", "/docs/sdk/typescript/db-adapters", "database"),
+    "postgres": [
+        ("JS Postgres", "/docs/js/postgres", "database"),
+        ("JS NL Postgres", "/docs/js/nl-postgres", "database"),
+    ],
+    "redis": [
+        ("JS Redis", "/docs/js/redis", "database"),
+    ],
+    # Workflow & Planning
+    "workflow": [
+        ("JS Workflows", "/docs/js/workflows", "diagram-project"),
+        ("JS Workflows CLI", "/docs/js/workflows-cli", "terminal"),
+        ("JS Workflow Hooks", "/docs/js/workflow-hooks", "anchor"),
+        ("JS Planning", "/docs/js/planning", "map"),
+    ],
+    "planning": [
+        ("JS Planning", "/docs/js/planning", "map"),
+        ("JS Planning CLI", "/docs/js/planning-cli", "terminal"),
+    ],
+    "flow": [
+        ("JS Agent Flow", "/docs/js/agent-flow", "diagram-project"),
+        ("JS Flow", "/docs/js/flow", "route"),
+        ("JS Routing", "/docs/js/routing", "arrows-split"),
+    ],
+    # Routing
+    "router": [
+        ("JS Router Agent", "/docs/js/router-agent", "arrows-split"),
+        ("JS Router Agent CLI", "/docs/js/router-agent-cli", "terminal"),
+        ("JS Routing", "/docs/js/routing", "route"),
+    ],
+    "rout": [
+        ("JS Routing", "/docs/js/routing", "route"),
+        ("JS Router Agent", "/docs/js/router-agent", "arrows-split"),
+    ],
+    # Handoffs
+    "handoff": [
+        ("JS Handoffs", "/docs/js/handoffs", "arrow-right-arrow-left"),
+        ("JS Agent Team", "/docs/js/agent-team", "users"),
+    ],
+    # Context
+    "context": [
+        ("JS Context Manager", "/docs/js/context-manager", "layer-group"),
+        ("JS Context Manager CLI", "/docs/js/context-manager-cli", "terminal"),
     ],
     # RAG & Knowledge
     "rag": [
-        ("Graph RAG", "/docs/sdk/typescript/graph-rag", "git-branch"),
-        ("Vector Stores", "/docs/sdk/typescript/vector-stores", "database"),
-        ("Reranker", "/docs/sdk/typescript/reranker", "list-ol"),
-        ("Query Rewriter", "/docs/sdk/typescript/query-rewriter", "pen"),
+        ("JS RAG Agent", "/docs/js/rag-agent", "magnifying-glass"),
+        ("JS RAG Agent CLI", "/docs/js/rag-agent-cli", "terminal"),
+        ("JS Graph RAG", "/docs/js/graph-rag", "git-branch"),
+        ("JS Vector Stores", "/docs/js/vector-stores", "database"),
     ],
     "graph": [
-        ("Graph RAG", "/docs/sdk/typescript/graph-rag", "git-branch"),
-        ("Vector Stores", "/docs/sdk/typescript/vector-stores", "database"),
+        ("JS Graph RAG", "/docs/js/graph-rag", "git-branch"),
     ],
     "vector": [
-        ("Vector Stores", "/docs/sdk/typescript/vector-stores", "database"),
-        ("Graph RAG", "/docs/sdk/typescript/graph-rag", "git-branch"),
+        ("JS Vector Stores", "/docs/js/vector-stores", "database"),
+        ("JS Embeddings", "/docs/js/embeddings", "code"),
     ],
     "embed": [
-        ("Vector Stores", "/docs/sdk/typescript/vector-stores", "database"),
+        ("JS Embeddings", "/docs/js/embeddings", "code"),
+        ("JS Embeddings CLI", "/docs/js/embeddings-cli", "terminal"),
     ],
     "knowledge": [
-        ("Graph RAG", "/docs/sdk/typescript/graph-rag", "git-branch"),
-        ("Vector Stores", "/docs/sdk/typescript/vector-stores", "database"),
+        ("JS Knowledge Base", "/docs/js/knowledge-base", "book"),
+        ("JS Knowledge Base CLI", "/docs/js/knowledge-base-cli", "terminal"),
     ],
-    # Reranking & Query
-    "rerank": [
-        ("Reranker", "/docs/sdk/typescript/reranker", "list-ol"),
-        ("Query Rewriter", "/docs/sdk/typescript/query-rewriter", "pen"),
-    ],
-    "query": [
-        ("Query Rewriter", "/docs/sdk/typescript/query-rewriter", "pen"),
-        ("Reranker", "/docs/sdk/typescript/reranker", "list-ol"),
+    "chunk": [
+        ("JS Chunking", "/docs/js/chunking", "scissors"),
+        ("JS Chunking CLI", "/docs/js/chunking-cli", "terminal"),
     ],
     "retriev": [
-        ("Vector Stores", "/docs/sdk/typescript/vector-stores", "database"),
-        ("Reranker", "/docs/sdk/typescript/reranker", "list-ol"),
+        ("JS Retrieval", "/docs/js/retrieval", "search"),
+        ("JS RAG Agent", "/docs/js/rag-agent", "magnifying-glass"),
     ],
-    # Prompts
+    "query": [
+        ("JS Query Rewriter", "/docs/js/query-rewriter", "pen"),
+        ("JS Query Rewriter CLI", "/docs/js/query-rewriter-cli", "terminal"),
+    ],
+    "rerank": [
+        ("JS Reranking", "/docs/js/reranking", "list-ol"),
+    ],
+    # Prompts & Templates
     "prompt": [
-        ("Prompt Expander", "/docs/sdk/typescript/prompt-expander", "expand"),
-        ("TypeScript SDK", "/docs/sdk/typescript/index", "book-open"),
+        ("JS Prompt Expander", "/docs/js/prompt-expander", "message"),
+        ("JS Prompt Expander CLI", "/docs/js/prompt-expander-cli", "terminal"),
+        ("JS Template Catalog", "/docs/js/template-catalog", "file-code"),
     ],
-    "expand": [
-        ("Prompt Expander", "/docs/sdk/typescript/prompt-expander", "expand"),
+    "template": [
+        ("JS Template Catalog", "/docs/js/template-catalog", "file-code"),
+        ("JS Template Catalog CLI", "/docs/js/template-catalog-cli", "terminal"),
     ],
-    # Guardrails
+    # Guardrails & Security
     "guard": [
-        ("Guardrails", "/docs/sdk/typescript/guardrails", "shield"),
+        ("JS Guardrails", "/docs/js/guardrails", "shield"),
+        ("JS Guardrails CLI", "/docs/js/guardrails-cli", "terminal"),
+        ("JS LLM Guardrail", "/docs/js/llm-guardrail", "shield-halved"),
     ],
     "guardrail": [
-        ("Guardrails", "/docs/sdk/typescript/guardrails", "shield"),
+        ("JS Guardrails", "/docs/js/guardrails", "shield"),
+        ("JS LLM Guardrail", "/docs/js/llm-guardrail", "shield-halved"),
     ],
     "security": [
-        ("Guardrails", "/docs/sdk/typescript/guardrails", "shield"),
+        ("JS Security", "/docs/js/security", "lock"),
+        ("JS MCP Security", "/docs/js/mcp-security", "shield"),
+        ("JS Sandbox", "/docs/js/sandbox", "box"),
+    ],
+    "approval": [
+        ("JS Approval", "/docs/js/approval", "check"),
+    ],
+    # Hooks & Events
+    "hook": [
+        ("JS Hooks Manager", "/docs/js/hooks-manager", "anchor"),
+        ("JS Memory Hooks", "/docs/js/memory-hooks", "database"),
+        ("JS Workflow Hooks", "/docs/js/workflow-hooks", "diagram-project"),
+    ],
+    "event": [
+        ("JS Events", "/docs/js/events", "bolt"),
+    ],
+    "callback": [
+        ("JS Callbacks", "/docs/js/callbacks", "phone"),
     ],
     # Observability
     "observ": [
-        ("Observability", "/docs/sdk/typescript/observability", "eye"),
-        ("Telemetry", "/docs/sdk/typescript/telemetry", "signal"),
+        ("JS Observability", "/docs/js/observability", "eye"),
+        ("JS Observability CLI", "/docs/js/observability-cli", "terminal"),
     ],
     "telemetry": [
-        ("Telemetry", "/docs/sdk/typescript/telemetry", "signal"),
-        ("Observability", "/docs/sdk/typescript/observability", "eye"),
-    ],
-    "trace": [
-        ("Telemetry", "/docs/sdk/typescript/telemetry", "signal"),
-        ("Observability", "/docs/sdk/typescript/observability", "eye"),
+        ("JS Telemetry", "/docs/js/telemetry", "signal"),
+        ("JS Telemetry CLI", "/docs/js/telemetry-cli", "terminal"),
     ],
     "monitor": [
-        ("Observability", "/docs/sdk/typescript/observability", "eye"),
-        ("Telemetry", "/docs/sdk/typescript/telemetry", "signal"),
+        ("JS Performance Monitor", "/docs/js/performance-monitor", "chart-line"),
+        ("JS Performance Monitor CLI", "/docs/js/performance-monitor-cli", "terminal"),
     ],
-    # Configuration
-    "config": [
-        ("TypeScript SDK", "/docs/sdk/typescript/index", "book-open"),
-        ("Observability", "/docs/sdk/typescript/observability", "eye"),
+    "benchmark": [
+        ("JS Benchmarks", "/docs/js/benchmarks", "gauge"),
+        ("JS Benchmarks CLI", "/docs/js/benchmarks-cli", "terminal"),
     ],
-    # Voice & Multimodal
+    # Multimodal
     "voice": [
-        ("Voice", "/docs/sdk/typescript/voice", "mic"),
+        ("JS Voice", "/docs/js/voice", "mic"),
+        ("JS Voice CLI", "/docs/js/voice-cli", "terminal"),
     ],
     "audio": [
-        ("Voice", "/docs/sdk/typescript/voice", "mic"),
+        ("JS Audio", "/docs/js/audio", "volume-high"),
+        ("JS Voice", "/docs/js/voice", "mic"),
     ],
-    "speech": [
-        ("Voice", "/docs/sdk/typescript/voice", "mic"),
-    ],
-    # Image
     "image": [
-        ("Image Agent", "/docs/sdk/typescript/image-agent", "image"),
+        ("JS Image Agent", "/docs/js/image-agent", "image"),
+        ("JS Image Agent CLI", "/docs/js/image-agent-cli", "terminal"),
     ],
     "vision": [
-        ("Image Agent", "/docs/sdk/typescript/image-agent", "image"),
+        ("JS Vision", "/docs/js/vision", "eye"),
     ],
-    # Research
+    "video": [
+        ("JS Video", "/docs/js/video", "video"),
+    ],
+    "multimodal": [
+        ("JS Multimodal Agent", "/docs/js/multimodal-agent", "photo-film"),
+        ("JS Multimodal Agent CLI", "/docs/js/multimodal-agent-cli", "terminal"),
+    ],
+    # Research & Deep Research
     "research": [
-        ("Research Agent", "/docs/sdk/typescript/research-agent", "search"),
+        ("JS Deep Research", "/docs/js/deep-research", "search"),
+        ("JS Deep Research CLI", "/docs/js/deep-research-cli", "terminal"),
     ],
     "search": [
-        ("Research Agent", "/docs/sdk/typescript/research-agent", "search"),
-        ("Query Rewriter", "/docs/sdk/typescript/query-rewriter", "pen"),
+        ("JS Deep Research", "/docs/js/deep-research", "search"),
+        ("JS Web", "/docs/js/web", "globe"),
     ],
-    # MCP & LLM
+    # Output & Structured
+    "output": [
+        ("JS Output", "/docs/js/output", "file-export"),
+        ("JS Structured Output", "/docs/js/structured-output", "code"),
+        ("JS Structured Output CLI", "/docs/js/structured-output-cli", "terminal"),
+    ],
+    "structured": [
+        ("JS Structured Output", "/docs/js/structured-output", "code"),
+    ],
+    # Async & Jobs
+    "async": [
+        ("JS Async Jobs", "/docs/js/async-jobs", "clock"),
+        ("JS Async Jobs CLI", "/docs/js/async-jobs-cli", "terminal"),
+        ("TypeScript Async", "/docs/js/typescript-async", "clock"),
+    ],
+    "job": [
+        ("JS Jobs", "/docs/js/jobs", "list-check"),
+        ("JS Async Jobs", "/docs/js/async-jobs", "clock"),
+        ("JS Background Tasks", "/docs/js/background-tasks", "spinner"),
+    ],
+    "background": [
+        ("JS Background Tasks", "/docs/js/background-tasks", "spinner"),
+        ("JS Background Tasks CLI", "/docs/js/background-tasks-cli", "terminal"),
+    ],
+    "schedul": [
+        ("JS Scheduler", "/docs/js/scheduler", "calendar"),
+        ("JS Scheduler CLI", "/docs/js/scheduler-cli", "terminal"),
+    ],
+    # Error & Failover
+    "failover": [
+        ("JS Failover", "/docs/js/failover", "shield"),
+    ],
+    # Execution & Tasks
+    "execut": [
+        ("JS Execution", "/docs/js/execution", "play"),
+    ],
+    "task": [
+        ("JS Tasks", "/docs/js/tasks", "list-check"),
+        ("JS Auto Agents", "/docs/js/auto-agents", "robot"),
+    ],
+    # Reflection & Reasoning
+    "reflect": [
+        ("JS Reflection", "/docs/js/reflection", "mirror"),
+    ],
+    # Files & Documents
+    "file": [
+        ("JS Files", "/docs/js/files", "file"),
+    ],
+    "ocr": [
+        ("JS OCR", "/docs/js/ocr", "file-image"),
+    ],
+    # MCP & Providers
     "mcp": [
-        ("TypeScript SDK", "/docs/sdk/typescript/index", "plug"),
+        ("JS MCP Tools", "/docs/js/mcp-tools", "plug"),
+        ("JS MCP Tools CLI", "/docs/js/mcp-tools-cli", "terminal"),
+        ("JS MCP Security", "/docs/js/mcp-security", "shield"),
+        ("JS Resources", "/docs/js/resources", "folder"),
     ],
     "llm": [
-        ("TypeScript SDK", "/docs/sdk/typescript/index", "book-open"),
-    ],
-    "model": [
-        ("TypeScript SDK", "/docs/sdk/typescript/index", "book-open"),
+        ("JS Providers", "/docs/js/providers", "server"),
+        ("JS Providers CLI", "/docs/js/providers-cli", "terminal"),
+        ("JS Provider Registry", "/docs/js/provider-registry", "list"),
     ],
     "provider": [
-        ("TypeScript SDK", "/docs/sdk/typescript/index", "book-open"),
+        ("JS Providers", "/docs/js/providers", "server"),
+        ("JS Provider Registry", "/docs/js/provider-registry", "list"),
     ],
-    # Task
-    "task": [
-        ("Auto Agents", "/docs/sdk/typescript/auto-agents", "users"),
-        ("Planning", "/docs/sdk/typescript/planning", "diagram-project"),
+    "model": [
+        ("JS Providers", "/docs/js/providers", "server"),
+    ],
+    # Bots & Integrations
+    "bot": [
+        ("JS Bots", "/docs/js/bots", "robot"),
+        ("JS Slackbot Agent", "/docs/js/slackbot-agent", "slack"),
+    ],
+    "slack": [
+        ("JS Slackbot Agent", "/docs/js/slackbot-agent", "slack"),
+        ("JS Slackbot Agent CLI", "/docs/js/slackbot-agent-cli", "terminal"),
+    ],
+    "pubsub": [
+        ("JS PubSub", "/docs/js/pubsub", "tower-broadcast"),
+    ],
+    # Server & Middleware
+    "server": [
+        ("JS Server Adapters", "/docs/js/server-adapters", "server"),
+        ("JS Server Adapters CLI", "/docs/js/server-adapters-cli", "terminal"),
+    ],
+    "middleware": [
+        ("JS Middleware", "/docs/js/middleware", "layer-group"),
+    ],
+    # Evaluation
+    "eval": [
+        ("JS Evaluation", "/docs/js/evaluation", "gavel"),
+        ("JS Evaluation CLI", "/docs/js/evaluation-cli", "terminal"),
+        ("JS Eval Results", "/docs/js/eval-results", "chart-line"),
+    ],
+    "criteria": [
+        ("JS Criteria", "/docs/js/criteria", "check-double"),
+    ],
+    "attrib": [
+        ("JS Attribution", "/docs/js/attribution", "quote-left"),
+        ("JS Attribution CLI", "/docs/js/attribution-cli", "terminal"),
+    ],
+    "citat": [
+        ("JS Citations", "/docs/js/citations", "quote-left"),
+    ],
+    # Streaming & Realtime
+    "streaming": [
+        ("JS Streaming", "/docs/js/streaming", "wave-square"),
+        ("JS Streaming CLI", "/docs/js/streaming-cli", "terminal"),
+    ],
+    "realtime": [
+        ("JS Realtime", "/docs/js/realtime", "clock"),
+    ],
+    # CLI & Config
+    "cli": [
+        ("JS CLI", "/docs/js/cli", "terminal"),
+        ("JS Agent CLI", "/docs/js/agent-cli", "terminal"),
+        ("JS Agents CLI", "/docs/js/agents-cli", "terminal"),
+    ],
+    "config": [
+        ("TypeScript Guide", "/docs/js/typescript", "book-open"),
+        ("JS Development", "/docs/js/development", "code"),
+    ],
+    # Sandbox & Code
+    "sandbox": [
+        ("JS Sandbox", "/docs/js/sandbox", "box"),
+    ],
+    "code": [
+        ("JS Computer Use", "/docs/js/computer-use", "display"),
+        ("JS Computer Use CLI", "/docs/js/computer-use-cli", "terminal"),
+    ],
+    "computer": [
+        ("JS Computer Use", "/docs/js/computer-use", "display"),
+    ],
+    # Plugins & Skills
+    "plugin": [
+        ("JS Plugins", "/docs/js/plugins", "plug"),
+    ],
+    "skill": [
+        ("JS Skills", "/docs/js/skills", "wand-magic-sparkles"),
+        ("JS Skills CLI", "/docs/js/skills-cli", "terminal"),
+    ],
+    # Tokens & Optimization
+    "token": [
+        ("JS Token Management", "/docs/js/token-management", "coins"),
+    ],
+    "optim": [
+        ("JS Optimizer", "/docs/js/optimizer", "chart-line"),
+    ],
+    # Loops
+    "loop": [
+        ("JS Loops", "/docs/js/loops", "rotate"),
+    ],
+    # Autonomy
+    "autonom": [
+        ("JS Autonomy", "/docs/js/autonomy", "robot"),
+    ],
+    # TypeScript Specific
+    "typescript": [
+        ("TypeScript Guide", "/docs/js/typescript", "book-open"),
+        ("TypeScript Async", "/docs/js/typescript-async", "clock"),
+    ],
+    # Node.js & Next.js
+    "node": [
+        ("Node.js Guide", "/docs/js/nodejs", "node-js"),
+    ],
+    "next": [
+        ("Next.js Guide", "/docs/js/nextjs", "react"),
+    ],
+    # AgentOS
+    "agentos": [
+        ("JS AgentOS", "/docs/js/agentos", "robot"),
+    ],
+    # AI SDK
+    "ai": [
+        ("JS AI SDK", "/docs/js/ai-sdk", "brain"),
+        ("JS AI SDK CLI", "/docs/js/ai-sdk-cli", "terminal"),
     ],
 }
 
@@ -760,8 +960,15 @@ RUST_RELATED_DOCS = {
     ],
     "flow": [
         ("Rust Agent Flow", "/docs/rust/agent-flow", "diagram-project"),
+        ("Rust Flow", "/docs/rust/flow", "route"),
         ("Rust Routing", "/docs/rust/routing", "route"),
         ("Rust Conditions", "/docs/rust/conditions", "code-branch"),
+    ],
+    # Rust Overview/Index
+    "rust": [
+        ("Rust Overview", "/docs/rust/overview", "book-open"),
+        ("Rust SDK", "/docs/rust/rust", "rust"),
+        ("Rust Quickstart", "/docs/rust/quickstart", "rocket"),
     ],
     "task": [
         ("Rust Tasks", "/docs/rust/tasks", "list-check"),
