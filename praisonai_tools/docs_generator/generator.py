@@ -518,39 +518,56 @@ RELATED_DOCS = {
 # TypeScript SDK links to TypeScript-specific docs
 TYPESCRIPT_RELATED_DOCS = {
     "agent": [
-        ("TypeScript Overview", "/docs/typescript/overview", "book-open"),
-        ("TypeScript Quickstart", "/docs/typescript/quickstart", "rocket"),
-        ("TypeScript Agent", "/docs/typescript/agent", "robot"),
+        ("TypeScript SDK", "/docs/sdk/typescript/index", "book-open"),
+        ("Auto Agents", "/docs/sdk/typescript/auto-agents", "robot"),
+        ("Context Agent", "/docs/sdk/typescript/context-agent", "message-circle"),
     ],
     "tool": [
-        ("TypeScript Tools", "/docs/typescript/tools", "wrench"),
-        ("TypeScript Agent", "/docs/typescript/agent", "robot"),
+        ("TypeScript SDK", "/docs/sdk/typescript/index", "book-open"),
+        ("Planning", "/docs/sdk/typescript/planning", "diagram-project"),
     ],
     "config": [
-        ("TypeScript Installation", "/docs/typescript/installation", "download"),
-        ("TypeScript Overview", "/docs/typescript/overview", "book-open"),
+        ("TypeScript SDK", "/docs/sdk/typescript/index", "book-open"),
+        ("Observability", "/docs/sdk/typescript/observability", "eye"),
     ],
     "memory": [
-        ("TypeScript Memory", "/docs/typescript/memory", "brain"),
+        ("Vector Stores", "/docs/sdk/typescript/vector-stores", "database"),
+        ("Cache", "/docs/sdk/typescript/cache", "hard-drive"),
     ],
     "workflow": [
-        ("TypeScript AgentFlow", "/docs/typescript/agentflow", "diagram-project"),
-        ("TypeScript AgentTeam", "/docs/typescript/agentteam", "users"),
+        ("Planning", "/docs/sdk/typescript/planning", "diagram-project"),
+        ("Router Agent", "/docs/sdk/typescript/router-agent", "arrows-split"),
     ],
     "team": [
-        ("TypeScript AgentTeam", "/docs/typescript/agentteam", "users"),
+        ("Auto Agents", "/docs/sdk/typescript/auto-agents", "users"),
     ],
     "flow": [
-        ("TypeScript AgentFlow", "/docs/typescript/agentflow", "diagram-project"),
+        ("Planning", "/docs/sdk/typescript/planning", "diagram-project"),
     ],
     "task": [
-        ("TypeScript AgentTeam", "/docs/typescript/agentteam", "users"),
+        ("Auto Agents", "/docs/sdk/typescript/auto-agents", "users"),
     ],
     "mcp": [
-        ("TypeScript MCP", "/docs/typescript/mcp", "plug"),
+        ("TypeScript SDK", "/docs/sdk/typescript/index", "plug"),
     ],
     "llm": [
-        ("TypeScript Overview", "/docs/typescript/overview", "book-open"),
+        ("TypeScript SDK", "/docs/sdk/typescript/index", "book-open"),
+    ],
+    "guard": [
+        ("Guardrails", "/docs/sdk/typescript/guardrails", "shield"),
+    ],
+    "rag": [
+        ("Graph RAG", "/docs/sdk/typescript/graph-rag", "git-branch"),
+        ("Vector Stores", "/docs/sdk/typescript/vector-stores", "database"),
+    ],
+    "voice": [
+        ("Voice", "/docs/sdk/typescript/voice", "mic"),
+    ],
+    "image": [
+        ("Image Agent", "/docs/sdk/typescript/image-agent", "image"),
+    ],
+    "research": [
+        ("Research Agent", "/docs/sdk/typescript/research-agent", "search"),
     ],
 }
 
