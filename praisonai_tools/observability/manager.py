@@ -149,17 +149,40 @@ class ObservabilityManager:
         
         return result
     
+    # Mapping from obs provider names to litellm callback names
+    _LITELLM_CALLBACK_MAP = {
+        "langsmith": "langsmith",
+        "langfuse": "langfuse",
+        "datadog": "datadog",
+        "opik": "opik",
+        "braintrust": "braintrust",
+        "mlflow": "mlflow",
+        "langwatch": "langwatch",
+    }
+    
+    def _get_litellm_callback_name(self, provider_name: str) -> Optional[str]:
+        """Get the litellm callback name for a provider."""
+        return self._LITELLM_CALLBACK_MAP.get(provider_name)
+    
     def _auto_instrument_agents(self) -> None:
         """
         Auto-instrument Agent/Agents/Workflow classes to create spans automatically.
         
         This patches the main lifecycle methods (chat, start, run, astart) to
         create traces and spans without requiring explicit obs.trace() wrappers.
+        Also sets litellm callbacks for providers that support it, and registers
+        the ObservabilitySink bridge for ContextTraceEmitter events.
         """
         if not self._provider or not self._provider._initialized:
             return
         
         try:
+            # Set litellm callbacks for the active provider
+            self._setup_litellm_callbacks()
+            
+            # Register bridge sink for ContextTraceEmitter events
+            self._setup_bridge_sink()
+            
             from functools import wraps
             
             # Try to import praisonaiagents classes
@@ -179,15 +202,94 @@ class ObservabilityManager:
             # Silently fail - don't break user code if instrumentation fails
             pass
     
+    def _setup_litellm_callbacks(self) -> None:
+        """Set litellm callbacks for the active provider."""
+        provider_name = self._provider.name if self._provider else None
+        if not provider_name:
+            return
+        
+        callback_name = self._get_litellm_callback_name(provider_name)
+        if not callback_name:
+            return
+        
+        try:
+            import litellm
+            
+            # Add callback if not already present
+            if not hasattr(litellm, 'callbacks') or litellm.callbacks is None:
+                litellm.callbacks = []
+            if callback_name not in litellm.callbacks:
+                litellm.callbacks.append(callback_name)
+            
+            if not hasattr(litellm, 'success_callback') or litellm.success_callback is None:
+                litellm.success_callback = []
+            if callback_name not in litellm.success_callback:
+                litellm.success_callback.append(callback_name)
+        except ImportError:
+            pass
+    
+    def _setup_bridge_sink(self) -> None:
+        """Register ObservabilitySink as the ContextTraceEmitter sink."""
+        try:
+            from praisonai_tools.observability.bridge import ObservabilitySink
+            from praisonaiagents.trace.context_events import (
+                ContextTraceEmitter,
+                set_context_emitter,
+            )
+            
+            sink = ObservabilitySink(self)
+            emitter = ContextTraceEmitter(
+                sink=sink,
+                session_id=self.config.session_id or "",
+                enabled=True,
+            )
+            set_context_emitter(emitter)
+        except ImportError:
+            pass
+    
     def _wrap_agent_class(self, agent_cls: type) -> None:
-        """Wrap Agent class methods to auto-create spans."""
+        """Wrap Agent class methods to auto-create spans with input/output data."""
         from functools import wraps
+        import json
         
         # Skip if already instrumented
         if getattr(agent_cls, '_obs_instrumented', False):
             return
         
         manager = self
+        
+        def _extract_chat_input(agent_self, args, kwargs):
+            """Extract the input prompt from chat() arguments."""
+            prompt = args[0] if args else kwargs.get('prompt', kwargs.get('message', ''))
+            agent_name = getattr(agent_self, 'name', 'unknown')
+            instructions = getattr(agent_self, 'instructions', '')
+            model = getattr(agent_self, 'model', None)
+            # Use a dict format that LangSmith can display
+            input_data = {"input": str(prompt) if prompt else ""}
+            if instructions:
+                input_data["instructions"] = str(instructions)
+            if agent_name:
+                input_data["agent_name"] = agent_name
+            if model:
+                input_data["model"] = str(model)
+            return input_data
+        
+        def _set_span_io(span, input_data, output_data):
+            """Set input/output attributes on a span for LangSmith display."""
+            if span is None:
+                return
+            try:
+                # LangSmith recognizes these attributes for chain/agent spans
+                if input_data:
+                    input_str = json.dumps(input_data) if isinstance(input_data, dict) else str(input_data)
+                    span.attributes["input.value"] = input_str
+                    span.attributes["input"] = input_str
+                if output_data:
+                    output_str = str(output_data) if not isinstance(output_data, str) else output_data
+                    span.attributes["output.value"] = output_str
+                    span.attributes["output"] = output_str
+            except Exception:
+                pass
         
         # Wrap chat method
         if hasattr(agent_cls, 'chat'):
@@ -196,9 +298,26 @@ class ObservabilityManager:
             @wraps(original_chat)
             def instrumented_chat(self, *args, **kwargs):
                 agent_name = getattr(self, 'name', 'unknown')
-                with manager.trace(f"agent.{agent_name}.chat"):
-                    with manager.span(f"agent.{agent_name}.chat", kind=SpanKind.AGENT):
-                        return original_chat(self, *args, **kwargs)
+                input_data = _extract_chat_input(self, args, kwargs)
+                with manager.trace(agent_name):
+                    span = manager.start_span(agent_name, kind=SpanKind.AGENT)
+                    try:
+                        # Set input before the call
+                        _set_span_io(span, input_data, None)
+                        result = original_chat(self, *args, **kwargs)
+                        # Set output after the call
+                        output_str = str(result) if result else ""
+                        # Truncate very long outputs for span attributes
+                        if len(output_str) > 4000:
+                            output_str = output_str[:4000] + "..."
+                        _set_span_io(span, None, output_str)
+                        return result
+                    except Exception as e:
+                        if span:
+                            span.set_error(e)
+                        raise
+                    finally:
+                        manager.end_span(span)
             
             agent_cls.chat = instrumented_chat
         
@@ -216,15 +335,12 @@ class ObservabilityManager:
                 # Handle generator (streaming) mode
                 if isinstance(result, types.GeneratorType):
                     def traced_generator():
-                        with manager.trace(f"agent.{agent_name}.start"):
-                            with manager.span(f"agent.{agent_name}.start", kind=SpanKind.AGENT):
+                        with manager.trace(agent_name):
+                            with manager.span(agent_name, kind=SpanKind.AGENT):
                                 for chunk in result:
                                     yield chunk
                     return traced_generator()
                 else:
-                    # Non-streaming - wrap directly
-                    # Note: For sync non-generator, we can't wrap after the fact
-                    # The trace happens on the next call
                     return result
             
             agent_cls.start = instrumented_start
@@ -236,8 +352,8 @@ class ObservabilityManager:
             @wraps(original_run)
             def instrumented_run(self, *args, **kwargs):
                 agent_name = getattr(self, 'name', 'unknown')
-                with manager.trace(f"agent.{agent_name}.run"):
-                    with manager.span(f"agent.{agent_name}.run", kind=SpanKind.AGENT):
+                with manager.trace(agent_name):
+                    with manager.span(agent_name, kind=SpanKind.AGENT):
                         return original_run(self, *args, **kwargs)
             
             agent_cls.run = instrumented_run

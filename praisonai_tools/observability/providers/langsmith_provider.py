@@ -98,26 +98,56 @@ class LangSmithProvider(BaseObservabilityProvider):
             return True, "LangSmith API key configured"
         return False, "LANGSMITH_API_KEY not set"
     
+    # Map SpanKind to LangSmith span kind values
+    _LANGSMITH_SPAN_KINDS = {
+        "llm": "llm",
+        "tool": "tool",
+        "agent": "chain",
+        "chain": "chain",
+        "workflow": "chain",
+        "retrieval": "retriever",
+        "custom": "chain",
+    }
+    
     def export_span(self, span: Span) -> bool:
-        """Export span to LangSmith via OTel."""
+        """Export span to LangSmith via OTel with GenAI semantic conventions."""
         if not self._initialized or not self._tracer:
             return False
         
         try:
             with self._tracer.start_as_current_span(span.name) as otel_span:
-                otel_span.set_attribute("span.kind", span.kind.value)
+                # LangSmith-specific span kind
+                ls_kind = self._LANGSMITH_SPAN_KINDS.get(span.kind.value, "chain")
+                otel_span.set_attribute("langsmith.span.kind", ls_kind)
                 
+                # GenAI model attributes
                 if span.model:
-                    otel_span.set_attribute("llm.model", span.model)
+                    otel_span.set_attribute("gen_ai.request.model", span.model)
+                    otel_span.set_attribute("gen_ai.response.model", span.model)
+                    otel_span.set_attribute("gen_ai.system", "openai")
+                
+                # GenAI usage metrics
                 if span.input_tokens:
-                    otel_span.set_attribute("llm.input_tokens", span.input_tokens)
+                    otel_span.set_attribute("gen_ai.usage.prompt_tokens", span.input_tokens)
                 if span.output_tokens:
-                    otel_span.set_attribute("llm.output_tokens", span.output_tokens)
+                    otel_span.set_attribute("gen_ai.usage.completion_tokens", span.output_tokens)
+                if span.input_tokens or span.output_tokens:
+                    otel_span.set_attribute(
+                        "gen_ai.usage.total_tokens",
+                        (span.input_tokens or 0) + (span.output_tokens or 0),
+                    )
+                
+                # Tool attributes
                 if span.tool_name:
+                    otel_span.set_attribute("gen_ai.tool.name", span.tool_name)
                     otel_span.set_attribute("tool.name", span.tool_name)
                 
+                # Forward all custom attributes (includes gen_ai.prompt.*, gen_ai.completion.*, etc.)
                 for key, value in span.attributes.items():
-                    otel_span.set_attribute(key, str(value))
+                    try:
+                        otel_span.set_attribute(key, str(value))
+                    except Exception:
+                        pass
                 
                 if span.error_message:
                     from opentelemetry.trace import Status, StatusCode

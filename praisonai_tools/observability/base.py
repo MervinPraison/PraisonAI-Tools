@@ -4,6 +4,7 @@ Base Provider Interface
 Abstract base class for all observability providers.
 """
 
+import contextvars
 import uuid
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
@@ -180,12 +181,38 @@ class BaseObservabilityProvider(ABC):
     
     name: str = "base"
     
+    # Per-context span stack and trace for async safety
+    _ctx_span_stack: contextvars.ContextVar = contextvars.ContextVar(
+        'obs_span_stack', default=None
+    )
+    _ctx_current_trace: contextvars.ContextVar = contextvars.ContextVar(
+        'obs_current_trace', default=None
+    )
+    
     def __init__(self, config: Optional[ObservabilityConfig] = None):
         """Initialize the provider."""
         self.config = config or ObservabilityConfig()
         self._initialized = False
-        self._current_trace: Optional[Trace] = None
-        self._span_stack: List[Span] = []
+    
+    @property
+    def _current_trace(self) -> Optional[Trace]:
+        return self._ctx_current_trace.get(None)
+    
+    @_current_trace.setter
+    def _current_trace(self, value: Optional[Trace]):
+        self._ctx_current_trace.set(value)
+    
+    @property
+    def _span_stack(self) -> List[Span]:
+        stack = self._ctx_span_stack.get(None)
+        if stack is None:
+            stack = []
+            self._ctx_span_stack.set(stack)
+        return stack
+    
+    @_span_stack.setter
+    def _span_stack(self, value: List[Span]):
+        self._ctx_span_stack.set(value)
     
     @abstractmethod
     def init(self, **kwargs) -> bool:
