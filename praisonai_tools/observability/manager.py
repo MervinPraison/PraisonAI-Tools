@@ -408,12 +408,15 @@ class ObservabilityManager:
                         ObservabilityManager._set_branding_attrs(span)
                         # Capture input: task descriptions
                         try:
-                            tasks = getattr(self, 'tasks', []) or []
-                            agents = getattr(self, 'agents', []) or []
+                            tasks_raw = getattr(self, 'tasks', []) or []
+                            # Agents stores tasks as dict {idx: Task}, not a list
+                            task_items = tasks_raw.values() if isinstance(tasks_raw, dict) else tasks_raw
+                            agents_raw = getattr(self, 'agents', []) or []
+                            agent_items = agents_raw.values() if isinstance(agents_raw, dict) else agents_raw
                             input_data = {
                                 "workflow": workflow_name,
-                                "agents": [getattr(a, 'name', str(a)) for a in agents],
-                                "tasks": [getattr(t, 'description', str(t)) for t in tasks],
+                                "agents": [getattr(a, 'name', str(a)) for a in agent_items],
+                                "tasks": [getattr(t, 'description', str(t)) for t in task_items],
                             }
                             import json
                             input_str = json.dumps(input_data)
@@ -449,12 +452,14 @@ class ObservabilityManager:
                         ObservabilityManager._set_branding_attrs(span)
                         # Capture input
                         try:
-                            tasks = getattr(self, 'tasks', []) or []
-                            agents = getattr(self, 'agents', []) or []
+                            tasks_raw = getattr(self, 'tasks', []) or []
+                            task_items = tasks_raw.values() if isinstance(tasks_raw, dict) else tasks_raw
+                            agents_raw = getattr(self, 'agents', []) or []
+                            agent_items = agents_raw.values() if isinstance(agents_raw, dict) else agents_raw
                             input_data = {
                                 "workflow": workflow_name,
-                                "agents": [getattr(a, 'name', str(a)) for a in agents],
-                                "tasks": [getattr(t, 'description', str(t)) for t in tasks],
+                                "agents": [getattr(a, 'name', str(a)) for a in agent_items],
+                                "tasks": [getattr(t, 'description', str(t)) for t in task_items],
                             }
                             import json
                             input_str = json.dumps(input_data)
