@@ -247,6 +247,26 @@ class ObservabilityManager:
         except ImportError:
             pass
     
+    @staticmethod
+    def _get_version():
+        """Get praisonai-tools version lazily."""
+        try:
+            from praisonai_tools import __version__
+            return __version__
+        except Exception:
+            return "unknown"
+    
+    @staticmethod
+    def _set_branding_attrs(span):
+        """Set framework branding attributes on a span."""
+        if span is None:
+            return
+        try:
+            span.attributes["praisonai.version"] = ObservabilityManager._get_version()
+            span.attributes["praisonai.framework"] = "praisonai"
+        except Exception:
+            pass
+    
     def _wrap_agent_class(self, agent_cls: type) -> None:
         """Wrap Agent class methods to auto-create spans with input/output data."""
         from functools import wraps
@@ -301,6 +321,8 @@ class ObservabilityManager:
                 input_data = _extract_chat_input(self, args, kwargs)
                 with manager.trace(agent_name):
                     span = manager.start_span(agent_name, kind=SpanKind.AGENT)
+                    _set_branding_attrs = ObservabilityManager._set_branding_attrs
+                    _set_branding_attrs(span)
                     try:
                         # Set input before the call
                         _set_span_io(span, input_data, None)
@@ -336,7 +358,9 @@ class ObservabilityManager:
                 if isinstance(result, types.GeneratorType):
                     def traced_generator():
                         with manager.trace(agent_name):
-                            with manager.span(agent_name, kind=SpanKind.AGENT):
+                            span_ctx = manager.span(agent_name, kind=SpanKind.AGENT)
+                            with span_ctx as span:
+                                ObservabilityManager._set_branding_attrs(span)
                                 for chunk in result:
                                     yield chunk
                     return traced_generator()
@@ -353,7 +377,8 @@ class ObservabilityManager:
             def instrumented_run(self, *args, **kwargs):
                 agent_name = getattr(self, 'name', 'unknown')
                 with manager.trace(agent_name):
-                    with manager.span(agent_name, kind=SpanKind.AGENT):
+                    with manager.span(agent_name, kind=SpanKind.AGENT) as span:
+                        ObservabilityManager._set_branding_attrs(span)
                         return original_run(self, *args, **kwargs)
             
             agent_cls.run = instrumented_run
@@ -378,9 +403,37 @@ class ObservabilityManager:
             @wraps(original_start)
             def instrumented_start(self, *args, **kwargs):
                 workflow_name = getattr(self, 'name', None) or 'workflow'
-                with manager.trace(f"workflow.{workflow_name}"):
-                    with manager.span(f"workflow.{workflow_name}.start", kind=SpanKind.WORKFLOW):
-                        return original_start(self, *args, **kwargs)
+                with manager.trace(workflow_name):
+                    with manager.span(workflow_name, kind=SpanKind.WORKFLOW) as span:
+                        ObservabilityManager._set_branding_attrs(span)
+                        # Capture input: task descriptions
+                        try:
+                            tasks = getattr(self, 'tasks', []) or []
+                            agents = getattr(self, 'agents', []) or []
+                            input_data = {
+                                "workflow": workflow_name,
+                                "agents": [getattr(a, 'name', str(a)) for a in agents],
+                                "tasks": [getattr(t, 'description', str(t)) for t in tasks],
+                            }
+                            import json
+                            input_str = json.dumps(input_data)
+                            if span:
+                                span.attributes["input.value"] = input_str
+                                span.attributes["input"] = input_str
+                        except Exception:
+                            pass
+                        result = original_start(self, *args, **kwargs)
+                        # Capture output
+                        try:
+                            if span and result:
+                                output_str = str(result)
+                                if len(output_str) > 4000:
+                                    output_str = output_str[:4000] + "..."
+                                span.attributes["output.value"] = output_str
+                                span.attributes["output"] = output_str
+                        except Exception:
+                            pass
+                        return result
             
             workflow_cls.start = instrumented_start
         
@@ -391,9 +444,37 @@ class ObservabilityManager:
             @wraps(original_astart)
             async def instrumented_astart(self, *args, **kwargs):
                 workflow_name = getattr(self, 'name', None) or 'workflow'
-                with manager.trace(f"workflow.{workflow_name}"):
-                    with manager.span(f"workflow.{workflow_name}.astart", kind=SpanKind.WORKFLOW):
-                        return await original_astart(self, *args, **kwargs)
+                with manager.trace(workflow_name):
+                    with manager.span(workflow_name, kind=SpanKind.WORKFLOW) as span:
+                        ObservabilityManager._set_branding_attrs(span)
+                        # Capture input
+                        try:
+                            tasks = getattr(self, 'tasks', []) or []
+                            agents = getattr(self, 'agents', []) or []
+                            input_data = {
+                                "workflow": workflow_name,
+                                "agents": [getattr(a, 'name', str(a)) for a in agents],
+                                "tasks": [getattr(t, 'description', str(t)) for t in tasks],
+                            }
+                            import json
+                            input_str = json.dumps(input_data)
+                            if span:
+                                span.attributes["input.value"] = input_str
+                                span.attributes["input"] = input_str
+                        except Exception:
+                            pass
+                        result = await original_astart(self, *args, **kwargs)
+                        # Capture output
+                        try:
+                            if span and result:
+                                output_str = str(result)
+                                if len(output_str) > 4000:
+                                    output_str = output_str[:4000] + "..."
+                                span.attributes["output.value"] = output_str
+                                span.attributes["output"] = output_str
+                        except Exception:
+                            pass
+                        return result
             
             workflow_cls.astart = instrumented_astart
         

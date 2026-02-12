@@ -49,6 +49,7 @@ class LangfuseProvider(BaseObservabilityProvider):
             from opentelemetry.sdk.trace import TracerProvider
             from opentelemetry.sdk.trace.export import SimpleSpanProcessor
             from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+            from opentelemetry.sdk.resources import Resource
             
             public_key = kwargs.get("public_key") or os.getenv("LANGFUSE_PUBLIC_KEY")
             secret_key = kwargs.get("secret_key") or os.getenv("LANGFUSE_SECRET_KEY")
@@ -64,13 +65,27 @@ class LangfuseProvider(BaseObservabilityProvider):
             endpoint = f"{host}/api/public/otel/v1/traces"
             headers = {"Authorization": f"Basic {auth}"}
             
-            # Setup tracer provider
-            self._tracer_provider = TracerProvider()
+            # Get praisonai version for resource attributes
+            _version = "unknown"
+            try:
+                import praisonai_tools
+                _version = getattr(praisonai_tools, "__version__", "unknown")
+            except Exception:
+                pass
+            
+            # Setup tracer provider with PraisonAI resource branding
+            resource = Resource.create({
+                "service.name": "praisonai",
+                "service.version": _version,
+                "praisonai.version": _version,
+                "praisonai.framework": "praisonai",
+            })
+            self._tracer_provider = TracerProvider(resource=resource)
             self._tracer_provider.add_span_processor(
                 SimpleSpanProcessor(OTLPSpanExporter(endpoint=endpoint, headers=headers))
             )
             trace.set_tracer_provider(self._tracer_provider)
-            self._tracer = trace.get_tracer("praisonai")
+            self._tracer = trace.get_tracer("praisonai.observability")
             
             self._initialized = True
             return True
