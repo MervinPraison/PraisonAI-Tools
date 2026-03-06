@@ -19,6 +19,7 @@ Environment Variables:
 import os
 import logging
 from typing import Any, Dict, List, Optional, Union
+from urllib.parse import quote
 
 from praisonai_tools.tools.base import BaseTool
 
@@ -51,7 +52,7 @@ class NightmarketTool(BaseTool):
         body: Optional[Any] = None,
         headers: Optional[Dict[str, str]] = None,
         **kwargs,
-) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+    ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
         """Dispatch to the appropriate Nightmarket action.
 
         Actions:
@@ -110,7 +111,6 @@ class NightmarketTool(BaseTool):
             return {"error": "requests package is not installed"}
 
         try:
-            from urllib.parse import quote
             params: Dict[str, str] = {"q": query}
             if sort:
                 params["sort"] = sort
@@ -154,14 +154,13 @@ class NightmarketTool(BaseTool):
             return {"error": "requests package is not installed"}
 
         try:
-            from urllib.parse import quote
             resp = requests.get(
                 f"{API_BASE}/v1/services/{quote(endpoint_id, safe='')}",
                 timeout=15,
             )
             resp.raise_for_status()
             return resp.json()
-        except Exception as e:
+        except (requests.exceptions.RequestException, ValueError) as e:
             logger.error("Nightmarket get_service error: %s", e)
             return {"error": str(e)}
 
@@ -188,7 +187,7 @@ class NightmarketTool(BaseTool):
             return {"error": "endpoint_id is required"}
 
         requests = self._import_requests()
-        if requests_lib is None:
+        if requests is None:
             return {"error": "requests package is not installed"}
 
         method = (method or "GET").upper()
@@ -197,8 +196,6 @@ class NightmarketTool(BaseTool):
             req_headers.update(headers)
 
         try:
-            from urllib.parse import quote
-
             url = f"{API_BASE}/v1/services/{quote(endpoint_id, safe='')}/call"
 
             request_kwargs: Dict[str, Any] = {
@@ -210,7 +207,7 @@ class NightmarketTool(BaseTool):
             if body is not None and method in ("POST", "PUT", "PATCH"):
                 request_kwargs["json"] = body
 
-            resp = requests_lib.request(**request_kwargs)
+            resp = requests.request(**request_kwargs)
 
             # Handle x402 payment flow
             if resp.status_code == 402 and self.crowpay_api_key:
@@ -221,7 +218,7 @@ class NightmarketTool(BaseTool):
                     or resp.text
                 )
                 auth_result = self._authorize_payment(
-                    requests_lib, payment_header, endpoint_id
+                    requests, payment_header, endpoint_id
                 )
                 if "error" in auth_result:
                     return auth_result
@@ -233,7 +230,7 @@ class NightmarketTool(BaseTool):
                 if payment_token:
                     req_headers["X-Payment"] = payment_token
                     request_kwargs["headers"] = req_headers
-                    resp = requests_lib.request(**request_kwargs)
+                    resp = requests.request(**request_kwargs)
 
             resp.raise_for_status()
             try:
@@ -241,19 +238,19 @@ class NightmarketTool(BaseTool):
             except ValueError:
                 return {"response": resp.text}
 
-        except Exception as e:
+        except (requests.exceptions.RequestException, ValueError) as e:
             logger.error("Nightmarket call_service error: %s", e)
             return {"error": str(e)}
 
     def _authorize_payment(
         self,
-        requests_lib: Any,
+        requests: Any,
         payment_required: str,
         merchant: str,
     ) -> Dict[str, Any]:
         """Authorize a payment via CrowPay for a 402 response."""
         try:
-            resp = requests_lib.post(
+            resp = requests.post(
                 "https://api.crowpay.ai/v1/authorize",
                 headers={
                     "Authorization": f"Bearer {self.crowpay_api_key}",
@@ -268,7 +265,7 @@ class NightmarketTool(BaseTool):
             )
             resp.raise_for_status()
             return resp.json()
-        except Exception as e:
+        except (requests.exceptions.RequestException, ValueError) as e:
             logger.error("CrowPay authorization failed: %s", e)
             return {"error": f"CrowPay authorization failed: {e}"}
 
