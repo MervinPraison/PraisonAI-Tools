@@ -51,7 +51,7 @@ class NightmarketTool(BaseTool):
         body: Optional[Any] = None,
         headers: Optional[Dict[str, str]] = None,
         **kwargs,
-    ) -> Union[str, Dict[str, Any], List[Dict[str, Any]]]:
+) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
         """Dispatch to the appropriate Nightmarket action.
 
         Actions:
