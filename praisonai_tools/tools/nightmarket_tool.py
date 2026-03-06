@@ -187,7 +187,7 @@ class NightmarketTool(BaseTool):
         if not endpoint_id:
             return {"error": "endpoint_id is required"}
 
-        requests_lib = self._import_requests()
+        requests = self._import_requests()
         if requests_lib is None:
             return {"error": "requests package is not installed"}
 
