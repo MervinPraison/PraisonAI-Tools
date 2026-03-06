@@ -18,6 +18,7 @@ Environment Variables:
 import os
 import logging
 from typing import Any, Dict, Optional, Union
+from urllib.parse import quote
 
 from praisonai_tools.tools.base import BaseTool
 
@@ -51,7 +52,7 @@ class CrowPayTool(BaseTool):
         transaction_id: Optional[str] = None,
         tx_hash: Optional[str] = None,
         **kwargs,
-    ) -> Union[str, Dict[str, Any]]:
+    ) -> Dict[str, Any]:
         """Dispatch to the appropriate CrowPay action.
 
         Actions:
@@ -108,12 +109,17 @@ class CrowPayTool(BaseTool):
         except ImportError:
             return None
 
-    # ------------------------------------------------------------------
-    # Actions
-    # ------------------------------------------------------------------
+    def _make_request(
+        self,
+        method: str,
+        endpoint: str,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        """Make a request to the CrowPay API.
 
-    def setup(self) -> Dict[str, Any]:
-        """Create an agent wallet."""
+        Centralizes key validation, requests import, HTTP call, and
+        error handling for all action methods.
+        """
         err = self._require_key()
         if err:
             return err
@@ -123,17 +129,28 @@ class CrowPayTool(BaseTool):
             return {"error": "requests package is not installed"}
 
         try:
-            resp = requests.post(
-                f"{API_BASE}/v1/setup",
+            resp = requests.request(
+                method,
+                f"{API_BASE}/v1/{endpoint}",
                 headers=self._headers(),
-                json={},
-                timeout=30,
+                **kwargs,
             )
             resp.raise_for_status()
             return resp.json()
-        except Exception as e:
-            logger.error("CrowPay setup error: %s", e)
-            return {"error": str(e)}
+        except requests.exceptions.RequestException as e:
+            logger.error("CrowPay request error: %s", e)
+            return {"error": f"API request failed: {e}"}
+        except ValueError as e:
+            logger.error("CrowPay JSON decode error: %s", e)
+            return {"error": f"Failed to decode API response: {e}"}
+
+    # ------------------------------------------------------------------
+    # Actions
+    # ------------------------------------------------------------------
+
+    def setup(self) -> Dict[str, Any]:
+        """Create an agent wallet."""
+        return self._make_request("post", "setup", json={}, timeout=30)
 
     def authorize(
         self,
@@ -149,15 +166,8 @@ class CrowPayTool(BaseTool):
             merchant: Merchant identifier.
             reason: Human-readable reason for the payment.
         """
-        err = self._require_key()
-        if err:
-            return err
         if not payment_required:
             return {"error": "payment_required is required"}
-
-        requests = self._import_requests()
-        if requests is None:
-            return {"error": "requests package is not installed"}
 
         payload: Dict[str, Any] = {"paymentRequired": payment_required}
         if merchant:
@@ -165,18 +175,7 @@ class CrowPayTool(BaseTool):
         if reason:
             payload["reason"] = reason
 
-        try:
-            resp = requests.post(
-                f"{API_BASE}/v1/authorize",
-                headers=self._headers(),
-                json=payload,
-                timeout=30,
-            )
-            resp.raise_for_status()
-            return resp.json()
-        except Exception as e:
-            logger.error("CrowPay authorize error: %s", e)
-            return {"error": str(e)}
+        return self._make_request("post", "authorize", json=payload, timeout=30)
 
     def authorize_card(
         self,
@@ -193,15 +192,8 @@ class CrowPayTool(BaseTool):
             merchant: Merchant identifier.
             reason: Human-readable reason for the payment.
         """
-        err = self._require_key()
-        if err:
-            return err
         if not amount or not currency:
             return {"error": "amount and currency are required"}
-
-        requests = self._import_requests()
-        if requests is None:
-            return {"error": "requests package is not installed"}
 
         payload: Dict[str, Any] = {"amount": amount, "currency": currency}
         if merchant:
@@ -209,18 +201,7 @@ class CrowPayTool(BaseTool):
         if reason:
             payload["reason"] = reason
 
-        try:
-            resp = requests.post(
-                f"{API_BASE}/v1/authorize/card",
-                headers=self._headers(),
-                json=payload,
-                timeout=30,
-            )
-            resp.raise_for_status()
-            return resp.json()
-        except Exception as e:
-            logger.error("CrowPay authorize_card error: %s", e)
-            return {"error": str(e)}
+        return self._make_request("post", "authorize/card", json=payload, timeout=30)
 
     def poll_status(self, approval_id: Optional[str] = None) -> Dict[str, Any]:
         """Poll the status of a pending approval.
@@ -228,28 +209,14 @@ class CrowPayTool(BaseTool):
         Args:
             approval_id: The approval identifier to check.
         """
-        err = self._require_key()
-        if err:
-            return err
         if not approval_id:
             return {"error": "approval_id is required"}
 
-        requests = self._import_requests()
-        if requests is None:
-            return {"error": "requests package is not installed"}
-
-        try:
-            from urllib.parse import quote
-            resp = requests.get(
-                f"{API_BASE}/v1/approvals/{quote(approval_id, safe='')}",
-                headers=self._headers(),
-                timeout=15,
-            )
-            resp.raise_for_status()
-            return resp.json()
-        except Exception as e:
-            logger.error("CrowPay poll_status error: %s", e)
-            return {"error": str(e)}
+        return self._make_request(
+            "get",
+            f"approvals/{quote(approval_id, safe='')}",
+            timeout=15,
+        )
 
     def settle(
         self,
@@ -262,32 +229,14 @@ class CrowPayTool(BaseTool):
             transaction_id: The CrowPay transaction identifier.
             tx_hash: The on-chain transaction hash.
         """
-        err = self._require_key()
-        if err:
-            return err
         if not transaction_id:
             return {"error": "transaction_id is required"}
-
-        requests = self._import_requests()
-        if requests is None:
-            return {"error": "requests package is not installed"}
 
         payload: Dict[str, Any] = {"transactionId": transaction_id}
         if tx_hash:
             payload["txHash"] = tx_hash
 
-        try:
-            resp = requests.post(
-                f"{API_BASE}/v1/settle",
-                headers=self._headers(),
-                json=payload,
-                timeout=30,
-            )
-            resp.raise_for_status()
-            return resp.json()
-        except Exception as e:
-            logger.error("CrowPay settle error: %s", e)
-            return {"error": str(e)}
+        return self._make_request("post", "settle", json=payload, timeout=30)
 
 
 def crowpay_setup(api_key: Optional[str] = None) -> Dict[str, Any]:
