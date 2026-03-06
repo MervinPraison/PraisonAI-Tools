@@ -133,7 +133,7 @@ class NightmarketTool(BaseTool):
                     "url": item.get("url"),
                 })
             return results
-        except Exception as e:
+        except (requests.exceptions.RequestException, ValueError) as e:
             logger.error("Nightmarket search error: %s", e)
             return {"error": str(e)}
 
