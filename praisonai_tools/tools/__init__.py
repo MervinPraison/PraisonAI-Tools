@@ -342,6 +342,9 @@ def __getattr__(name):
         # Python
         "PythonTool": "python_tool",
         "python_execute": "python_tool",
+        # Capsule
+        "CapsuleTool": "capsule_tool",
+        "capsule_run_code": "capsule_tool",
         # Mem0
         "Mem0Tool": "mem0_tool",
         "mem0_add": "mem0_tool",
@@ -413,13 +416,13 @@ def __getattr__(name):
         "check_wp_duplicate": "wordpress_tool",
         "create_wp_post": "wordpress_tool",
     }
-    
+
     if name in tool_map:
         module_name = tool_map[name]
         from importlib import import_module
         module = import_module(f".{module_name}", __package__)
         return getattr(module, name)
-    
+
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 __all__ = [
