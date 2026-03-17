@@ -14,6 +14,13 @@ import sys
 # Add parent to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
+# Load .env file from project root
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".env"))
+except ImportError:
+    pass  # python-dotenv not installed, rely on environment variables
+
 def test_jira_kanban_real():
     """Test Jira Kanban integration with real API."""
     
