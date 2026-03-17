@@ -132,6 +132,13 @@ def __getattr__(name):
         # Jira
         "JiraTool": "jira_tool",
         "jira_search": "jira_tool",
+        "jira_list_boards": "jira_tool",
+        "jira_get_board": "jira_tool",
+        "jira_get_board_issues": "jira_tool",
+        "jira_get_backlog": "jira_tool",
+        "jira_get_transitions": "jira_tool",
+        "jira_move_issue": "jira_tool",
+        "jira_create_task": "jira_tool",
         # Trello
         "TrelloTool": "trello_tool",
         "list_trello_boards": "trello_tool",
@@ -216,6 +223,18 @@ def __getattr__(name):
         # Gmail
         "GmailTool": "gmail_tool",
         "list_gmail_emails": "gmail_tool",
+        "gmail_archive_email": "gmail_tool",
+        "gmail_label_email": "gmail_tool",
+        "gmail_mark_read": "gmail_tool",
+        "gmail_draft_email": "gmail_tool",
+        "gmail_trash_email": "gmail_tool",
+        # Outlook
+        "OutlookTool": "outlook_tool",
+        "outlook_list_emails": "outlook_tool",
+        "outlook_send_email": "outlook_tool",
+        "outlook_search_emails": "outlook_tool",
+        "outlook_archive_email": "outlook_tool",
+        "outlook_draft_email": "outlook_tool",
         # WhatsApp
         "WhatsAppTool": "whatsapp_tool",
         "send_whatsapp_message": "whatsapp_tool",
@@ -545,6 +564,13 @@ __all__ = [
     # Jira Tool
     "JiraTool",
     "jira_search",
+    "jira_list_boards",
+    "jira_get_board",
+    "jira_get_board_issues",
+    "jira_get_backlog",
+    "jira_get_transitions",
+    "jira_move_issue",
+    "jira_create_task",
     # Trello Tool
     "TrelloTool",
     "list_trello_boards",
@@ -625,4 +651,19 @@ __all__ = [
     "iMessageTool",
     "send_imessage",
     "check_imessage_availability",
+    # Gmail Tool (extended)
+    "GmailTool",
+    "list_gmail_emails",
+    "gmail_archive_email",
+    "gmail_label_email",
+    "gmail_mark_read",
+    "gmail_draft_email",
+    "gmail_trash_email",
+    # Outlook Tool
+    "OutlookTool",
+    "outlook_list_emails",
+    "outlook_send_email",
+    "outlook_search_emails",
+    "outlook_archive_email",
+    "outlook_draft_email",
 ]
