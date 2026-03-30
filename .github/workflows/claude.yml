@@ -1,0 +1,61 @@
+name: Claude Assistant
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  issues:
+    types: [assigned, labeled]
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  claude-response:
+    if: |
+      (
+        !contains(github.actor, '[bot]') ||
+        github.actor == 'github-actions[bot]'
+      ) &&
+      github.actor != 'dependabot[bot]' &&
+      github.actor != 'renovate[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@beta
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          trigger_phrase: "@claude"
+          label_trigger: "claude"
+          direct_prompt: |
+            Analyze this issue and implement a fix:
+            1. Read the codebase structure and understand the tool patterns (see tools/lumalabs_tool.py for reference)
+            2. Implement the tool following existing patterns (lazy imports, env vars as params, error handling)
+            3. Run tests to verify
+            4. Commit, push, and create a PR using `gh pr create`
+            CRITICAL: You MUST create the PR automatically using `gh pr create`. Do NOT just provide a link.
+          allowed_tools: |
+            Bash(git:*)
+            Bash(python:*)
+            Bash(pip:*)
+            Bash(pytest:*)
+            Bash(gh:*)
+            Bash(python -m pytest:*)
+            Bash(python -m pip:*)
+            View
+            GlobTool
+            GrepTool
+            BatchTool
+            Edit
+            Replace
+          timeout_minutes: 30

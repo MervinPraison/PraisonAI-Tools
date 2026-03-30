@@ -1,0 +1,37 @@
+name: Auto Issue Comment
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  trigger-claude:
+    # Skip if issue already has 'claude' label to avoid double-trigger
+    if: |
+      !contains(toJSON(github.event.issue.labels), 'claude')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Add claude label to trigger analysis
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const labels = context.payload.issue.labels.map(l => l.name);
+            if (labels.includes('claude')) {
+              console.log('Issue already has claude label, skipping');
+              return;
+            }
+            await github.rest.issues.addLabels({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ['claude']
+            });
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '🤖 Auto-triaging with Claude. Analyzing issue and implementing a fix...'
+            });
