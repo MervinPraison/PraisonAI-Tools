@@ -39,11 +39,22 @@ jobs:
           label_trigger: "claude"
           direct_prompt: |
             Analyze this issue and implement a fix:
-            1. Read the codebase structure and understand the tool patterns (see tools/lumalabs_tool.py for reference)
-            2. Implement the tool following existing patterns (lazy imports, env vars as params, error handling)
-            3. Run tests to verify
-            4. Commit, push, and create a PR using `gh pr create`
-            CRITICAL: You MUST create the PR automatically using `gh pr create`. Do NOT just provide a link.
+            1. Read the codebase structure and understand tool patterns (see praisonai_tools/tools/lumalabs_tool.py as reference)
+            2. Implement the tool following existing patterns:
+               - BaseTool class + standalone @tool functions
+               - Lazy imports (import requests inside functions)
+               - Env vars as constructor params (api_key=None, falls back to os.getenv)
+               - Proper error handling with descriptive messages
+               - Export in praisonai_tools/tools/__init__.py
+            3. Run: python -c "import ast; ast.parse(open('praisonai_tools/tools/<new_file>.py').read()); print('OK')"
+            4. Create a feature branch, commit, push, and create a PR:
+               git checkout -b feat/<tool-name>
+               git add .
+               git commit -m "feat: add <tool-name> tool"
+               git push origin feat/<tool-name>
+               gh pr create --title "feat: Add <tool-name> tool" --body "Closes #<issue-number>" --base main
+            CRITICAL: You MUST create the PR using `gh pr create`. The GITHUB_TOKEN has write permissions.
+            If `gh pr create` fails, try: GH_TOKEN=$GITHUB_TOKEN gh pr create ...
           allowed_tools: |
             Bash(git:*)
             Bash(python:*)
