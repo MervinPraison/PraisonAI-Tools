@@ -388,6 +388,12 @@ def __getattr__(name):
         # LumaLabs
         "LumaLabsTool": "lumalabs_tool",
         "lumalabs_generate": "lumalabs_tool",
+        # HeyGen
+        "HeyGenTool": "heygen_tool",
+        "heygen_list_avatars": "heygen_tool",
+        "heygen_list_voices": "heygen_tool",
+        "heygen_generate_video": "heygen_tool",
+        "heygen_video_status": "heygen_tool",
         # OpenCV
         "OpenCVTool": "opencv_tool",
         "opencv_resize": "opencv_tool",
@@ -639,6 +645,12 @@ __all__ = [
     "WordPressTool",
     "check_wp_duplicate",
     "create_wp_post",
+    # HeyGen Tool
+    "HeyGenTool",
+    "heygen_list_avatars",
+    "heygen_list_voices",
+    "heygen_generate_video",
+    "heygen_video_status",
     # Signal Tool
     "SignalTool",
     "send_signal_message",
