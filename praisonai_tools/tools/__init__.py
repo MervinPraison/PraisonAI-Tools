@@ -388,6 +388,11 @@ def __getattr__(name):
         # LumaLabs
         "LumaLabsTool": "lumalabs_tool",
         "lumalabs_generate": "lumalabs_tool",
+        # Higgsfield
+        "HiggsfieldTool": "higgsfield_tool",
+        "higgsfield_generate": "higgsfield_tool",
+        "higgsfield_status": "higgsfield_tool",
+        "higgsfield_upload": "higgsfield_tool",
         # OpenCV
         "OpenCVTool": "opencv_tool",
         "opencv_resize": "opencv_tool",
@@ -639,6 +644,11 @@ __all__ = [
     "WordPressTool",
     "check_wp_duplicate",
     "create_wp_post",
+    # Higgsfield Tool
+    "HiggsfieldTool",
+    "higgsfield_generate",
+    "higgsfield_status",
+    "higgsfield_upload",
     # Signal Tool
     "SignalTool",
     "send_signal_message",
