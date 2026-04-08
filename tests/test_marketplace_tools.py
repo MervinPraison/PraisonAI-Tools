@@ -1,7 +1,7 @@
 """Tests for marketplace tools."""
 
 import pytest
-from praisonai_tools.marketplace import (
+from praisonai_tools import (
     pinchwork_delegate, verify_agent_identity, check_trust_score,
     check_behavioral_trust, verify_task_delegation_safety
 )

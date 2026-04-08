@@ -11,7 +11,7 @@ def test_agentfolio_agentic():
     
     try:
         from praisonaiagents import Agent
-        from praisonai_tools.marketplace import check_behavioral_trust, verify_task_delegation_safety
+        from praisonai_tools import check_behavioral_trust, verify_task_delegation_safety
     except ImportError:
         print("Skipping agentic test - praisonaiagents not available")
         return

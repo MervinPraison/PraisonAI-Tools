@@ -134,4 +134,14 @@ __all__ = [
     # WhatsApp Tool
     "WhatsAppTool",
     "send_whatsapp_message",
+    # Marketplace Tools
+    "PinchworkTool",
+    "pinchwork_delegate",
+    "AgentIDTool", 
+    "verify_agent_identity",
+    "JoyTrustTool",
+    "check_trust_score",
+    "AgentFolioTool",
+    "check_behavioral_trust",
+    "verify_task_delegation_safety",
 ]

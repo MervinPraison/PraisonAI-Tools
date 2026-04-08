@@ -1,7 +1,7 @@
 """Real agentic test for marketplace tools - LLM calls required per AGENTS.md §9.4."""
 
 import pytest
-from praisonai_tools.marketplace import pinchwork_delegate, verify_agent_identity, check_trust_score
+from praisonai_tools import pinchwork_delegate, verify_agent_identity, check_trust_score
 
 
 def test_marketplace_tools_with_mock_agent():
