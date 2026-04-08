@@ -36,6 +36,21 @@ dev = [
 wordpress = [
     "praisonaiwp[ai]>=0.1.0",
 ]
+marketplace = [
+    "httpx>=0.24.0",
+]
+pinchwork = [
+    "httpx>=0.24.0",
+]
+agentid = [
+    "httpx>=0.24.0",
+]
+joy-trust = [
+    "httpx>=0.24.0",
+]
+agentfolio = [
+    "httpx>=0.24.0",
+]
 
 [project.urls]
 Homepage = "https://docs.praison.ai"

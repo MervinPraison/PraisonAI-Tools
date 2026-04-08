@@ -445,6 +445,16 @@ def __getattr__(name):
         "WordPressTool": "wordpress_tool",
         "check_wp_duplicate": "wordpress_tool",
         "create_wp_post": "wordpress_tool",
+        # Marketplace Tools
+        "PinchworkTool": "pinchwork_tool",
+        "pinchwork_delegate": "pinchwork_tool",
+        "AgentIDTool": "agentid_tool",
+        "verify_agent_identity": "agentid_tool",
+        "JoyTrustTool": "joy_trust_tool",
+        "check_trust_score": "joy_trust_tool",
+        "AgentFolioTool": "agentfolio_tool",
+        "check_behavioral_trust": "agentfolio_tool",
+        "verify_task_delegation_safety": "agentfolio_tool",
     }
 
     if name in tool_map:
@@ -688,4 +698,14 @@ __all__ = [
     "outlook_search_emails",
     "outlook_archive_email",
     "outlook_draft_email",
+    # Marketplace Tools
+    "PinchworkTool",
+    "pinchwork_delegate",
+    "AgentIDTool",
+    "verify_agent_identity",
+    "JoyTrustTool",
+    "check_trust_score",
+    "AgentFolioTool",
+    "check_behavioral_trust",
+    "verify_task_delegation_safety",
 ]
