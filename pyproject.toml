@@ -48,6 +48,9 @@ agentid = [
 joy-trust = [
     "httpx>=0.24.0",
 ]
+agentfolio = [
+    "httpx>=0.24.0",
+]
 
 [project.urls]
 Homepage = "https://docs.praison.ai"
