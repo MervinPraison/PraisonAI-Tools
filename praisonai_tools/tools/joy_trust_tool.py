@@ -34,6 +34,7 @@ Environment Variables:
 
 import os
 import logging
+import time
 from typing import Any, Dict, Optional, Union, Callable, List
 from dataclasses import dataclass
 from functools import wraps
@@ -174,12 +175,15 @@ class JoyTrustTool(BaseTool):
                 if not agent:
                     return {
                         "agent_name": agent_name,
+                        "agent_id": None,
                         "trust_score": 0.0,
                         "verified": False,
                         "meets_threshold": False,
                         "threshold_used": min_threshold,
-                        "reputation": {},
-                        "recommendations": 0,
+                        "vouch_count": 0,
+                        "capabilities": [],
+                        "tier": None,
+                        "badges": [],
                         "error": f"Agent '{agent_name}' not found on Joy Trust Network"
                     }
 
@@ -208,46 +212,52 @@ class JoyTrustTool(BaseTool):
                 
         except httpx.RequestError as e:
             logger.error(f"Joy Trust request error: {e}")
-            error_result = {
+            return {
                 "agent_name": agent_name,
+                "agent_id": None,
                 "trust_score": 0.0,
                 "verified": False,
-                "meets_threshold": self.config.fallback_on_error,  # Fallback behavior
+                "meets_threshold": self.config.fallback_on_error,
                 "threshold_used": min_threshold,
-                "reputation": {},
-                "recommendations": 0,
+                "vouch_count": 0,
+                "capabilities": [],
+                "tier": None,
+                "badges": [],
                 "error": f"Connection error: {e}",
                 "fallback_used": self.config.fallback_on_error
             }
-            return error_result
         except httpx.HTTPStatusError as e:
             logger.error(f"Joy Trust API error: {e.response.status_code}")
-            error_result = {
+            return {
                 "agent_name": agent_name,
+                "agent_id": None,
                 "trust_score": 0.0,
                 "verified": False,
-                "meets_threshold": self.config.fallback_on_error,  # Fallback behavior
+                "meets_threshold": self.config.fallback_on_error,
                 "threshold_used": min_threshold,
-                "reputation": {},
-                "recommendations": 0,
+                "vouch_count": 0,
+                "capabilities": [],
+                "tier": None,
+                "badges": [],
                 "error": f"API error ({e.response.status_code}): {e.response.text}",
                 "fallback_used": self.config.fallback_on_error
             }
-            return error_result
         except Exception as e:
             logger.error(f"Joy Trust unexpected error: {e}")
-            error_result = {
+            return {
                 "agent_name": agent_name,
+                "agent_id": None,
                 "trust_score": 0.0,
                 "verified": False,
-                "meets_threshold": self.config.fallback_on_error,  # Fallback behavior
+                "meets_threshold": self.config.fallback_on_error,
                 "threshold_used": min_threshold,
-                "reputation": {},
-                "recommendations": 0,
+                "vouch_count": 0,
+                "capabilities": [],
+                "tier": None,
+                "badges": [],
                 "error": f"Unexpected error: {e}",
                 "fallback_used": self.config.fallback_on_error
             }
-            return error_result
     
     def verify_handoff_safety(self, agent_name: str, min_score: Optional[float] = None) -> Dict[str, Any]:
         """Verify if it's safe to hand off to the specified agent.
