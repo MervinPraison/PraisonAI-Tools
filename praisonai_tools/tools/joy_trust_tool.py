@@ -174,7 +174,12 @@ class JoyTrustTool(BaseTool):
 
                 # Find matching agent by name (case-insensitive, exact match only)
                 # Security: Do NOT fallback to first result - could return wrong agent's trust
-                agent = next((a for a in agents if a.get("name", "").lower() == agent_name.lower()), None)
+                # Use 'or ""' to handle null name values
+                normalized_name = agent_name.lower()
+                agent = next(
+                    (a for a in agents if (a.get("name") or "").lower() == normalized_name),
+                    None
+                )
 
                 if not agent:
                     return {
@@ -192,11 +197,29 @@ class JoyTrustTool(BaseTool):
                     }
 
                 # Read from the agent object, not top level
-                # Use 'or' to handle both missing key AND null value
-                trust_score = agent.get("trust_score") or 0.0
+                # Safely convert trust_score to float (handles null, string, missing)
+                raw_trust_score = agent.get("trust_score")
+                try:
+                    trust_score = 0.0 if raw_trust_score in (None, "") else float(raw_trust_score)
+                except (TypeError, ValueError):
+                    # Invalid trust_score format - fail closed
+                    return {
+                        "agent_name": agent.get("name") or agent_name,
+                        "agent_id": agent.get("id"),
+                        "trust_score": 0.0,
+                        "verified": False,
+                        "meets_threshold": False,
+                        "threshold_used": min_threshold,
+                        "vouch_count": 0,
+                        "capabilities": [],
+                        "tier": None,
+                        "badges": [],
+                        "error": f"Invalid trust_score for agent '{agent_name}': {raw_trust_score!r}",
+                        "fallback_used": False
+                    }
 
                 result = {
-                    "agent_name": agent.get("name", agent_name),
+                    "agent_name": agent.get("name") or agent_name,
                     "agent_id": agent.get("id"),
                     "trust_score": trust_score,
                     "verified": agent.get("verified", False),
