@@ -169,7 +169,8 @@ class JoyTrustTool(BaseTool):
                 data = response.json()
 
                 # FIX: Extract agent from the agents array, not top level
-                agents = data.get("agents", [])
+                # Use 'or' to handle both missing key AND null value
+                agents = data.get("agents") or []
 
                 # Find matching agent by name (case-insensitive, exact match only)
                 # Security: Do NOT fallback to first result - could return wrong agent's trust
