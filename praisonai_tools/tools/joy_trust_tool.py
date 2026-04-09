@@ -1,77 +1,142 @@
 """Joy Trust Tool for PraisonAI Agents.
 
-Agent trust score verification using Joy Trust Network.
+Enhanced agent trust score verification using Joy Trust Network with native
+integration for secure agent handoffs.
+
+Features:
+- Basic trust score verification
+- Automatic handoff trust verification
+- Environment variable configuration
+- Decorator for trust-aware agent delegation
+- Integration hooks for PraisonAI handoff system
 
 Usage:
-    from praisonai_tools import JoyTrustTool
+    Basic usage:
+        from praisonai_tools import check_trust_score
+        result = check_trust_score("agent_name")
     
-    tool = JoyTrustTool()
-    result = tool.check_trust("agent_name")
+    Advanced usage with handoff integration:
+        from praisonai_tools import JoyTrustTool, trust_verified_handoff
+        
+        # Enable automatic trust verification
+        os.environ['PRAISONAI_TRUST_PROVIDER'] = 'joy'
+        
+        @trust_verified_handoff(min_score=3.0)
+        def delegate_to_agent(agent, task):
+            return agent.run(task)
 
 Environment Variables:
     JOY_TRUST_API_KEY: Joy Trust API key (optional)
+    PRAISONAI_TRUST_PROVIDER: Set to 'joy' to enable automatic trust verification
+    PRAISONAI_TRUST_MIN_SCORE: Minimum trust score threshold (default: 3.0)
+    PRAISONAI_TRUST_AUTO_VERIFY: Enable automatic handoff verification (default: true)
 """
 
 import os
 import logging
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union, Callable, List
+from dataclasses import dataclass
+from functools import wraps
 
 from praisonai_tools.tools.base import BaseTool
 
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class TrustConfig:
+    """Configuration for Joy Trust integration."""
+    
+    enabled: bool = False
+    provider: str = "joy"
+    min_score: float = 3.0
+    auto_verify_handoffs: bool = True
+    timeout_seconds: float = 10.0
+    cache_duration: int = 300  # 5 minutes
+    fallback_on_error: bool = True
+    
+    @classmethod
+    def from_env(cls) -> 'TrustConfig':
+        """Create configuration from environment variables."""
+        return cls(
+            enabled=os.getenv('PRAISONAI_TRUST_PROVIDER', '').lower() == 'joy',
+            provider=os.getenv('PRAISONAI_TRUST_PROVIDER', 'joy'),
+            min_score=float(os.getenv('PRAISONAI_TRUST_MIN_SCORE', '3.0')),
+            auto_verify_handoffs=os.getenv('PRAISONAI_TRUST_AUTO_VERIFY', 'true').lower() == 'true',
+            timeout_seconds=float(os.getenv('PRAISONAI_TRUST_TIMEOUT', '10.0')),
+            cache_duration=int(os.getenv('PRAISONAI_TRUST_CACHE_DURATION', '300')),
+            fallback_on_error=os.getenv('PRAISONAI_TRUST_FALLBACK', 'true').lower() == 'true'
+        )
+
+
 class JoyTrustTool(BaseTool):
-    """Tool for Joy Trust Network verification."""
+    """Enhanced tool for Joy Trust Network verification with native integration."""
     
     name = "joy_trust"
-    description = "Check agent trust scores using Joy Trust Network."
+    description = "Check agent trust scores using Joy Trust Network with automatic handoff integration."
     
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, config: Optional[TrustConfig] = None):
         self.api_key = api_key or os.getenv("JOY_TRUST_API_KEY")
+        self.config = config or TrustConfig.from_env()
+        self._cache = {}  # Simple in-memory cache
         super().__init__()
     
     def run(
         self,
         action: str = "check_trust",
         agent_name: Optional[str] = None,
+        min_score: Optional[float] = None,
         **kwargs
     ) -> Union[str, Dict[str, Any]]:
+        """Run trust verification action."""
         if action == "check_trust":
-            return self.check_trust(agent_name=agent_name)
+            return self.check_trust(agent_name=agent_name, min_score=min_score)
+        elif action == "verify_handoff":
+            return self.verify_handoff_safety(agent_name=agent_name, min_score=min_score)
+        elif action == "configure":
+            return self.configure(**kwargs)
         return {"error": f"Unknown action: {action}"}
     
-    def check_trust(self, agent_name: str) -> Dict[str, Any]:
-        """Check an agent's trust score on Joy Trust Network before delegation.
+    def check_trust(self, agent_name: str, min_score: Optional[float] = None) -> Dict[str, Any]:
+        """Check an agent's trust score on Joy Trust Network.
         
         Args:
             agent_name: Name/identifier of the agent to check
+            min_score: Minimum acceptable trust score (uses config default if not provided)
         
         Returns:
-            Dictionary containing:
-            - trust_score: Numeric trust score (0-1)
-            - verified: Boolean indicating if agent is verified
-            - reputation: Reputation metrics if available
-            - recommendations: Number of positive recommendations
-            - error: Error message if lookup failed
+            Dictionary containing trust information and verification status
         """
         if not agent_name:
             return {
                 "agent_name": "",
                 "trust_score": 0.0,
                 "verified": False,
+                "meets_threshold": False,
                 "reputation": {},
                 "recommendations": 0,
                 "error": "agent_name is required"
             }
         
+        min_threshold = min_score if min_score is not None else self.config.min_score
+        
+        # Check cache first
+        cache_key = f"{agent_name}_{min_threshold}"
+        if cache_key in self._cache:
+            cached_result = self._cache[cache_key]
+            if cached_result.get('_cached_at', 0) + self.config.cache_duration > time.time():
+                logger.debug(f"Using cached trust score for {agent_name}")
+                return cached_result
+        
         try:
             import httpx
+            import time
         except ImportError:
             return {
                 "agent_name": agent_name,
                 "trust_score": 0.0,
                 "verified": False,
+                "meets_threshold": False,
                 "reputation": {},
                 "recommendations": 0,
                 "error": (
@@ -81,7 +146,7 @@ class JoyTrustTool(BaseTool):
             }
         
         try:
-            with httpx.Client(timeout=30.0) as client:
+            with httpx.Client(timeout=self.config.timeout_seconds) as client:
                 params = {"name": agent_name}
                 if self.api_key:
                     params["api_key"] = self.api_key
@@ -93,50 +158,219 @@ class JoyTrustTool(BaseTool):
                 response.raise_for_status()
                 
                 data = response.json()
+                trust_score = data.get("trust_score", 0.0)
                 
-                return {
+                result = {
                     "agent_name": agent_name,
-                    "trust_score": data.get("trust_score", 0.0),
+                    "trust_score": trust_score,
                     "verified": data.get("verified", False),
+                    "meets_threshold": trust_score >= min_threshold,
+                    "threshold_used": min_threshold,
                     "reputation": data.get("reputation", {}),
                     "recommendations": data.get("recommendations", 0),
                     "last_activity": data.get("last_activity"),
                     "network_rank": data.get("network_rank"),
-                    "error": None
+                    "error": None,
+                    "_cached_at": time.time()
                 }
+                
+                # Cache the result
+                self._cache[cache_key] = result
+                
+                return result
                 
         except httpx.RequestError as e:
             logger.error(f"Joy Trust request error: {e}")
-            return {
+            error_result = {
                 "agent_name": agent_name,
                 "trust_score": 0.0,
                 "verified": False,
+                "meets_threshold": self.config.fallback_on_error,  # Fallback behavior
+                "threshold_used": min_threshold,
                 "reputation": {},
                 "recommendations": 0,
-                "error": f"Connection error: {e}"
+                "error": f"Connection error: {e}",
+                "fallback_used": self.config.fallback_on_error
             }
+            return error_result
         except httpx.HTTPStatusError as e:
             logger.error(f"Joy Trust API error: {e.response.status_code}")
-            return {
+            error_result = {
                 "agent_name": agent_name,
                 "trust_score": 0.0,
                 "verified": False,
+                "meets_threshold": self.config.fallback_on_error,  # Fallback behavior
+                "threshold_used": min_threshold,
                 "reputation": {},
                 "recommendations": 0,
-                "error": f"API error ({e.response.status_code}): {e.response.text}"
+                "error": f"API error ({e.response.status_code}): {e.response.text}",
+                "fallback_used": self.config.fallback_on_error
             }
+            return error_result
         except Exception as e:
             logger.error(f"Joy Trust unexpected error: {e}")
-            return {
+            error_result = {
                 "agent_name": agent_name,
                 "trust_score": 0.0,
                 "verified": False,
+                "meets_threshold": self.config.fallback_on_error,  # Fallback behavior
+                "threshold_used": min_threshold,
                 "reputation": {},
                 "recommendations": 0,
-                "error": f"Unexpected error: {e}"
+                "error": f"Unexpected error: {e}",
+                "fallback_used": self.config.fallback_on_error
             }
+            return error_result
+    
+    def verify_handoff_safety(self, agent_name: str, min_score: Optional[float] = None) -> Dict[str, Any]:
+        """Verify if it's safe to hand off to the specified agent.
+        
+        Args:
+            agent_name: Target agent for handoff
+            min_score: Minimum acceptable trust score
+            
+        Returns:
+            Dictionary with safety verification and recommendation
+        """
+        trust_result = self.check_trust(agent_name, min_score)
+        
+        safety_result = {
+            **trust_result,
+            "handoff_safe": trust_result.get("meets_threshold", False),
+            "recommendation": self._get_handoff_recommendation(trust_result),
+            "verification_time": time.time()
+        }
+        
+        return safety_result
+    
+    def _get_handoff_recommendation(self, trust_result: Dict[str, Any]) -> str:
+        """Generate handoff recommendation based on trust score."""
+        score = trust_result.get("trust_score", 0.0)
+        verified = trust_result.get("verified", False)
+        error = trust_result.get("error")
+        
+        if error and not trust_result.get("fallback_used", False):
+            return f"⚠️ Trust verification failed: {error}. Handoff not recommended."
+        
+        if error and trust_result.get("fallback_used", False):
+            return "⚠️ Trust verification failed but fallback enabled. Proceed with caution."
+        
+        if score >= 4.5 and verified:
+            return "✅ Excellent trust score. Handoff highly recommended."
+        elif score >= 3.5 and verified:
+            return "✅ Good trust score. Handoff recommended."
+        elif score >= 2.5:
+            return "⚠️ Moderate trust score. Handoff acceptable with caution."
+        elif score >= 1.0:
+            return "❌ Low trust score. Handoff not recommended."
+        else:
+            return "❌ Very low or no trust score. Handoff strongly discouraged."
+    
+    def configure(self, **kwargs) -> Dict[str, Any]:
+        """Update configuration settings."""
+        for key, value in kwargs.items():
+            if hasattr(self.config, key):
+                setattr(self.config, key, value)
+        
+        return {
+            "status": "configured",
+            "config": {
+                "enabled": self.config.enabled,
+                "min_score": self.config.min_score,
+                "auto_verify_handoffs": self.config.auto_verify_handoffs,
+                "timeout_seconds": self.config.timeout_seconds
+            }
+        }
 
 
-def check_trust_score(agent_name: str) -> Dict[str, Any]:
-    """Check an agent's trust score on Joy Trust Network before delegation."""
-    return JoyTrustTool().check_trust(agent_name=agent_name)
+def trust_verified_handoff(min_score: float = 3.0, trust_tool: Optional[JoyTrustTool] = None):
+    """Decorator for trust-verified agent handoffs.
+    
+    This decorator automatically verifies agent trust before delegation.
+    
+    Args:
+        min_score: Minimum trust score required
+        trust_tool: Custom JoyTrustTool instance (creates one if None)
+    
+    Usage:
+        @trust_verified_handoff(min_score=4.0)
+        def delegate_task(agent_name, task):
+            # Your delegation logic here
+            return result
+    """
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # Get agent name from args/kwargs
+            agent_name = None
+            if args and hasattr(args[0], 'name'):
+                agent_name = args[0].name
+            elif 'agent_name' in kwargs:
+                agent_name = kwargs['agent_name']
+            elif 'agent' in kwargs and hasattr(kwargs['agent'], 'name'):
+                agent_name = kwargs['agent'].name
+            
+            if not agent_name:
+                logger.warning("Could not determine agent name for trust verification")
+                return func(*args, **kwargs)
+            
+            # Verify trust if enabled
+            config = TrustConfig.from_env()
+            if config.enabled and config.auto_verify_handoffs:
+                tool = trust_tool or JoyTrustTool(config=config)
+                verification = tool.verify_handoff_safety(agent_name, min_score)
+                
+                if not verification.get("handoff_safe", False):
+                    error_msg = f"Handoff blocked: {verification.get('recommendation', 'Trust verification failed')}"
+                    logger.warning(error_msg)
+                    return {
+                        "success": False,
+                        "error": error_msg,
+                        "trust_verification": verification
+                    }
+                
+                logger.info(f"Trust verification passed for {agent_name}: {verification.get('recommendation')}")
+            
+            return func(*args, **kwargs)
+        
+        return wrapper
+    return decorator
+
+
+def check_trust_score(agent_name: str, min_score: float = 3.0) -> Dict[str, Any]:
+    """Check an agent's trust score on Joy Trust Network before delegation.
+    
+    Args:
+        agent_name: Name/identifier of the agent to check
+        min_score: Minimum acceptable trust score
+    
+    Returns:
+        Dictionary containing trust information and safety recommendation
+    """
+    tool = JoyTrustTool()
+    return tool.check_trust(agent_name=agent_name, min_score=min_score)
+
+
+def verify_handoff_safety(agent_name: str, min_score: float = 3.0) -> Dict[str, Any]:
+    """Verify if it's safe to hand off to the specified agent.
+    
+    Args:
+        agent_name: Target agent for handoff
+        min_score: Minimum acceptable trust score
+        
+    Returns:
+        Dictionary with safety verification and recommendation
+    """
+    tool = JoyTrustTool()
+    return tool.verify_handoff_safety(agent_name=agent_name, min_score=min_score)
+
+
+def is_trust_verification_enabled() -> bool:
+    """Check if trust verification is enabled via environment variables."""
+    config = TrustConfig.from_env()
+    return config.enabled
+
+
+def get_trust_config() -> TrustConfig:
+    """Get current trust configuration from environment variables."""
+    return TrustConfig.from_env()
