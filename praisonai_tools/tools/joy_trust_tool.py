@@ -147,36 +147,66 @@ class JoyTrustTool(BaseTool):
         
         try:
             with httpx.Client(timeout=self.config.timeout_seconds) as client:
-                params = {"name": agent_name}
+                headers = {}
                 if self.api_key:
-                    params["api_key"] = self.api_key
-                    
+                    headers["x-api-key"] = self.api_key
+
                 response = client.get(
                     "https://joy-connect.fly.dev/agents/discover",
-                    params=params
+                    params={"query": agent_name},
+                    headers=headers
                 )
                 response.raise_for_status()
-                
+
                 data = response.json()
-                trust_score = data.get("trust_score", 0.0)
-                
+
+                # FIX: Extract agent from the agents array, not top level
+                agents = data.get("agents", [])
+
+                # Find matching agent by name (case-insensitive)
+                agent = None
+                for a in agents:
+                    if a.get("name", "").lower() == agent_name.lower():
+                        agent = a
+                        break
+
+                # Fallback to first agent if no exact match
+                if not agent and agents:
+                    agent = agents[0]
+
+                if not agent:
+                    return {
+                        "agent_name": agent_name,
+                        "trust_score": 0.0,
+                        "verified": False,
+                        "meets_threshold": False,
+                        "threshold_used": min_threshold,
+                        "reputation": {},
+                        "recommendations": 0,
+                        "error": f"Agent '{agent_name}' not found on Joy Trust Network"
+                    }
+
+                # Read from the agent object, not top level
+                trust_score = agent.get("trust_score", 0.0)
+
                 result = {
-                    "agent_name": agent_name,
+                    "agent_name": agent.get("name", agent_name),
+                    "agent_id": agent.get("id"),
                     "trust_score": trust_score,
-                    "verified": data.get("verified", False),
+                    "verified": agent.get("verified", False),
                     "meets_threshold": trust_score >= min_threshold,
                     "threshold_used": min_threshold,
-                    "reputation": data.get("reputation", {}),
-                    "recommendations": data.get("recommendations", 0),
-                    "last_activity": data.get("last_activity"),
-                    "network_rank": data.get("network_rank"),
+                    "vouch_count": agent.get("vouch_count", 0),
+                    "capabilities": agent.get("capabilities", []),
+                    "tier": agent.get("tier", "free"),
+                    "badges": agent.get("badges", []),
                     "error": None,
                     "_cached_at": time.time()
                 }
-                
+
                 # Cache the result
                 self._cache[cache_key] = result
-                
+
                 return result
                 
         except httpx.RequestError as e:
