@@ -111,11 +111,15 @@ class JoyTrustTool(BaseTool):
         if not agent_name:
             return {
                 "agent_name": "",
+                "agent_id": None,
                 "trust_score": 0.0,
                 "verified": False,
                 "meets_threshold": False,
-                "reputation": {},
-                "recommendations": 0,
+                "threshold_used": 0.0,
+                "vouch_count": 0,
+                "capabilities": [],
+                "tier": None,
+                "badges": [],
                 "error": "agent_name is required"
             }
         
@@ -135,11 +139,15 @@ class JoyTrustTool(BaseTool):
         except ImportError:
             return {
                 "agent_name": agent_name,
+                "agent_id": None,
                 "trust_score": 0.0,
                 "verified": False,
                 "meets_threshold": False,
-                "reputation": {},
-                "recommendations": 0,
+                "threshold_used": min_threshold,
+                "vouch_count": 0,
+                "capabilities": [],
+                "tier": None,
+                "badges": [],
                 "error": (
                     "httpx is required for Joy Trust Network integration. "
                     "Install with: pip install praisonai-tools[marketplace] or pip install httpx"
@@ -166,11 +174,7 @@ class JoyTrustTool(BaseTool):
 
                 # Find matching agent by name (case-insensitive, exact match only)
                 # Security: Do NOT fallback to first result - could return wrong agent's trust
-                agent = None
-                for a in agents:
-                    if a.get("name", "").lower() == agent_name.lower():
-                        agent = a
-                        break
+                agent = next((a for a in agents if a.get("name", "").lower() == agent_name.lower()), None)
 
                 if not agent:
                     return {
