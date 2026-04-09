@@ -191,7 +191,8 @@ class JoyTrustTool(BaseTool):
                     }
 
                 # Read from the agent object, not top level
-                trust_score = agent.get("trust_score", 0.0)
+                # Use 'or' to handle both missing key AND null value
+                trust_score = agent.get("trust_score") or 0.0
 
                 result = {
                     "agent_name": agent.get("name", agent_name),
