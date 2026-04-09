@@ -163,16 +163,13 @@ class JoyTrustTool(BaseTool):
                 # FIX: Extract agent from the agents array, not top level
                 agents = data.get("agents", [])
 
-                # Find matching agent by name (case-insensitive)
+                # Find matching agent by name (case-insensitive, exact match only)
+                # Security: Do NOT fallback to first result - could return wrong agent's trust
                 agent = None
                 for a in agents:
                     if a.get("name", "").lower() == agent_name.lower():
                         agent = a
                         break
-
-                # Fallback to first agent if no exact match
-                if not agent and agents:
-                    agent = agents[0]
 
                 if not agent:
                     return {
