@@ -230,7 +230,7 @@ class JoyTrustTool(BaseTool):
                 "tier": None,
                 "badges": [],
                 "error": f"Connection error: {e}",
-                "fallback_used": True
+                "fallback_used": False
             }
         except httpx.HTTPStatusError as e:
             logger.error(f"Joy Trust API error: {e.response.status_code}")
@@ -247,7 +247,7 @@ class JoyTrustTool(BaseTool):
                 "tier": None,
                 "badges": [],
                 "error": f"API error ({e.response.status_code}): {e.response.text}",
-                "fallback_used": True
+                "fallback_used": False
             }
         except Exception as e:
             logger.exception("Joy Trust unexpected error")
@@ -264,7 +264,7 @@ class JoyTrustTool(BaseTool):
                 "tier": None,
                 "badges": [],
                 "error": f"Unexpected error: {e}",
-                "fallback_used": True
+                "fallback_used": False
             }
     
     def verify_handoff_safety(self, agent_name: str, min_score: Optional[float] = None) -> Dict[str, Any]:
