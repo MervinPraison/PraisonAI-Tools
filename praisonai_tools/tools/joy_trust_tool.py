@@ -135,7 +135,6 @@ class JoyTrustTool(BaseTool):
         
         try:
             import httpx
-            import time
         except ImportError:
             return {
                 "agent_name": agent_name,
