@@ -50,7 +50,7 @@ class TrustConfig:
     
     enabled: bool = False
     provider: str = "joy"
-    min_score: float = 3.0
+    min_score: float = 1.5  # Joy network avg is 1.1, use 'standard' threshold
     auto_verify_handoffs: bool = True
     timeout_seconds: float = 10.0
     cache_duration: int = 300  # 5 minutes
@@ -62,7 +62,7 @@ class TrustConfig:
         return cls(
             enabled=os.getenv('PRAISONAI_TRUST_PROVIDER', '').lower() == 'joy',
             provider=os.getenv('PRAISONAI_TRUST_PROVIDER', 'joy'),
-            min_score=float(os.getenv('PRAISONAI_TRUST_MIN_SCORE', '3.0')),
+            min_score=float(os.getenv('PRAISONAI_TRUST_MIN_SCORE', '1.5')),
             auto_verify_handoffs=os.getenv('PRAISONAI_TRUST_AUTO_VERIFY', 'true').lower() == 'true',
             timeout_seconds=float(os.getenv('PRAISONAI_TRUST_TIMEOUT', '10.0')),
             cache_duration=int(os.getenv('PRAISONAI_TRUST_CACHE_DURATION', '300')),
@@ -405,7 +405,7 @@ def trust_verified_handoff(min_score: float = 3.0, trust_tool: Optional[JoyTrust
     return decorator
 
 
-def check_trust_score(agent_name: str, min_score: float = 3.0) -> Dict[str, Any]:
+def check_trust_score(agent_name: str, min_score: float = 1.5) -> Dict[str, Any]:
     """Check an agent's trust score on Joy Trust Network before delegation.
     
     Args:
@@ -419,7 +419,7 @@ def check_trust_score(agent_name: str, min_score: float = 3.0) -> Dict[str, Any]
     return tool.check_trust(agent_name=agent_name, min_score=min_score)
 
 
-def verify_handoff_safety(agent_name: str, min_score: float = 3.0) -> Dict[str, Any]:
+def verify_handoff_safety(agent_name: str, min_score: float = 1.5) -> Dict[str, Any]:
     """Verify if it's safe to hand off to the specified agent.
     
     Args:
