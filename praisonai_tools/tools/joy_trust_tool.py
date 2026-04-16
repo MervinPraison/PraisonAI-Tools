@@ -34,6 +34,7 @@ Environment Variables:
 
 import os
 import logging
+import time
 from typing import Any, Dict, Optional, Union, Callable, List
 from dataclasses import dataclass
 from functools import wraps
@@ -49,7 +50,7 @@ class TrustConfig:
     
     enabled: bool = False
     provider: str = "joy"
-    min_score: float = 3.0
+    min_score: float = 1.5  # Joy network avg is 1.1, use 'standard' threshold
     auto_verify_handoffs: bool = True
     timeout_seconds: float = 10.0
     cache_duration: int = 300  # 5 minutes
@@ -61,7 +62,7 @@ class TrustConfig:
         return cls(
             enabled=os.getenv('PRAISONAI_TRUST_PROVIDER', '').lower() == 'joy',
             provider=os.getenv('PRAISONAI_TRUST_PROVIDER', 'joy'),
-            min_score=float(os.getenv('PRAISONAI_TRUST_MIN_SCORE', '3.0')),
+            min_score=float(os.getenv('PRAISONAI_TRUST_MIN_SCORE', '1.5')),
             auto_verify_handoffs=os.getenv('PRAISONAI_TRUST_AUTO_VERIFY', 'true').lower() == 'true',
             timeout_seconds=float(os.getenv('PRAISONAI_TRUST_TIMEOUT', '10.0')),
             cache_duration=int(os.getenv('PRAISONAI_TRUST_CACHE_DURATION', '300')),
@@ -110,11 +111,15 @@ class JoyTrustTool(BaseTool):
         if not agent_name:
             return {
                 "agent_name": "",
+                "agent_id": None,
                 "trust_score": 0.0,
                 "verified": False,
                 "meets_threshold": False,
-                "reputation": {},
-                "recommendations": 0,
+                "threshold_used": 0.0,
+                "vouch_count": 0,
+                "capabilities": [],
+                "tier": None,
+                "badges": [],
                 "error": "agent_name is required"
             }
         
@@ -130,15 +135,18 @@ class JoyTrustTool(BaseTool):
         
         try:
             import httpx
-            import time
         except ImportError:
             return {
                 "agent_name": agent_name,
+                "agent_id": None,
                 "trust_score": 0.0,
                 "verified": False,
                 "meets_threshold": False,
-                "reputation": {},
-                "recommendations": 0,
+                "threshold_used": min_threshold,
+                "vouch_count": 0,
+                "capabilities": [],
+                "tier": None,
+                "badges": [],
                 "error": (
                     "httpx is required for Joy Trust Network integration. "
                     "Install with: pip install praisonai-tools[marketplace] or pip install httpx"
@@ -147,80 +155,140 @@ class JoyTrustTool(BaseTool):
         
         try:
             with httpx.Client(timeout=self.config.timeout_seconds) as client:
-                params = {"name": agent_name}
+                headers = {}
                 if self.api_key:
-                    params["api_key"] = self.api_key
-                    
+                    headers["x-api-key"] = self.api_key
+
                 response = client.get(
                     "https://joy-connect.fly.dev/agents/discover",
-                    params=params
+                    params={"query": agent_name},
+                    headers=headers
                 )
                 response.raise_for_status()
-                
+
                 data = response.json()
-                trust_score = data.get("trust_score", 0.0)
-                
+
+                # FIX: Extract agent from the agents array, not top level
+                # Use 'or' to handle both missing key AND null value
+                agents = data.get("agents") or []
+
+                # Find matching agent by name (case-insensitive, exact match only)
+                # Security: Do NOT fallback to first result - could return wrong agent's trust
+                # Use 'or ""' to handle null name values
+                normalized_name = agent_name.lower()
+                agent = next(
+                    (a for a in agents if (a.get("name") or "").lower() == normalized_name),
+                    None
+                )
+
+                if not agent:
+                    return {
+                        "agent_name": agent_name,
+                        "agent_id": None,
+                        "trust_score": 0.0,
+                        "verified": False,
+                        "meets_threshold": False,
+                        "threshold_used": min_threshold,
+                        "vouch_count": 0,
+                        "capabilities": [],
+                        "tier": None,
+                        "badges": [],
+                        "error": f"Agent '{agent_name}' not found on Joy Trust Network"
+                    }
+
+                # Read from the agent object, not top level
+                # Safely convert trust_score to float (handles null, string, missing)
+                raw_trust_score = agent.get("trust_score")
+                try:
+                    trust_score = 0.0 if raw_trust_score in (None, "") else float(raw_trust_score)
+                except (TypeError, ValueError):
+                    # Invalid trust_score format - fail closed
+                    return {
+                        "agent_name": agent.get("name") or agent_name,
+                        "agent_id": agent.get("id"),
+                        "trust_score": 0.0,
+                        "verified": False,
+                        "meets_threshold": False,
+                        "threshold_used": min_threshold,
+                        "vouch_count": 0,
+                        "capabilities": [],
+                        "tier": None,
+                        "badges": [],
+                        "error": f"Invalid trust_score for agent '{agent_name}': {raw_trust_score!r}",
+                        "fallback_used": False
+                    }
+
                 result = {
-                    "agent_name": agent_name,
+                    "agent_name": agent.get("name") or agent_name,
+                    "agent_id": agent.get("id"),
                     "trust_score": trust_score,
-                    "verified": data.get("verified", False),
+                    "verified": agent.get("verified", False),
                     "meets_threshold": trust_score >= min_threshold,
                     "threshold_used": min_threshold,
-                    "reputation": data.get("reputation", {}),
-                    "recommendations": data.get("recommendations", 0),
-                    "last_activity": data.get("last_activity"),
-                    "network_rank": data.get("network_rank"),
+                    "vouch_count": agent.get("vouch_count", 0),
+                    "capabilities": agent.get("capabilities", []),
+                    "tier": agent.get("tier", "free"),
+                    "badges": agent.get("badges", []),
                     "error": None,
                     "_cached_at": time.time()
                 }
-                
+
                 # Cache the result
                 self._cache[cache_key] = result
-                
+
                 return result
                 
         except httpx.RequestError as e:
             logger.error(f"Joy Trust request error: {e}")
-            error_result = {
+            # Security: Fail closed - errors should deny handoffs, not allow them
+            return {
                 "agent_name": agent_name,
+                "agent_id": None,
                 "trust_score": 0.0,
                 "verified": False,
-                "meets_threshold": self.config.fallback_on_error,  # Fallback behavior
+                "meets_threshold": False,
                 "threshold_used": min_threshold,
-                "reputation": {},
-                "recommendations": 0,
+                "vouch_count": 0,
+                "capabilities": [],
+                "tier": None,
+                "badges": [],
                 "error": f"Connection error: {e}",
-                "fallback_used": self.config.fallback_on_error
+                "fallback_used": False
             }
-            return error_result
         except httpx.HTTPStatusError as e:
             logger.error(f"Joy Trust API error: {e.response.status_code}")
-            error_result = {
+            # Security: Fail closed - errors should deny handoffs, not allow them
+            return {
                 "agent_name": agent_name,
+                "agent_id": None,
                 "trust_score": 0.0,
                 "verified": False,
-                "meets_threshold": self.config.fallback_on_error,  # Fallback behavior
+                "meets_threshold": False,
                 "threshold_used": min_threshold,
-                "reputation": {},
-                "recommendations": 0,
+                "vouch_count": 0,
+                "capabilities": [],
+                "tier": None,
+                "badges": [],
                 "error": f"API error ({e.response.status_code}): {e.response.text}",
-                "fallback_used": self.config.fallback_on_error
+                "fallback_used": False
             }
-            return error_result
         except Exception as e:
-            logger.error(f"Joy Trust unexpected error: {e}")
-            error_result = {
+            logger.exception("Joy Trust unexpected error")
+            # Security: Fail closed - errors should deny handoffs, not allow them
+            return {
                 "agent_name": agent_name,
+                "agent_id": None,
                 "trust_score": 0.0,
                 "verified": False,
-                "meets_threshold": self.config.fallback_on_error,  # Fallback behavior
+                "meets_threshold": False,
                 "threshold_used": min_threshold,
-                "reputation": {},
-                "recommendations": 0,
+                "vouch_count": 0,
+                "capabilities": [],
+                "tier": None,
+                "badges": [],
                 "error": f"Unexpected error: {e}",
-                "fallback_used": self.config.fallback_on_error
+                "fallback_used": False
             }
-            return error_result
     
     def verify_handoff_safety(self, agent_name: str, min_score: Optional[float] = None) -> Dict[str, Any]:
         """Verify if it's safe to hand off to the specified agent.
@@ -337,7 +405,7 @@ def trust_verified_handoff(min_score: float = 3.0, trust_tool: Optional[JoyTrust
     return decorator
 
 
-def check_trust_score(agent_name: str, min_score: float = 3.0) -> Dict[str, Any]:
+def check_trust_score(agent_name: str, min_score: float = 1.5) -> Dict[str, Any]:
     """Check an agent's trust score on Joy Trust Network before delegation.
     
     Args:
@@ -351,7 +419,7 @@ def check_trust_score(agent_name: str, min_score: float = 3.0) -> Dict[str, Any]
     return tool.check_trust(agent_name=agent_name, min_score=min_score)
 
 
-def verify_handoff_safety(agent_name: str, min_score: float = 3.0) -> Dict[str, Any]:
+def verify_handoff_safety(agent_name: str, min_score: float = 1.5) -> Dict[str, Any]:
     """Verify if it's safe to hand off to the specified agent.
     
     Args:
