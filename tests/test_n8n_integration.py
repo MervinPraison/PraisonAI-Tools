@@ -10,10 +10,22 @@ class TestN8nWorkflowTool:
     
     @pytest.fixture
     def mock_httpx(self):
-        # Mock httpx in sys.modules to catch lazy imports
-        with patch.dict('sys.modules', {'httpx': MagicMock()}) as mock_modules:
-            mock_httpx = mock_modules['httpx']
-            yield mock_httpx
+        """Mock httpx module for testing."""
+        mock_module = MagicMock()
+        
+        # Create proper exception classes
+        mock_module.TimeoutException = type('TimeoutException', (Exception,), {})
+        
+        class MockHTTPStatusError(Exception):
+            def __init__(self, message, request=None, response=None):
+                super().__init__(message)
+                self.request = request
+                self.response = response
+        
+        mock_module.HTTPStatusError = MockHTTPStatusError
+        
+        with patch.dict('sys.modules', {'httpx': mock_module}) as mock_modules:
+            yield mock_module
     
     def test_import_n8n_tools(self):
         """Test that n8n tools can be imported."""
@@ -69,7 +81,8 @@ class TestN8nWorkflowTool:
         from praisonai_tools.n8n import N8nWorkflowTool
         
         tool = N8nWorkflowTool()
-        with patch('praisonai_tools.n8n.n8n_workflow.httpx', None):
+        # Mock the import failure using sys.modules approach
+        with patch.dict('sys.modules', {'httpx': None}):
             with patch('builtins.__import__', side_effect=ImportError("No module named 'httpx'")):
                 result = tool.run(workflow_id="test-workflow")
                 assert "httpx not installed" in result["error"]
