@@ -529,6 +529,10 @@ def __getattr__(name):
         "medium_get_user": "medium_tool",
         "medium_list_publications": "medium_tool",
         "medium_publish_to_publication": "medium_tool",
+        # n8n Tools
+        "N8nWorkflowTool": "n8n.n8n_workflow",
+        "n8n_workflow": "n8n.n8n_workflow",
+        "n8n_list_workflows": "n8n.n8n_workflow",
     }
 
     if name in tool_map:
@@ -859,4 +863,8 @@ __all__ = [
     "medium_get_user",
     "medium_list_publications",
     "medium_publish_to_publication",
+    # n8n Tool
+    "N8nWorkflowTool",
+    "n8n_workflow",
+    "n8n_list_workflows",
 ]
