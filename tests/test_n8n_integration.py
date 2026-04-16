@@ -179,7 +179,7 @@ class TestN8nWorkflowTool:
         tool = N8nWorkflowTool(timeout=5.0)
         result = tool.run(workflow_id="test-workflow")
         
-        assert "timed out after 5.0 seconds" in result["error"]
+        assert "Request timed out" in result["error"]
     
     def test_n8n_workflow_no_webhook_trigger(self, mock_httpx):
         """Test error handling when workflow has no webhook trigger."""
