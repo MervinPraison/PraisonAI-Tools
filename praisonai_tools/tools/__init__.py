@@ -530,15 +530,22 @@ def __getattr__(name):
         "medium_list_publications": "medium_tool",
         "medium_publish_to_publication": "medium_tool",
         # n8n Tools
-        "N8nWorkflowTool": "n8n.n8n_workflow",
-        "n8n_workflow": "n8n.n8n_workflow",
-        "n8n_list_workflows": "n8n.n8n_workflow",
+        "N8nWorkflowTool": "praisonai_tools.n8n.n8n_workflow",
+        "n8n_workflow": "praisonai_tools.n8n.n8n_workflow",
+        "n8n_list_workflows": "praisonai_tools.n8n.n8n_workflow",
     }
 
     if name in tool_map:
         module_name = tool_map[name]
         from importlib import import_module
-        module = import_module(f".{module_name}", __package__)
+        
+        # Handle absolute module paths (e.g., praisonai_tools.n8n.n8n_workflow)
+        if module_name.startswith("praisonai_tools."):
+            module = import_module(module_name)
+        else:
+            # Handle relative module paths within tools package
+            module = import_module(f".{module_name}", __package__)
+        
         return getattr(module, name)
 
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

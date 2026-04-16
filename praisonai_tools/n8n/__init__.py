@@ -14,9 +14,10 @@ Usage:
     )
 """
 
-from .n8n_workflow import n8n_workflow, N8nWorkflowTool
+from .n8n_workflow import n8n_workflow, n8n_list_workflows, N8nWorkflowTool
 
 __all__ = [
     "n8n_workflow",
+    "n8n_list_workflows",
     "N8nWorkflowTool",
 ]

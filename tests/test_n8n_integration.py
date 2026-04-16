@@ -10,8 +10,10 @@ class TestN8nWorkflowTool:
     
     @pytest.fixture
     def mock_httpx(self):
-        with patch('praisonai_tools.n8n.n8n_workflow.httpx') as mock:
-            yield mock
+        # Mock httpx in sys.modules to catch lazy imports
+        with patch.dict('sys.modules', {'httpx': MagicMock()}) as mock_modules:
+            mock_httpx = mock_modules['httpx']
+            yield mock_httpx
     
     def test_import_n8n_tools(self):
         """Test that n8n tools can be imported."""

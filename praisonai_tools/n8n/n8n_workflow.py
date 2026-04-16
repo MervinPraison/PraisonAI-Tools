@@ -111,11 +111,15 @@ class N8nWorkflowTool(BaseTool):
         client: "httpx.Client",
         execution_id: str,
         headers: Dict[str, str],
-        max_wait: int = 60,
+        max_wait: Optional[int] = None,
         poll_interval: int = 2,
     ) -> Dict[str, Any]:
         """Wait for workflow execution to complete."""
         import time
+        
+        # Use configured timeout if max_wait is not provided
+        if max_wait is None:
+            max_wait = int(self.timeout)
         
         waited = 0
         while waited < max_wait:
