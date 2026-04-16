@@ -12,12 +12,18 @@ on:
 
 jobs:
   claude-response:
+    env:
+      ISSUE_NUMBER_RESOLVED: ${{ github.event.issue.number || github.event.pull_request.number }}
     if: |
+      (github.event.action != 'labeled' || github.event.label.name == 'claude') &&
+      (github.event_name != 'issue_comment' || contains(github.event.comment.body, '@claude')) &&
       (
         !contains(github.actor, '[bot]') ||
-        github.actor == 'github-actions[bot]'
+        github.actor == 'github-actions[bot]' ||
+        github.actor == 'praisonai-triage-agent[bot]'
       ) &&
       github.actor != 'dependabot[bot]' &&
+      github.actor != 'cursor[bot]' &&
       github.actor != 'renovate[bot]'
     runs-on: ubuntu-latest
     permissions:
@@ -32,29 +38,45 @@ jobs:
           fetch-depth: 0
 
       - uses: anthropics/claude-code-action@beta
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          allowed_bots: 'praisonai-triage-agent[bot]'
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           trigger_phrase: "@claude"
           label_trigger: "claude"
           direct_prompt: |
-            Analyze this issue and implement a fix:
-            1. Read the codebase structure and understand tool patterns (see praisonai_tools/tools/lumalabs_tool.py as reference)
-            2. Implement the tool following existing patterns:
-               - BaseTool class + standalone @tool functions
-               - Lazy imports (import requests inside functions)
-               - Env vars as constructor params (api_key=None, falls back to os.getenv)
-               - Proper error handling with descriptive messages
-               - Export in praisonai_tools/tools/__init__.py
-            3. Run: python -c "import ast; ast.parse(open('praisonai_tools/tools/<new_file>.py').read()); print('OK')"
-            4. Create a feature branch, commit, push, and create a PR:
-               git checkout -b feat/<tool-name>
-               git add .
-               git commit -m "feat: add <tool-name> tool"
-               git push origin feat/<tool-name>
-               gh pr create --title "feat: Add <tool-name> tool" --body "Closes #<issue-number>" --base main
-            CRITICAL: You MUST create the PR using `gh pr create`. The GITHUB_TOKEN has write permissions.
-            If `gh pr create` fails, try: GH_TOKEN=$GITHUB_TOKEN gh pr create ...
+            You are implementing changes in the praisonai-tools repository (Python tools for PraisonAI).
+
+            STEP 0 — GIT & GITHUB CLI:
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            gh auth setup-git
+
+            STEP 1 — ISSUE:
+            Read the issue/PR context. Scope: implement or fix tools under `praisonai_tools/`.
+
+            STEP 2 — IMPLEMENT (tool patterns):
+            - Use `praisonai_tools/tools/lumalabs_tool.py` as a structural reference where applicable
+            - BaseTool + `@tool` patterns, lazy imports for optional deps, env via constructor or os.getenv
+            - Clear errors; export new tools from `praisonai_tools/tools/__init__.py` when adding a tool
+            - Sanity check: python -c "import ast; ast.parse(open('path/to/file.py').read()); print('OK')"
+
+            STEP 3 — BRANCH (one name, reuse in STEP 5):
+            BRANCH="claude/issue-${{ env.ISSUE_NUMBER_RESOLVED }}-$(date +%Y%m%d)"
+            git checkout -b "$BRANCH"
+
+            STEP 4 — TEST / VERIFY:
+            Run targeted tests or imports relevant to your edits.
+
+            STEP 5 — COMMIT, PUSH, OPEN PR (mandatory if you produced commits):
+            git add -A
+            git commit -m "fix: <short summary> (fixes #${{ env.ISSUE_NUMBER_RESOLVED }})"
+            git push -u origin "$BRANCH"
+            gh pr create --base main --head "$BRANCH" --title "fix: <short title>" --body "Fixes #${{ env.ISSUE_NUMBER_RESOLVED }}"
+            Do not stop after push only. Do not ask a human to open the PR. Finish only when `gh pr create` prints a PR URL; on failure, read the error and retry after fixing (auth, duplicate PR, head branch).
+
           allowed_tools: |
             Bash(git:*)
             Bash(python:*)
@@ -69,4 +91,7 @@ jobs:
             BatchTool
             Edit
             Replace
+            mcp__github__get_issue
+            mcp__github__get_issue_comments
+            mcp__github__update_issue
           timeout_minutes: 30
