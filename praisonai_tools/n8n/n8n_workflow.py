@@ -21,7 +21,7 @@ Environment Variables:
 
 import os
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 from praisonai_tools.tools.base import BaseTool
 from praisonai_tools.tools.decorator import tool
@@ -53,12 +53,12 @@ class N8nWorkflowTool(BaseTool):
         wait_for_completion: bool = True,
         **kwargs
     ) -> Dict[str, Any]:
-        """Execute an n8n workflow and return the result.
+        """Execute an n8n workflow via webhook trigger.
         
         Args:
             workflow_id: The n8n workflow ID to execute
             input_data: Input data to pass to the workflow
-            wait_for_completion: Whether to wait for workflow completion
+            wait_for_completion: Whether to wait for workflow completion (ignored for webhook execution)
             
         Returns:
             Workflow execution result
@@ -72,78 +72,104 @@ class N8nWorkflowTool(BaseTool):
         except ImportError:
             return {"error": "httpx not installed. Install with: pip install 'praisonai-tools[n8n]'"}
         
-        # Prepare headers
+        # Fetch workflow to find webhook trigger
+        webhook_url = self._get_webhook_url(workflow_id)
+        if isinstance(webhook_url, dict) and "error" in webhook_url:
+            return webhook_url  # Return error from _get_webhook_url
+        
+        # Execute workflow via webhook (no API key needed for webhooks)
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                response = client.post(
+                    webhook_url,
+                    json=input_data or {},
+                    headers={"Content-Type": "application/json"},
+                )
+                response.raise_for_status()
+                
+                # Try to parse JSON response, fallback to text if not JSON
+                try:
+                    return response.json()
+                except ValueError:
+                    return {"result": response.text, "status_code": response.status_code}
+                
+        except httpx.TimeoutException:
+            logger.error(f"n8n workflow {workflow_id} webhook timed out after {self.timeout}s")
+            return {"error": f"Workflow webhook execution timed out after {self.timeout} seconds"}
+        except httpx.HTTPStatusError as e:
+            logger.error(f"n8n webhook error: {e.response.status_code} - {e.response.text}")
+            return {"error": f"HTTP {e.response.status_code}: {e.response.text}"}
+        except Exception as e:
+            logger.error(f"n8n workflow webhook execution error: {e}")
+            return {"error": str(e)}
+    
+    def _get_webhook_url(self, workflow_id: str) -> Union[str, Dict[str, Any]]:
+        """Get webhook URL for a workflow by finding its webhook trigger node.
+        
+        Args:
+            workflow_id: The n8n workflow ID
+            
+        Returns:
+            Webhook URL string or error dict
+        """
+        try:
+            import httpx
+        except ImportError:
+            return {"error": "httpx not installed"}
+        
+        # Prepare headers for API calls
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["X-N8N-API-KEY"] = self.api_key
         
-        # Execute workflow
         try:
-            with httpx.Client(timeout=self.timeout) as client:
-                response = client.post(
-                    f"{self.n8n_url}/api/v1/workflows/{workflow_id}/execute",
-                    json={"data": input_data or {}},
+            with httpx.Client(timeout=30.0) as client:
+                # Fetch workflow definition
+                response = client.get(
+                    f"{self.n8n_url}/api/v1/workflows/{workflow_id}",
                     headers=headers,
                 )
                 response.raise_for_status()
+                workflow = response.json()
                 
-                result = response.json()
+                # Find webhook trigger node
+                nodes = workflow.get("nodes", [])
+                webhook_node = None
+                for node in nodes:
+                    if node.get("type") == "n8n-nodes-base.webhook":
+                        webhook_node = node
+                        break
                 
-                if wait_for_completion and result.get("executionId"):
-                    # Poll for completion
-                    execution_id = result["executionId"]
-                    return self._wait_for_execution(client, execution_id, headers)
+                if not webhook_node:
+                    return {"error": "Workflow has no Webhook trigger node. Add a Webhook trigger to enable external execution."}
                 
-                return result
+                # Extract webhook path
+                parameters = webhook_node.get("parameters", {})
+                path = parameters.get("path", "")
+                if not path:
+                    return {"error": "Webhook trigger node has no path configured"}
                 
-        except httpx.TimeoutException:
-            logger.error(f"n8n workflow {workflow_id} timed out after {self.timeout}s")
-            return {"error": f"Workflow execution timed out after {self.timeout} seconds"}
+                # Ensure workflow is active
+                if not workflow.get("active"):
+                    activate_response = client.patch(
+                        f"{self.n8n_url}/api/v1/workflows/{workflow_id}",
+                        json={"active": True},
+                        headers=headers,
+                    )
+                    activate_response.raise_for_status()
+                    logger.info(f"Activated workflow {workflow_id}")
+                
+                # Construct webhook URL
+                # Use /webhook-test/ for test mode, /webhook/ for production
+                webhook_url = f"{self.n8n_url}/webhook/{path}"
+                return webhook_url
+                
         except httpx.HTTPStatusError as e:
-            logger.error(f"n8n API error: {e.response.status_code} - {e.response.text}")
+            logger.error(f"n8n API error fetching workflow {workflow_id}: {e.response.status_code} - {e.response.text}")
             return {"error": f"HTTP {e.response.status_code}: {e.response.text}"}
         except Exception as e:
-            logger.error(f"n8n workflow execution error: {e}")
+            logger.error(f"Error fetching workflow {workflow_id}: {e}")
             return {"error": str(e)}
-    
-    def _wait_for_execution(
-        self,
-        client: "httpx.Client",
-        execution_id: str,
-        headers: Dict[str, str],
-        max_wait: Optional[int] = None,
-        poll_interval: int = 2,
-    ) -> Dict[str, Any]:
-        """Wait for workflow execution to complete."""
-        import time
-        
-        # Use configured timeout if max_wait is not provided
-        if max_wait is None:
-            max_wait = int(self.timeout)
-        
-        waited = 0
-        while waited < max_wait:
-            try:
-                response = client.get(
-                    f"{self.n8n_url}/api/v1/executions/{execution_id}",
-                    headers=headers,
-                )
-                response.raise_for_status()
-                
-                execution = response.json()
-                status = execution.get("status")
-                
-                if status in ["success", "error", "canceled"]:
-                    return execution
-                
-                time.sleep(poll_interval)
-                waited += poll_interval
-                
-            except Exception as e:
-                logger.error(f"Error polling execution {execution_id}: {e}")
-                return {"error": f"Error polling execution: {e}"}
-        
-        return {"error": f"Execution {execution_id} did not complete within {max_wait} seconds"}
     
     def list_workflows(self) -> Dict[str, Any]:
         """List available n8n workflows."""

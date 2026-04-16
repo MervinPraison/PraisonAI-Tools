@@ -89,19 +89,40 @@ class TestN8nWorkflowTool:
                 assert "pip install 'praisonai-tools[n8n]'" in result["error"]
     
     def test_n8n_workflow_successful_execution(self, mock_httpx):
-        """Test successful workflow execution."""
+        """Test successful workflow execution via webhook."""
         from praisonai_tools.n8n import N8nWorkflowTool
         
-        # Mock httpx response
-        mock_response = Mock()
-        mock_response.json.return_value = {
-            "executionId": "exec-123",
-            "status": "running"
+        # Mock workflow fetch response
+        mock_workflow_response = Mock()
+        mock_workflow_response.json.return_value = {
+            "id": "test-workflow",
+            "name": "Test Workflow",
+            "active": True,
+            "nodes": [
+                {
+                    "id": "webhook-node",
+                    "name": "Webhook",
+                    "type": "n8n-nodes-base.webhook",
+                    "parameters": {
+                        "path": "test-webhook",
+                        "httpMethod": "POST"
+                    }
+                }
+            ]
         }
-        mock_response.raise_for_status.return_value = None
+        mock_workflow_response.raise_for_status.return_value = None
+        
+        # Mock webhook execution response
+        mock_webhook_response = Mock()
+        mock_webhook_response.json.return_value = {
+            "result": "success",
+            "message": "Webhook executed successfully"
+        }
+        mock_webhook_response.raise_for_status.return_value = None
         
         mock_client = Mock()
-        mock_client.post.return_value = mock_response
+        mock_client.get.return_value = mock_workflow_response
+        mock_client.post.return_value = mock_webhook_response
         mock_httpx.Client.return_value.__enter__.return_value = mock_client
         
         tool = N8nWorkflowTool(api_key="test-key")
@@ -111,27 +132,33 @@ class TestN8nWorkflowTool:
             wait_for_completion=False
         )
         
-        assert result["executionId"] == "exec-123"
-        assert result["status"] == "running"
+        assert result["result"] == "success"
+        assert result["message"] == "Webhook executed successfully"
         
-        # Verify API call
-        mock_client.post.assert_called_once_with(
-            "http://localhost:5678/api/v1/workflows/test-workflow/execute",
-            json={"data": {"message": "Hello"}},
+        # Verify workflow fetch call
+        mock_client.get.assert_called_once_with(
+            "http://localhost:5678/api/v1/workflows/test-workflow",
             headers={"Content-Type": "application/json", "X-N8N-API-KEY": "test-key"},
+        )
+        
+        # Verify webhook execution call
+        mock_client.post.assert_called_once_with(
+            "http://localhost:5678/webhook/test-webhook",
+            json={"message": "Hello"},
+            headers={"Content-Type": "application/json"},
         )
     
     def test_n8n_workflow_http_error(self, mock_httpx):
-        """Test HTTP error handling."""
+        """Test HTTP error handling during workflow fetch."""
         from praisonai_tools.n8n import N8nWorkflowTool
         
-        # Mock HTTP error
+        # Mock HTTP error during workflow fetch
         mock_response = Mock()
         mock_response.status_code = 401
         mock_response.text = "Unauthorized"
         
         mock_client = Mock()
-        mock_client.post.side_effect = mock_httpx.HTTPStatusError(
+        mock_client.get.side_effect = mock_httpx.HTTPStatusError(
             "401 Unauthorized", request=Mock(), response=mock_response
         )
         mock_httpx.Client.return_value.__enter__.return_value = mock_client
@@ -142,17 +169,47 @@ class TestN8nWorkflowTool:
         assert "HTTP 401: Unauthorized" in result["error"]
     
     def test_n8n_workflow_timeout_error(self, mock_httpx):
-        """Test timeout error handling."""
+        """Test timeout error handling during workflow fetch."""
         from praisonai_tools.n8n import N8nWorkflowTool
         
         mock_client = Mock()
-        mock_client.post.side_effect = mock_httpx.TimeoutException("Request timed out")
+        mock_client.get.side_effect = mock_httpx.TimeoutException("Request timed out")
         mock_httpx.Client.return_value.__enter__.return_value = mock_client
         
         tool = N8nWorkflowTool(timeout=5.0)
         result = tool.run(workflow_id="test-workflow")
         
         assert "timed out after 5.0 seconds" in result["error"]
+    
+    def test_n8n_workflow_no_webhook_trigger(self, mock_httpx):
+        """Test error handling when workflow has no webhook trigger."""
+        from praisonai_tools.n8n import N8nWorkflowTool
+        
+        # Mock workflow fetch response with no webhook trigger
+        mock_workflow_response = Mock()
+        mock_workflow_response.json.return_value = {
+            "id": "test-workflow",
+            "name": "Test Workflow",
+            "active": True,
+            "nodes": [
+                {
+                    "id": "manual-node",
+                    "name": "Manual Trigger",
+                    "type": "n8n-nodes-base.manualTrigger",
+                    "parameters": {}
+                }
+            ]
+        }
+        mock_workflow_response.raise_for_status.return_value = None
+        
+        mock_client = Mock()
+        mock_client.get.return_value = mock_workflow_response
+        mock_httpx.Client.return_value.__enter__.return_value = mock_client
+        
+        tool = N8nWorkflowTool(api_key="test-key")
+        result = tool.run(workflow_id="test-workflow")
+        
+        assert "Workflow has no Webhook trigger node" in result["error"]
     
     def test_n8n_list_workflows(self, mock_httpx):
         """Test listing workflows."""
