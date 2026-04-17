@@ -39,11 +39,11 @@ jobs:
 
       - uses: anthropics/claude-code-action@beta
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           allowed_bots: 'praisonai-triage-agent[bot]'
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          github_token: ${{ secrets.GH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           trigger_phrase: "@claude"
           label_trigger: "claude"
           direct_prompt: |
