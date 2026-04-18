@@ -229,14 +229,15 @@ class TestRendering:
     
     def test_is_safe_workspace(self):
         """Test workspace safety validation."""
-        # Valid workspace
-        valid_workspace = Path("/tmp/test_workspace")
-        assert self.backend._is_safe_workspace(valid_workspace) is True
-        
         # Test with actual path that exists
         with tempfile.TemporaryDirectory() as tmpdir:
             workspace = Path(tmpdir)
             assert self.backend._is_safe_workspace(workspace) is True
+            
+            # Test with subdirectory that exists
+            sub_workspace = Path(tmpdir) / "test_workspace"
+            sub_workspace.mkdir()
+            assert self.backend._is_safe_workspace(sub_workspace) is True
     
     def test_get_crf_for_quality(self):
         """Test CRF value mapping for quality settings."""

@@ -44,9 +44,12 @@ class TestBackendSafety:
     def test_workspace_in_temp_dir_allowed(self):
         """Test workspace in temp directory is allowed."""
         import tempfile
-        temp_workspace = Path(tempfile.gettempdir()) / "test_workspace"
-        
-        assert self.backend._is_safe_workspace(temp_workspace)
+        temp_workspace = Path(tempfile.gettempdir()) / "test_workspace_mg"
+        temp_workspace.mkdir(exist_ok=True)
+        try:
+            assert self.backend._is_safe_workspace(temp_workspace)
+        finally:
+            temp_workspace.rmdir()
     
     def test_nonexistent_workspace_rejected(self):
         """Test non-existent workspace is rejected."""
