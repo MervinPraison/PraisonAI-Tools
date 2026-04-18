@@ -37,9 +37,10 @@ class MockBackend:
         return LintResult(ok=True, messages=[])
     
     async def render(self, workspace, opts):
+        output_name = getattr(opts, 'output_name', 'test.mp4')
         return RenderResult(
             ok=True,
-            output_path=workspace / "test.mp4",
+            output_path=workspace / output_name,
             bytes_=b"test video data",
             size_kb=1024
         )

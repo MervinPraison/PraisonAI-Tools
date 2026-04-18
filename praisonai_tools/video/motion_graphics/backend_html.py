@@ -81,7 +81,7 @@ class HtmlRenderBackend:
             messages.append("Math.random() detected - animations must be deterministic")
         
         if "repeat: -1" in content:
-            messages.append("Infinite repeat detected - use finite repeat counts")
+            messages.append("Infinite repeat detected (`repeat: -1`) — use finite repeat counts")
         
         if strict:
             # Additional strict checks

@@ -161,9 +161,14 @@ class TestSafety:
             with pytest.raises(ValueError, match="Invalid file path"):
                 self.git_tools._validate_file_path(unsafe_path)
     
-    def test_validate_file_path_removes_leading_slash(self):
-        """Test file path validation removes leading slashes."""
-        result = self.git_tools._validate_file_path("/src/main.py")
+    def test_validate_file_path_rejects_absolute_paths(self):
+        """Test file path validation rejects absolute paths."""
+        with pytest.raises(ValueError, match="Invalid file path"):
+            self.git_tools._validate_file_path("/src/main.py")
+    
+    def test_validate_file_path_accepts_relative_paths(self):
+        """Test file path validation accepts relative paths."""
+        result = self.git_tools._validate_file_path("src/main.py")
         assert result == "src/main.py"
 
 
@@ -241,7 +246,7 @@ class TestGitOperations:
     def test_run_git_command_failure(self, mock_run):
         """Test git command failure handling."""
         mock_run.side_effect = subprocess.CalledProcessError(
-            1, ["git", "status"], stdout="", stderr="not a git repository"
+            1, ["git", "status"], output="", stderr="not a git repository"
         )
         
         repo_path = Path(self.base_dir) / "test_repo"
