@@ -57,6 +57,10 @@ n8n = [
 langextract = [
     "langextract>=0.1.0",
 ]
+video-motion = [
+    "playwright>=1.40",
+    "imageio-ffmpeg>=0.5",
+]
 
 [project.urls]
 Homepage = "https://docs.praison.ai"

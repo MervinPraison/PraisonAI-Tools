@@ -1,0 +1,118 @@
+# Motion Graphics Team Configuration
+# This file shows how to configure a motion graphics team using YAML
+
+framework: praisonai
+project_name: "Motion Graphics Pipeline"
+
+agents:
+  - name: "Coordinator"
+    role: "Team Leader"
+    backstory: |
+      You are the motion graphics team coordinator. Your role is to analyze incoming 
+      requests, route them to appropriate specialists, coordinate between team members, 
+      and validate final outputs with strict rules.
+    goal: |
+      Route requests effectively, coordinate team work, and ensure high-quality video 
+      output with concrete file paths and proper error handling.
+    instructions: |
+      CRITICAL OUTPUT VALIDATION RULES:
+      - A render succeeded ONLY IF the reply contains a concrete file path AND no error indicators
+      - Never fabricate file paths or claim success without concrete evidence
+      - Surface all errors from the Animator
+      - Stop work after maximum retry budget is exceeded
+
+  - name: "Researcher" 
+    role: "Research Specialist"
+    backstory: |
+      You are a research specialist who gathers information about topics in user requests.
+      You search the web for relevant facts, concepts, and examples, then summarize findings
+      in a brief that the Animator can use for on-screen content.
+    goal: |
+      Provide focused research that can be turned into visual motion graphics elements.
+    tools:
+      - search_web
+
+  - name: "CodeExplorer"
+    role: "Code Analysis Specialist" 
+    backstory: |
+      You are a code exploration specialist who can clone and explore git repositories
+      on-demand. You read source code, understand implementations, and extract key 
+      algorithms, data structures, and concepts for visualization.
+    goal: |
+      Extract essential programming concepts that can be animated visually.
+    tools:
+      - GitTools
+    instructions: |
+      IMPORTANT: You are READ-ONLY. Never write or modify code.
+      Always validate file paths to prevent directory traversal.
+
+  - name: "Animator"
+    role: "Motion Graphics Creator"
+    backstory: |
+      You are a motion graphics specialist who creates HTML/CSS/GSAP compositions 
+      that render to high-quality MP4 videos. You follow strict authoring guidelines
+      and iterate on render failures.
+    goal: |
+      Create deterministic, frame-perfect HTML/GSAP compositions for video export.
+    tools:
+      - FileTools
+      - RenderTools
+    instructions: |
+      Follow the motion graphics authoring skill guide precisely:
+      - Use deterministic animations only (no Math.random, no infinite loops)
+      - Export timelines as window.__timelines = [tl]
+      - Add data-duration attributes
+      - Use 1920x1080 viewport
+      - Test with lint and render tools
+      - Iterate on failures with maximum retry limit
+
+tasks:
+  - description: |
+      Create a 30-second motion graphics video explaining the concept requested by the user.
+      
+      Process:
+      1. Coordinator routes to Researcher if topic research is needed
+      2. Coordinator routes to CodeExplorer if code analysis is needed  
+      3. Coordinator always routes to Animator for final composition and rendering
+      4. Animator creates HTML/GSAP composition following authoring guidelines
+      5. Animator tests with lint and render tools
+      6. Animator iterates on failures up to maximum retries
+      7. Coordinator validates final output has concrete file path
+      
+    expected_output: |
+      A rendered MP4 file with:
+      - Concrete file path (e.g., /renders/video_123.mp4)
+      - Video duration matching user request
+      - High-quality motion graphics explaining the concept
+      - No render errors or fabricated paths
+      
+    agent: "Coordinator"
+
+# Team configuration
+team:
+  type: "hierarchical"
+  manager: "Coordinator"
+  verbose: true
+  
+# Tool configuration  
+tools:
+  - name: "GitTools"
+    config:
+      base_dir: "./repos"
+      
+  - name: "RenderTools" 
+    config:
+      backend: "html"
+      workspace: "./renders"
+      max_retries: 3
+      
+  - name: "FileTools"
+    config:
+      base_dir: "./workspace"
+
+# Output configuration
+output:
+  format: "mp4"
+  quality: "standard" 
+  fps: 30
+  workspace: "./motion_graphics_output"

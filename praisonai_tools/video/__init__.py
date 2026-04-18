@@ -5,6 +5,7 @@ This module provides video editing capabilities including:
 - Audio transcription with word-level timestamps
 - LLM-based content analysis and edit planning
 - FFmpeg-based video rendering
+- Motion graphics creation with HTML/GSAP compositions
 
 Usage:
     # As CLI
@@ -14,6 +15,7 @@ Usage:
     
     # As library
     from praisonai_tools.video import probe_video, transcribe_video, edit_video
+    from praisonai_tools.video.motion_graphics import motion_graphics_team
 """
 
 # Lazy imports to avoid dependency issues when running standalone
@@ -46,6 +48,9 @@ def __getattr__(name):
     elif name == "VideoEditResult":
         from .pipeline import VideoEditResult
         return VideoEditResult
+    elif name == "motion_graphics":
+        from . import motion_graphics
+        return motion_graphics
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 __all__ = [
@@ -58,4 +63,5 @@ __all__ = [
     "render_video",
     "edit_video",
     "VideoEditResult",
+    "motion_graphics",
 ]
