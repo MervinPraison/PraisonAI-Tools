@@ -60,7 +60,7 @@ class TestLangExtractTool:
         
         # Mock visualization methods
         mock_lx.io.save_annotated_documents = Mock()
-        mock_lx.visualize = Mock()
+        mock_lx.visualize = Mock(return_value="<html>mock visualization</html>")
         
         text = "John Doe works at OpenAI"
         extractions = ["John Doe", "OpenAI"]
@@ -96,7 +96,7 @@ class TestLangExtractTool:
         with patch('praisonai_tools.tools.langextract_tool._create_annotated_document') as mock_create_doc:
             mock_create_doc.return_value = Mock()
             mock_lx.io.save_annotated_documents = Mock()
-            mock_lx.visualize = Mock()
+            mock_lx.visualize = Mock(return_value="<html>mock visualization</html>")
             
             with patch('webbrowser.open') as mock_open:
                 with tempfile.TemporaryDirectory() as temp_dir:
@@ -138,7 +138,7 @@ class TestLangExtractTool:
         
         # Mock visualization methods
         mock_lx.io.save_annotated_documents = Mock()
-        mock_lx.visualize = Mock()
+        mock_lx.visualize = Mock(return_value="<html>mock visualization</html>")
         
         # Create temporary file
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as temp_file:
@@ -256,7 +256,7 @@ class TestIntegration:
         mock_get_lx.return_value = mock_lx
         mock_create_doc.return_value = Mock()
         mock_lx.io.save_annotated_documents = Mock()
-        mock_lx.visualize = Mock()
+        mock_lx.visualize = Mock(return_value="<html>mock visualization</html>")
         
         # Simulate contract text with key terms
         contract_text = """
@@ -287,13 +287,13 @@ class TestIntegration:
         analysis_text = "The quarterly report shows revenue of $1.2M and profit of $300K."
         findings = ["$1.2M", "$300K", "quarterly report"]
         
-        # Without langextract installed, should get helpful error
         result = langextract_extract(
             text=analysis_text,
             extractions=findings,
-            document_id="financial-analysis"
+            document_id="financial-analysis",
+            auto_open=False,
         )
-        
-        # Should get error about missing langextract
-        assert "error" in result
-        assert "langextract not installed" in result["error"]
+
+        assert result["success"] is True
+        assert result["document_id"] == "financial-analysis"
+        assert result["extractions_count"] == len(findings)

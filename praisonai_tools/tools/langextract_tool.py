@@ -151,9 +151,26 @@ class LangExtractTool(BaseTool):
             
             output_path = Path(output_path).resolve()
             
-            # Save annotated documents and visualize
-            lx.io.save_annotated_documents([doc], str(output_path.parent / f"{document_id}.jsonl"))
-            lx.visualize(str(output_path))
+            # Save JSONL and generate HTML from it
+            import tempfile, os
+            jsonl_dir = tempfile.gettempdir()
+            jsonl_path = os.path.join(jsonl_dir, f"{document_id}.jsonl")
+            lx.io.save_annotated_documents(
+                [doc],
+                output_name=os.path.basename(jsonl_path),
+                output_dir=jsonl_dir,
+            )
+
+            html = lx.visualize(jsonl_path)
+            html_content = html.data if hasattr(html, "data") else html
+
+            output_path = Path(output_path).resolve() if output_path else Path(f"{document_id}.html").resolve()
+            output_path.write_text(html_content, encoding="utf-8")
+
+            try:
+                os.remove(jsonl_path)
+            except OSError:
+                pass
             
             result = {
                 "success": True,
