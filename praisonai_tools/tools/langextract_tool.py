@@ -67,7 +67,7 @@ def _create_annotated_document(text: str, extractions: List[str], document_id: s
     
     # Create annotated document
     return lx.data.AnnotatedDocument(
-        id=document_id,
+        document_id=document_id,
         text=text,
         intervals=intervals
     )
