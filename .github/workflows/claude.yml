@@ -3,79 +3,84 @@ name: Claude Assistant
 on:
   issue_comment:
     types: [created]
-  pull_request_review_comment:
-    types: [created]
   issues:
-    types: [assigned, labeled]
-  pull_request_review:
-    types: [submitted]
+    types: [labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: read
+  id-token: write
 
 jobs:
   claude-response:
     env:
-      ISSUE_NUMBER_RESOLVED: ${{ github.event.issue.number || github.event.pull_request.number }}
+      ISSUE_NUMBER_RESOLVED: ${{ github.event.issue.number }}
     if: |
-      (github.event.action != 'labeled' || github.event.label.name == 'claude') &&
-      (github.event_name != 'issue_comment' || contains(github.event.comment.body, '@claude')) &&
       (
-        !contains(github.actor, '[bot]') ||
-        github.actor == 'github-actions[bot]' ||
-        github.actor == 'praisonai-triage-agent[bot]'
-      ) &&
-      github.actor != 'dependabot[bot]' &&
-      github.actor != 'cursor[bot]' &&
-      github.actor != 'renovate[bot]'
+        github.event_name == 'issue_comment' &&
+        contains(github.event.comment.body, '@claude') &&
+        github.actor != 'dependabot[bot]' &&
+        github.actor != 'cursor[bot]' &&
+        github.actor != 'renovate[bot]'
+      ) || (
+        github.event_name == 'issues' &&
+        github.event.action == 'labeled' &&
+        github.event.label.name == 'claude'
+      )
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-      issues: write
-      actions: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.event.issue.pull_request && format('refs/pull/{0}/head', github.event.issue.number) || github.event.repository.default_branch }}
 
-      - uses: anthropics/claude-code-action@beta
+      - name: Run Claude Code Action
+        uses: anthropics/claude-code-action@beta
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          allowed_bots: 'praisonai-triage-agent[bot]'
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           trigger_phrase: "@claude"
           label_trigger: "claude"
+          allowed_bots: "praisonai-triage-agent[bot]"
+          timeout_minutes: "30"
           direct_prompt: |
-            You are implementing changes in the praisonai-tools repository (Python tools for PraisonAI).
+            You are implementing changes in MervinPraison/PraisonAI-Tools (Python tools for PraisonAI). Follow README.md and existing patterns under `praisonai_tools/`.
+
+            Primary scope: `praisonai_tools/`, `tests/`, `examples/`, `docs/`. Do not change `praisonaiagents` in this repo (it is not vendored here).
 
             STEP 0 — GIT & GITHUB CLI:
             git config --global user.name "github-actions[bot]"
             git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
             gh auth setup-git
 
-            STEP 1 — ISSUE:
-            Read the issue/PR context. Scope: implement or fix tools under `praisonai_tools/`.
+            STEP 1 — ISSUE / PR:
+            Read the issue (or PR) and all comments. Implement what is described with minimal, focused changes.
 
-            STEP 2 — IMPLEMENT (tool patterns):
-            - Use `praisonai_tools/tools/lumalabs_tool.py` as a structural reference where applicable
-            - BaseTool + `@tool` patterns, lazy imports for optional deps, env via constructor or os.getenv
-            - Clear errors; export new tools from `praisonai_tools/tools/__init__.py` when adding a tool
-            - Sanity check: python -c "import ast; ast.parse(open('path/to/file.py').read()); print('OK')"
-
-            STEP 3 — BRANCH (one name, reuse in STEP 5):
-            BRANCH="claude/issue-${{ env.ISSUE_NUMBER_RESOLVED }}-$(date +%Y%m%d)"
+            STEP 2 — BRANCH (single name; reuse in STEP 4):
+            BRANCH="claude/issue-${{ env.ISSUE_NUMBER_RESOLVED }}-$(date +%Y%m%d-%H%M%S)"
             git checkout -b "$BRANCH"
 
-            STEP 4 — TEST / VERIFY:
-            Run targeted tests or imports relevant to your edits.
+            STEP 3 — TEST / VERIFY:
+            Run targeted pytest or smoke checks relevant to your edits (e.g. pytest tests/unit -q).
 
-            STEP 5 — COMMIT, PUSH, OPEN PR (mandatory if you produced commits):
+            STEP 4 — COMMIT, PUSH, OPEN PR (mandatory if you produced commits):
             git add -A
-            git commit -m "fix: <short summary> (fixes #${{ env.ISSUE_NUMBER_RESOLVED }})"
+            git commit -m "feat: <short summary> (fixes #${{ env.ISSUE_NUMBER_RESOLVED }})"
             git push -u origin "$BRANCH"
-            gh pr create --base main --head "$BRANCH" --title "fix: <short title>" --body "Fixes #${{ env.ISSUE_NUMBER_RESOLVED }}"
-            Do not stop after push only. Do not ask a human to open the PR. Finish only when `gh pr create` prints a PR URL; on failure, read the error and retry after fixing (auth, duplicate PR, head branch).
+            REPO="${{ github.repository }}"
+            COUNT=$(gh pr list --repo "$REPO" --head "$BRANCH" --json number --jq 'length')
+            if [ "$COUNT" -gt 0 ]; then
+              gh pr list --repo "$REPO" --head "$BRANCH" --json url --jq '.[0].url'
+            else
+              gh pr create --repo "$REPO" --base main --head "$BRANCH" --title "feat: <short title>" --body "Fixes #${{ env.ISSUE_NUMBER_RESOLVED }}"
+            fi
+            CRITICAL: Do not stop after `git push`. You MUST complete `gh pr create` (or print the existing PR URL from the step above) and post that URL on the issue. Never ask a human to open the PR manually.
 
           allowed_tools: |
             Bash(git:*)
@@ -94,4 +99,3 @@ jobs:
             mcp__github__get_issue
             mcp__github__get_issue_comments
             mcp__github__update_issue
-          timeout_minutes: 30
