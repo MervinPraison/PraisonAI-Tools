@@ -33,5 +33,5 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: '🤖 Auto-triaging with Claude. Analyzing issue and implementing a fix...'
+              body: '@claude Read this issue (title + body) and all existing comments. Implement or fix in `praisonai_tools/` with minimal changes; follow README and existing tool patterns (lazy optional deps, clear errors). Open a PR when you have commits.\n\n🤖 Auto-triage: label `claude` was added for filtering.'
             });

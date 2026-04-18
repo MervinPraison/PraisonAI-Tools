@@ -3,8 +3,6 @@ name: Claude Assistant
 on:
   issue_comment:
     types: [created]
-  issues:
-    types: [labeled]
 
 permissions:
   contents: write
@@ -18,17 +16,11 @@ jobs:
     env:
       ISSUE_NUMBER_RESOLVED: ${{ github.event.issue.number }}
     if: |
-      (
-        github.event_name == 'issue_comment' &&
-        contains(github.event.comment.body, '@claude') &&
-        github.actor != 'dependabot[bot]' &&
-        github.actor != 'cursor[bot]' &&
-        github.actor != 'renovate[bot]'
-      ) || (
-        github.event_name == 'issues' &&
-        github.event.action == 'labeled' &&
-        github.event.label.name == 'claude'
-      )
+      github.event_name == 'issue_comment' &&
+      contains(github.event.comment.body, '@claude') &&
+      github.actor != 'dependabot[bot]' &&
+      github.actor != 'cursor[bot]' &&
+      github.actor != 'renovate[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
