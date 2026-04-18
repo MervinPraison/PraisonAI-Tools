@@ -394,6 +394,10 @@ def __getattr__(name):
         # LumaLabs
         "LumaLabsTool": "lumalabs_tool",
         "lumalabs_generate": "lumalabs_tool",
+        # Langextract
+        "LangExtractTool": "langextract_tool",
+        "langextract_extract": "langextract_tool",
+        "langextract_render_file": "langextract_tool",
 # HeyGen
         "HeyGenTool": "heygen_tool",
         "heygen_list_avatars": "heygen_tool",
@@ -874,4 +878,8 @@ __all__ = [
     "N8nWorkflowTool",
     "n8n_workflow",
     "n8n_list_workflows",
+    # Langextract Tool
+    "LangExtractTool",
+    "langextract_extract",
+    "langextract_render_file",
 ]
