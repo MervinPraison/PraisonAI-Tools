@@ -46,30 +46,40 @@ def _get_langextract():
 
 
 def _create_annotated_document(text: str, extractions: List[str], document_id: str):
-    """Create langextract AnnotatedDocument with extractions as CharIntervals."""
+    """Create langextract AnnotatedDocument with extractions as Extraction objects."""
     lx = _get_langextract()
     if not lx:
         return None
-    
-    # Find all extraction positions in the text
-    intervals = []
-    for extraction in extractions:
+
+    # Find all extraction positions and wrap as Extraction objects
+    extraction_objects = []
+    for i, extraction_text in enumerate(extractions or []):
+        if not extraction_text.strip():
+            continue
         start_pos = 0
         while True:
-            pos = text.find(extraction, start_pos)
+            pos = text.lower().find(extraction_text.lower(), start_pos)
             if pos == -1:
                 break
-            intervals.append(lx.data.CharInterval(
-                start_pos=pos,
-                end_pos=pos + len(extraction)
+            extraction_objects.append(lx.data.Extraction(
+                extraction_class=f"extraction_{i}",
+                extraction_text=extraction_text,
+                char_interval=lx.data.CharInterval(
+                    start_pos=pos,
+                    end_pos=pos + len(extraction_text),
+                ),
+                attributes={
+                    "index": i,
+                    "original_text": extraction_text,
+                    "tool": "langextract_extract",
+                },
             ))
             start_pos = pos + 1
-    
-    # Create annotated document
+
     return lx.data.AnnotatedDocument(
         document_id=document_id,
         text=text,
-        intervals=intervals
+        extractions=extraction_objects,
     )
 
 
