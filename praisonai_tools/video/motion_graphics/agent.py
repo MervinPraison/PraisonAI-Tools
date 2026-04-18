@@ -20,9 +20,10 @@ from .skill import MOTION_GRAPHICS_SKILL
 class RenderTools:
     """Tools for motion graphics rendering."""
     
-    def __init__(self, backend: RenderBackendProtocol, workspace: Path):
+    def __init__(self, backend: RenderBackendProtocol, workspace: Path, max_retries: int = 3):
         self.backend = backend
         self.workspace = workspace
+        self.max_retries = max_retries
     
     async def lint_composition(self, strict: bool = False) -> dict:
         """Lint the motion graphics composition.
@@ -46,7 +47,7 @@ class RenderTools:
         fps: int = 30,
         quality: str = "standard"
     ) -> dict:
-        """Render the motion graphics composition to MP4.
+        """Render the motion graphics composition to MP4 with bounded retries.
         
         Args:
             output_name: Output filename
@@ -64,7 +65,67 @@ class RenderTools:
             quality=quality
         )
         
+        # Direct render with bounded retries for transient failures
+        # Note: For composition authoring retries, the agent should use render_iterate 
+        # with appropriate write/lint/patch functions
         result = await self.backend.render(self.workspace, opts)
+        attempts = 1
+        
+        while not result.ok and attempts < self.max_retries:
+            # Retry for transient failures (e.g., ffmpeg timeouts)
+            result = await self.backend.render(self.workspace, opts)
+            attempts += 1
+        
+        return {
+            "ok": result.ok,
+            "output_path": str(result.output_path) if result.output_path else None,
+            "size_kb": result.size_kb,
+            "stderr": result.stderr,
+            "attempts": attempts,
+            "bytes": result.bytes_
+        }
+    
+    async def render_with_bounded_retries(
+        self,
+        write_fn,
+        patch_fn,
+        output_name: str = "video.mp4", 
+        fps: int = 30,
+        quality: str = "standard",
+        **kwargs
+    ) -> dict:
+        """Use render_iterate for full composition authoring with retries.
+        
+        Args:
+            write_fn: Function to write initial composition
+            patch_fn: Function to patch composition based on error
+            output_name: Output filename
+            fps: Frames per second  
+            quality: Quality setting
+            **kwargs: Arguments passed to write_fn
+            
+        Returns:
+            Dict with render results
+        """
+        from ._render_loop import render_iterate
+        from .protocols import RenderOpts
+        
+        opts = RenderOpts(output_name=output_name, fps=fps, quality=quality)
+        
+        async def lint_fn():
+            return await self.backend.lint(self.workspace, strict=False)
+            
+        async def render_fn():
+            return await self.backend.render(self.workspace, opts)
+        
+        result = await render_iterate(
+            write_fn=write_fn,
+            lint_fn=lint_fn,
+            render_fn=render_fn,
+            patch_fn=patch_fn,
+            max_retries=self.max_retries,
+            **kwargs
+        )
         
         return {
             "ok": result.ok,
@@ -134,7 +195,7 @@ Workspace directory: {workspace}
     
     # Create tools
     file_tools = FileTools(base_dir=str(workspace))
-    render_tools = RenderTools(render_backend, workspace)
+    render_tools = RenderTools(render_backend, workspace, max_retries)
     
     # Create agent
     agent = Agent(

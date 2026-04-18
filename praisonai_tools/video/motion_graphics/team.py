@@ -15,7 +15,6 @@ except ImportError:
     search_web = None
 
 from .agent import create_motion_graphics_agent
-from ..motion_graphics import protocols
 
 
 def motion_graphics_team(
@@ -58,6 +57,8 @@ def motion_graphics_team(
         workspace = Path(workspace)
     
     workspace.mkdir(parents=True, exist_ok=True)
+    renders_dir = workspace / "renders"
+    renders_dir.mkdir(parents=True, exist_ok=True)
     
     # Create agents
     agents = []
@@ -74,7 +75,7 @@ You are the motion graphics team coordinator. Your role is to:
 4. Return final results to users
 
 CRITICAL OUTPUT VALIDATION RULES:
-- A render succeeded ONLY IF the reply contains a concrete file path (e.g., '/renders/video_123.mp4') AND no error indicators
+- A render succeeded ONLY IF the reply contains a concrete file path under '{renders_dir}' AND no error indicators
 - Never fabricate file paths or claim success without concrete evidence
 - Surface all errors from the Animator
 - Stop work after maximum retry budget is exceeded
@@ -137,16 +138,17 @@ Focus on extracting the essential concepts that can be animated visually.
     # Animator - the core specialist
     animator = create_motion_graphics_agent(
         backend=backend,
-        workspace=workspace / "animations",
+        workspace=renders_dir,
         llm=llm
     )
     animator.name = "animator"
     agents.append(animator)
     
-    # Create team with coordinator as leader
+    # Create team with coordinator as manager via hierarchical process
     team = AgentTeam(
         agents=agents,
-        leader=coordinator,
+        process="hierarchical",
+        manager_llm=llm,
         **team_kwargs
     )
     

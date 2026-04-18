@@ -447,17 +447,7 @@ class GitTools:
         if ".." in safe_path:
             raise ValueError("Invalid file path")
         
-        # Additional safety: resolve path and check it doesn't escape
-        try:
-            from pathlib import Path
-            resolved = Path(safe_path).resolve()
-            # If it tries to go outside current dir, reject
-            if str(resolved).startswith("/") and not str(resolved).startswith(str(Path.cwd())):
-                # This is an absolute path that escapes - but we allow relative paths
-                pass
-        except Exception:
-            # If path resolution fails, reject
-            raise ValueError("Invalid file path")
+        # Basic path validation - above checks already prevent most traversal attacks
         
         return safe_path
     

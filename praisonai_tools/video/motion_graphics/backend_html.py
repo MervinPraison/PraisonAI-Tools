@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -36,7 +37,7 @@ class HtmlRenderBackend:
     - Subprocess timeout limits
     """
     
-    def __init__(self):
+    def __init__(self, base_dir: Optional[Path] = None):
         if async_playwright is None:
             raise ImportError(
                 "Playwright not installed. Install with: pip install playwright"
@@ -45,6 +46,13 @@ class HtmlRenderBackend:
             raise ImportError(
                 "imageio-ffmpeg not installed. Install with: pip install imageio-ffmpeg"
             )
+        
+        # Set allowed base directory for workspace safety
+        if base_dir is None:
+            # Default to current working directory and temp directory as allowed roots
+            self._allowed_base = Path.cwd()
+        else:
+            self._allowed_base = Path(base_dir).resolve()
     
     async def lint(self, workspace: Path, strict: bool = False) -> LintResult:
         """Lint HTML composition for common issues."""
@@ -128,10 +136,29 @@ class HtmlRenderBackend:
     def _is_safe_workspace(self, workspace: Path) -> bool:
         """Check if workspace path is safe (prevents path traversal)."""
         try:
-            workspace_abs = workspace.resolve()
-            # Basic check - workspace should be under a temp directory or user's project
-            return True  # Add more sophisticated checks as needed
-        except Exception:
+            workspace_abs = workspace.resolve(strict=True)
+            allowed_base_abs = self._allowed_base.resolve()
+            
+            # Also allow temp directories
+            temp_base = Path(tempfile.gettempdir()).resolve()
+            
+            # Check if workspace is under allowed base or temp directory
+            try:
+                # Check if workspace is relative to allowed base
+                workspace_abs.relative_to(allowed_base_abs)
+                return True
+            except ValueError:
+                pass
+                
+            try:
+                # Check if workspace is relative to temp directory
+                workspace_abs.relative_to(temp_base)
+                return True
+            except ValueError:
+                pass
+                
+            return False
+        except (OSError, ValueError):
             return False
     
     async def _render_with_playwright(self, workspace: Path, opts: RenderOpts) -> RenderResult:
