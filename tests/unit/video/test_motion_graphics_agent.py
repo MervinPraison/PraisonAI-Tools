@@ -24,10 +24,23 @@ class MockAgent:
 
 
 class MockFileTools:
-    """Mock FileTools for testing."""
-    
+    """Mock FileTools for testing.
+
+    Exposes the same method surface as `praisonaiagents.tools.file_tools.FileTools`
+    so the factory can reference bound methods as tools.
+    """
+
     def __init__(self, base_dir=""):
         self.base_dir = base_dir
+
+    def read_file(self, filepath, encoding="utf-8"):
+        return ""
+
+    def write_file(self, filepath, content, encoding="utf-8"):
+        return True
+
+    def list_files(self, directory=".", pattern="*"):
+        return []
 
 
 class MockBackend:
@@ -115,7 +128,13 @@ class TestCreateMotionGraphicsAgent:
             
             assert isinstance(agent, MockAgent)
             assert agent.llm == "claude-sonnet-4"
-            assert len(agent.tools) == 2  # FileTools and RenderTools
+            # Tools are now exposed as individual callables (bound methods +
+            # sync render wrappers): read_file, write_file, list_files,
+            # lint_composition, render_composition.
+            assert len(agent.tools) == 5
+            tool_names = {getattr(t, "__name__", "") for t in agent.tools}
+            assert {"read_file", "write_file", "list_files",
+                    "lint_composition", "render_composition"} <= tool_names
             assert "motion graphics specialist" in agent.instructions.lower()
     
     @patch('praisonai_tools.video.motion_graphics.agent.Agent', MockAgent)
@@ -207,14 +226,10 @@ class TestCreateMotionGraphicsAgent:
         with tempfile.TemporaryDirectory() as tmpdir:
             agent = create_motion_graphics_agent(workspace=tmpdir)
             
-            assert len(agent.tools) == 2
-            
-            # Check FileTools
-            file_tools = agent.tools[0]
-            assert isinstance(file_tools, MockFileTools)
-            assert file_tools.base_dir == str(tmpdir)
-            
-            # Check RenderTools
-            render_tools = agent.tools[1]
-            assert isinstance(render_tools, RenderTools)
-            assert render_tools.workspace == Path(tmpdir)
+            # Tools are now exposed as individual callables (bound methods +
+            # sync render wrappers): read_file, write_file, list_files,
+            # lint_composition, render_composition.
+            assert len(agent.tools) == 5
+            tool_names = {getattr(t, "__name__", "") for t in agent.tools}
+            assert {"read_file", "write_file", "list_files",
+                    "lint_composition", "render_composition"} <= tool_names
