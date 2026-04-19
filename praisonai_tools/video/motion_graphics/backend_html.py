@@ -231,9 +231,15 @@ class HtmlRenderBackend:
                         # Wait a bit for animations to settle
                         await page.wait_for_timeout(50)
                         
-                        # Capture frame
+                        # Capture frame. Clip to the fixed 1920x1080 viewport —
+                        # `full_page=True` can produce odd-height images when
+                        # content overflows, which libx264 rejects (height must
+                        # be divisible by 2).
                         frame_path = temp_path / f"frame_{frame:06d}.png"
-                        await page.screenshot(path=str(frame_path), full_page=True)
+                        await page.screenshot(
+                            path=str(frame_path),
+                            clip={"x": 0, "y": 0, "width": 1920, "height": 1080},
+                        )
                         frame_paths.append(frame_path)
                     
                     # Encode to MP4 using FFmpeg

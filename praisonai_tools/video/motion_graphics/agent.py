@@ -1,5 +1,6 @@
 """Motion graphics agent factory."""
 
+import asyncio
 import tempfile
 from pathlib import Path
 from typing import Union, Any
@@ -193,16 +194,47 @@ CRITICAL OUTPUT VALIDATION:
 Workspace directory: {workspace}
 """
     
-    # Create tools.
-    # FileTools is a utility class with bound methods; pass the instance so the
-    # Agent can register read_file/write_file/list_files as callable tools.
+    # Create tools. Expose bound methods individually so the Agent (which
+    # treats each tool entry as a callable) can register them across all LLM
+    # adapters (OpenAI, Anthropic, LiteLLM). Passing class instances is not
+    # portable — the OpenAI adapter logs "Tool ... not recognized".
     file_tools = FileTools()
     render_tools = RenderTools(render_backend, workspace, max_retries)
-    
+
+    # Sync wrappers around the async render tools — the Agent's sync call path
+    # does not await coroutines automatically and would otherwise fail with
+    # "Object of type coroutine is not JSON serializable".
+    def lint_composition(strict: bool = False) -> dict:
+        """Lint the motion graphics composition for common issues."""
+        return asyncio.run(render_tools.lint_composition(strict=strict))
+
+    def render_composition(
+        output_name: str = "video.mp4",
+        fps: int = 30,
+        quality: str = "standard",
+    ) -> dict:
+        """Render the motion graphics composition to MP4."""
+        result = asyncio.run(
+            render_tools.render_composition(
+                output_name=output_name, fps=fps, quality=quality
+            )
+        )
+        # Strip the raw bytes — they are not JSON-serializable for the next
+        # LLM turn and the file is already on disk at result["output_path"].
+        return {k: v for k, v in result.items() if k != "bytes"}
+
+    tool_callables = [
+        file_tools.read_file,
+        file_tools.write_file,
+        file_tools.list_files,
+        lint_composition,
+        render_composition,
+    ]
+
     # Create agent
     agent = Agent(
         instructions=base_instructions + "\n\n" + MOTION_GRAPHICS_SKILL,
-        tools=[file_tools, render_tools],
+        tools=tool_callables,
         llm=llm,
         **agent_kwargs
     )
