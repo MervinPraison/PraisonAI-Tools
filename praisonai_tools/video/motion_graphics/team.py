@@ -6,9 +6,11 @@ from typing import Union, Any, Optional
 
 try:
     from praisonaiagents import Agent, AgentTeam
-    from praisonaiagents.tools import FileTools, search_web
-except ImportError:
-    # Fallback for development
+    from praisonaiagents.tools.file_tools import FileTools
+    # search_web is lazily resolved via praisonaiagents.tools.__getattr__
+    from praisonaiagents.tools import search_web
+except (ImportError, AttributeError):
+    # Fallback for development / partial installs
     Agent = None
     AgentTeam = None
     FileTools = None
