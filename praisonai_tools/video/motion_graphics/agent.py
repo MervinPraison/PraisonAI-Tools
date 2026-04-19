@@ -6,7 +6,7 @@ from typing import Union, Any
 
 try:
     from praisonaiagents import Agent
-    from praisonaiagents.tools import FileTools
+    from praisonaiagents.tools.file_tools import FileTools
 except ImportError:
     # Fallback for development
     Agent = None
@@ -193,8 +193,10 @@ CRITICAL OUTPUT VALIDATION:
 Workspace directory: {workspace}
 """
     
-    # Create tools
-    file_tools = FileTools(base_dir=str(workspace))
+    # Create tools.
+    # FileTools is a utility class with bound methods; pass the instance so the
+    # Agent can register read_file/write_file/list_files as callable tools.
+    file_tools = FileTools()
     render_tools = RenderTools(render_backend, workspace, max_retries)
     
     # Create agent
