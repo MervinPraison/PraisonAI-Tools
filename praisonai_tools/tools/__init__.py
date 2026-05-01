@@ -104,6 +104,11 @@ def __getattr__(name):
         # ArXiv
         "ArxivTool": "arxiv_tool",
         "arxiv_search": "arxiv_tool",
+        # SwarmScore
+        "SwarmScoreTool": "swarmscore_tool",
+        "load_swarmscore_by_slug": "swarmscore_tool",
+        "verify_swarmscore_freshness": "swarmscore_tool",
+        "get_agent_discovery_manifest": "swarmscore_tool",
         # Calculator
         "CalculatorTool": "calculator_tool",
         "calculate": "calculator_tool",
