@@ -638,20 +638,22 @@ air = weather.get_air_quality("Tokyo")
 | TTSTool | `OPENAI_API_KEY` or `ELEVENLABS_API_KEY` |
 | YouTubeTool | `YOUTUBE_API_KEY` |
 | WeatherTool | `OPENWEATHER_API_KEY` |
+| SwarmScoreTool | None (uses public API) |
 
 ### Using with PraisonAI Agents
 
 ```python
 from praisonaiagents import Agent
-from praisonai_tools import EmailTool, SlackTool, GitHubTool, WeatherTool
+from praisonai_tools import EmailTool, SlackTool, GitHubTool, WeatherTool, SwarmScoreTool
 
 agent = Agent(
-    instructions="You are a helpful assistant with access to email, slack, github, and weather",
+    instructions="You are a helpful assistant with access to email, slack, github, weather, and trust ratings",
     tools=[
         EmailTool(provider="gmail"),
         SlackTool(),
         GitHubTool(),
         WeatherTool(),
+        SwarmScoreTool(),
     ]
 )
 
