@@ -79,7 +79,7 @@ class TestMotionGraphicsTeam:
             # Check code explorer
             code_explorer = team.agents[2]
             assert code_explorer.name == "code_explorer"
-            assert "code exploration specialist" in researcher.instructions.lower()
+            assert "code exploration specialist" in code_explorer.instructions.lower()
             
             # Check animator
             animator = team.agents[3]
