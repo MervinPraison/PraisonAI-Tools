@@ -47,21 +47,30 @@ jobs:
             Primary scope: `praisonai_tools/`, `tests/`, `examples/`, `docs/`. Do not change `praisonaiagents` in this repo (it is not vendored here).
 
             STEP 0 — GIT & GITHUB CLI:
-            git config --global user.name "github-actions[bot]"
-            git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git config --global user.name "MervinPraison"
+            git config --global user.email "454862+MervinPraison@users.noreply.github.com"
             gh auth setup-git
 
             STEP 1 — ISSUE / PR:
             Read the issue (or PR) and all comments. Implement what is described with minimal, focused changes.
 
-            STEP 2 — BRANCH (single name; reuse in STEP 4):
+            STEP 2 — LAYER VALIDATION (mandatory before coding):
+            This repo IS the **Tools** layer (`praisonai-tools`). Agent-callable integrations belong here.
+            - **Implement here:** third-party API tools, optional/heavy deps, vertical integrations
+            - **Route to PraisonAI (core):** new protocols, agent runtime, built-in tools → comment and link MervinPraison/PraisonAI issue
+            - **Route to PraisonAI (wrapper):** CLI/YAML wiring only → MervinPraison/PraisonAI
+            - **Route to PraisonAI-Plugins:** lifecycle hooks, guardrails, policies → MervinPraison/PraisonAI-Plugins
+            - **Reject:** duplicating tools already in `praisonaiagents.tools` (Tavily, DuckDuckGo, etc.)
+            If the issue belongs in another layer, explain why and do not implement here.
+
+            STEP 3 — BRANCH (single name; reuse in STEP 5):
             BRANCH="claude/issue-${{ env.ISSUE_NUMBER_RESOLVED }}-$(date +%Y%m%d-%H%M%S)"
             git checkout -b "$BRANCH"
 
-            STEP 3 — TEST / VERIFY:
+            STEP 4 — TEST / VERIFY:
             Run targeted pytest or smoke checks relevant to your edits (e.g. pytest tests/unit -q).
 
-            STEP 4 — COMMIT, PUSH, OPEN PR (mandatory if you produced commits):
+            STEP 5 — COMMIT, PUSH, OPEN PR (mandatory if you produced commits):
             git add -A
             git commit -m "feat: <short summary> (fixes #${{ env.ISSUE_NUMBER_RESOLVED }})"
             git push -u origin "$BRANCH"
