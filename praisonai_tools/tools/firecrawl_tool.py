@@ -38,10 +38,12 @@ class FirecrawlTool(BaseTool):
             if not self.api_key:
                 raise ValueError("FIRECRAWL_API_KEY is required")
             try:
-                from firecrawl import FirecrawlApp
+                from firecrawl import Firecrawl
             except ImportError:
-                raise ImportError("firecrawl-py not installed. Install with: pip install firecrawl-py")
-            self._client = FirecrawlApp(api_key=self.api_key)
+                raise ImportError(
+                    "firecrawl-py>=4 not installed. Install with: pip install 'firecrawl-py>=4'"
+                )
+            self._client = Firecrawl(api_key=self.api_key)
         return self._client
     
     def run(
@@ -68,16 +70,28 @@ class FirecrawlTool(BaseTool):
             return {"error": "FIRECRAWL_API_KEY not configured"}
         
         try:
-            params = {}
+            # firecrawl-py v2 (>=4): kwargs instead of a params dict; returns a
+            # typed Document, not a dict.
+            kwargs: Dict[str, Any] = {}
             if formats:
-                params["formats"] = formats
-            
-            result = self.client.scrape_url(url, params=params if params else None)
-            
+                kwargs["formats"] = formats
+
+            result = self.client.scrape(url, **kwargs)
+
+            # v2 returns a Document object; metadata is a typed DocumentMetadata.
+            # Coerce to a plain dict to keep this tool's return shape stable.
+            metadata = getattr(result, "metadata", None)
+            if metadata is not None and hasattr(metadata, "model_dump"):
+                metadata = metadata.model_dump(exclude_none=True)
+            elif metadata is None:
+                metadata = {}
+
+            markdown = getattr(result, "markdown", None) or ""
+
             return {
                 "url": url,
-                "markdown": result.get("markdown", "")[:5000],
-                "metadata": result.get("metadata", {}),
+                "markdown": markdown[:5000],
+                "metadata": metadata,
             }
         except Exception as e:
             logger.error(f"Firecrawl scrape error: {e}")
@@ -92,18 +106,23 @@ class FirecrawlTool(BaseTool):
             return [{"error": "FIRECRAWL_API_KEY not configured"}]
         
         try:
-            result = self.client.crawl_url(
+            # firecrawl-py v2 (>=4): kwargs instead of a params dict; returns a
+            # typed CrawlJob whose `.data` is a list of Document objects.
+            result = self.client.crawl(
                 url,
-                params={"limit": limit},
+                limit=limit,
                 poll_interval=5,
             )
-            
+
+            data = getattr(result, "data", None) or []
+
             pages = []
-            for page in result.get("data", [])[:limit]:
+            for page in data[:limit]:
+                metadata = getattr(page, "metadata", None)
                 pages.append({
-                    "url": page.get("metadata", {}).get("sourceURL"),
-                    "title": page.get("metadata", {}).get("title"),
-                    "markdown": page.get("markdown", "")[:2000],
+                    "url": getattr(metadata, "source_url", None),
+                    "title": getattr(metadata, "title", None),
+                    "markdown": (getattr(page, "markdown", None) or "")[:2000],
                 })
             return pages
         except Exception as e:
