@@ -537,6 +537,11 @@ def __getattr__(name):
         "N8nWorkflowTool": "praisonai_tools.n8n.n8n_workflow",
         "n8n_workflow": "praisonai_tools.n8n.n8n_workflow",
         "n8n_list_workflows": "praisonai_tools.n8n.n8n_workflow",
+        # NEXUS Prediction Market Tool
+        "NexusPredictionMarketTool": "nexus_prediction_market_tool",
+        "nexus_prediction_market_tool": "nexus_prediction_market_tool",
+        "get_market_data": "nexus_prediction_market_tool",
+        "check_arbitrage_opportunities": "nexus_prediction_market_tool",
     }
 
     if name in tool_map:
@@ -882,4 +887,9 @@ __all__ = [
     "LangExtractTool",
     "langextract_extract",
     "langextract_render_file",
+    # NEXUS Prediction Market Tool
+    "NexusPredictionMarketTool",
+    "nexus_prediction_market_tool",
+    "get_market_data",
+    "check_arbitrage_opportunities",
 ]
