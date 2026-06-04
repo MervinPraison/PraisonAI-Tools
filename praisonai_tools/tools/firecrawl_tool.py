@@ -25,7 +25,7 @@ class FirecrawlTool(BaseTool):
     """Tool for web scraping using Firecrawl."""
     
     name = "firecrawl"
-    description = "Scrape and crawl websites using Firecrawl."
+    description = "Scrape, crawl, and search the web using Firecrawl."
     
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or os.getenv("FIRECRAWL_API_KEY")
@@ -58,6 +58,8 @@ class FirecrawlTool(BaseTool):
             return self.scrape(url=url, **kwargs)
         elif action == "crawl":
             return self.crawl(url=url, **kwargs)
+        elif action == "search":
+            return self.search(query=kwargs.get("query") or url, limit=kwargs.get("limit", 5))
         else:
             return {"error": f"Unknown action: {action}"}
     
@@ -128,8 +130,40 @@ class FirecrawlTool(BaseTool):
         except Exception as e:
             logger.error(f"Firecrawl crawl error: {e}")
             return [{"error": str(e)}]
+    
+    def search(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """Search the web and return results."""
+        if not query:
+            return [{"error": "query is required"}]
+        
+        if not self.api_key:
+            return [{"error": "FIRECRAWL_API_KEY not configured"}]
+        
+        try:
+            # firecrawl-py v2 returns a typed SearchData object whose results are
+            # grouped by source; read the web results and coerce to plain dicts.
+            result = self.client.search(query, limit=limit)
+            
+            web = getattr(result, "web", None) or []
+            results = []
+            for item in web[:limit]:
+                results.append({
+                    "url": getattr(item, "url", None),
+                    "title": getattr(item, "title", None),
+                    "description": getattr(item, "description", None),
+                    "markdown": (getattr(item, "markdown", None) or "")[:2000],
+                })
+            return results
+        except Exception as e:
+            logger.error(f"Firecrawl search error: {e}")
+            return [{"error": str(e)}]
 
 
 def firecrawl_scrape(url: str) -> Dict[str, Any]:
     """Scrape URL with Firecrawl."""
     return FirecrawlTool().scrape(url=url)
+
+
+def firecrawl_search(query: str, limit: int = 5) -> List[Dict[str, Any]]:
+    """Search the web with Firecrawl."""
+    return FirecrawlTool().search(query=query, limit=limit)
