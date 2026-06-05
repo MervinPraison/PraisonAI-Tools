@@ -108,6 +108,14 @@ class FirecrawlTool(BaseTool):
             return [{"error": "FIRECRAWL_API_KEY not configured"}]
         
         try:
+            # `limit` may arrive as a string (e.g. "10") or None when invoked by
+            # an LLM/agent; coerce to int so the SDK call and `data[:limit]` slice
+            # below don't raise TypeError.
+            try:
+                limit = int(limit) if limit is not None else 10
+            except (ValueError, TypeError):
+                limit = 10
+
             # firecrawl-py v2 (>=4): kwargs instead of a params dict; returns a
             # typed CrawlJob whose `.data` is a list of Document objects.
             result = self.client.crawl(
@@ -140,6 +148,13 @@ class FirecrawlTool(BaseTool):
             return [{"error": "FIRECRAWL_API_KEY not configured"}]
         
         try:
+            # `limit` may arrive as a string or None from an LLM/agent; coerce to
+            # int so the SDK call and `web[:limit]` slice below don't raise.
+            try:
+                limit = int(limit) if limit is not None else 5
+            except (ValueError, TypeError):
+                limit = 5
+
             # firecrawl-py v2 returns a typed SearchData object whose results are
             # grouped by source; read the web results and coerce to plain dicts.
             result = self.client.search(query, limit=limit)
