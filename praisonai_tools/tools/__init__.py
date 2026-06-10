@@ -537,6 +537,11 @@ def __getattr__(name):
         "N8nWorkflowTool": "praisonai_tools.n8n.n8n_workflow",
         "n8n_workflow": "praisonai_tools.n8n.n8n_workflow",
         "n8n_list_workflows": "praisonai_tools.n8n.n8n_workflow",
+        # Inkog Security Tool
+        "InkogTool": "inkog_tool",
+        "scan_agent_code": "inkog_tool",
+        "scan_skill_package": "inkog_tool",
+        "scan_mcp_server": "inkog_tool",
     }
 
     if name in tool_map:
@@ -882,4 +887,9 @@ __all__ = [
     "LangExtractTool",
     "langextract_extract",
     "langextract_render_file",
+    # Inkog Security Tool
+    "InkogTool",
+    "scan_agent_code", 
+    "scan_skill_package",
+    "scan_mcp_server",
 ]
