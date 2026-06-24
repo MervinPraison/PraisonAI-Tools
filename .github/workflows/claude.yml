@@ -18,17 +18,79 @@ jobs:
     if: |
       github.event_name == 'issue_comment' &&
       contains(github.event.comment.body, '@claude') &&
+      (
+        !contains(github.actor, '[bot]') ||
+        github.actor == 'github-actions[bot]' ||
+        github.actor == 'praisonai-triage-agent[bot]'
+      ) &&
       github.actor != 'dependabot[bot]' &&
       github.actor != 'cursor[bot]' &&
       github.actor != 'renovate[bot]'
     runs-on: ubuntu-latest
     steps:
+      - name: Check for Fork PR
+        id: check_fork
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const isPR = context.payload.issue && context.payload.issue.pull_request;
+            if (!isPR) {
+              core.setOutput('is_pr', 'false');
+              core.setOutput('is_fork', 'false');
+              core.setOutput('merge_state', '');
+              return;
+            }
+            const prNumber = context.payload.issue.number;
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            });
+            let mergeState = '';
+            try {
+              const gql = await github.graphql(
+                `query($owner: String!, $repo: String!, $number: Int!) {
+                  repository(owner: $owner, name: $repo) {
+                    pullRequest(number: $number) { mergeStateStatus }
+                  }
+                }`,
+                { owner: context.repo.owner, repo: context.repo.repo, number: prNumber }
+              );
+              mergeState = (gql.repository.pullRequest.mergeStateStatus || '').toUpperCase();
+            } catch (e) {
+              core.warning(`GraphQL mergeStateStatus failed: ${e.message}`);
+            }
+            if (!mergeState) {
+              mergeState = (pr.data.mergeable_state || pr.data.merge_state_status || '').toUpperCase();
+            }
+            core.setOutput('is_pr', 'true');
+            core.setOutput('pr_number', String(prNumber));
+            core.setOutput('pr_branch', pr.data.head.ref);
+            core.setOutput('head_repo', pr.data.head.repo?.full_name || '');
+            core.setOutput('merge_state', mergeState);
+            const baseRepo = `${context.repo.owner}/${context.repo.repo}`;
+            if (pr.data.head.repo && pr.data.head.repo.full_name !== baseRepo) {
+              core.setOutput('is_fork', 'true');
+              return;
+            }
+            core.setOutput('is_fork', 'false');
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
-          ref: ${{ github.event.issue.pull_request && format('refs/pull/{0}/head', github.event.issue.number) || github.event.repository.default_branch }}
+          ref: ${{ steps.check_fork.outputs.is_pr == 'true' && format('refs/pull/{0}/head', steps.check_fork.outputs.pr_number) || github.event.repository.default_branch }}
+
+      - name: Fetch PR branch
+        if: steps.check_fork.outputs.is_pr == 'true' && steps.check_fork.outputs.is_fork != 'true'
+        env:
+          PR_BRANCH: ${{ steps.check_fork.outputs.pr_branch }}
+          PR_NUMBER: ${{ steps.check_fork.outputs.pr_number }}
+        run: |
+          git fetch origin "pull/${PR_NUMBER}/head:${PR_BRANCH}"
+          git checkout "${PR_BRANCH}"
+          git fetch origin main
 
       - name: Run Claude Code Action
         uses: anthropics/claude-code-action@beta
@@ -37,11 +99,14 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          model: claude-opus-4-8
           trigger_phrase: "@claude"
           label_trigger: "claude"
           allowed_bots: "praisonai-triage-agent[bot]"
           timeout_minutes: "30"
           direct_prompt: |
+            ${{ steps.check_fork.outputs.is_fork == 'true' && 'CRITICAL: FORK PR — comment only, do not push.\n\n' || (steps.check_fork.outputs.is_pr == 'true' && 'NOTE: Internal PR on MervinPraison/PraisonAI-Tools — you may push to this branch.\n\n' || '') }}
+            ${{ steps.check_fork.outputs.is_pr == 'true' && format('CONTEXT: PR #{0} on branch {1}. merge_state={2}.\n\n', steps.check_fork.outputs.pr_number, steps.check_fork.outputs.pr_branch, steps.check_fork.outputs.merge_state) || '' }}
             You are implementing changes in MervinPraison/PraisonAI-Tools (Python tools for PraisonAI). Follow README.md and existing patterns under `praisonai_tools/`.
 
             Primary scope: `praisonai_tools/`, `tests/`, `examples/`, `docs/`. Do not change `praisonaiagents` in this repo (it is not vendored here).
@@ -63,25 +128,14 @@ jobs:
             - **Reject:** duplicating tools already in `praisonaiagents.tools` (Tavily, DuckDuckGo, etc.)
             If the issue belongs in another layer, explain why and do not implement here.
 
-            STEP 3 — BRANCH (single name; reuse in STEP 5):
-            BRANCH="claude/issue-${{ env.ISSUE_NUMBER_RESOLVED }}-$(date +%Y%m%d-%H%M%S)"
-            git checkout -b "$BRANCH"
+            ${{ steps.check_fork.outputs.is_pr == 'true' && steps.check_fork.outputs.is_fork != 'true' && steps.check_fork.outputs.merge_state == 'DIRTY' && format('STEP 3 — RESOLVE MERGE CONFLICTS ON PR (branch: {0}, PR #{1}):\n- DO NOT create a new branch or PR\n- git fetch origin main && git rebase origin/main\n- Resolve conflicts: keep this PR intent, merge in main newer logic\n- git add -A && git rebase --continue (repeat until done)\n- git push --force-with-lease origin {0}\n- Run targeted pytest on changed paths\n- Comment files resolved and what you skipped\n', steps.check_fork.outputs.pr_branch, steps.check_fork.outputs.pr_number) || '' }}
+            ${{ steps.check_fork.outputs.is_pr == 'true' && steps.check_fork.outputs.is_fork != 'true' && steps.check_fork.outputs.merge_state != 'DIRTY' && format('STEP 3 — IMPLEMENT ON EXISTING PR (branch: {0}, PR #{1}):\n- DO NOT create a new branch or PR\n- git checkout {0}\n- Implement minimal, focused fixes\n- Commit and push: git push origin {0}\n', steps.check_fork.outputs.pr_branch, steps.check_fork.outputs.pr_number) || '' }}
+            ${{ steps.check_fork.outputs.is_pr != 'true' && 'STEP 3 — BRANCH (single name; reuse in STEP 5):\nBRANCH="claude/issue-${{ env.ISSUE_NUMBER_RESOLVED }}-$(date +%Y%m%d-%H%M%S)"\ngit checkout -b "$BRANCH"\n' || '' }}
 
             STEP 4 — TEST / VERIFY:
             Run targeted pytest or smoke checks relevant to your edits (e.g. pytest tests/unit -q).
 
-            STEP 5 — COMMIT, PUSH, OPEN PR (mandatory if you produced commits):
-            git add -A
-            git commit -m "feat: <short summary> (fixes #${{ env.ISSUE_NUMBER_RESOLVED }})"
-            git push -u origin "$BRANCH"
-            REPO="${{ github.repository }}"
-            COUNT=$(gh pr list --repo "$REPO" --head "$BRANCH" --json number --jq 'length')
-            if [ "$COUNT" -gt 0 ]; then
-              gh pr list --repo "$REPO" --head "$BRANCH" --json url --jq '.[0].url'
-            else
-              gh pr create --repo "$REPO" --base main --head "$BRANCH" --title "feat: <short title>" --body "Fixes #${{ env.ISSUE_NUMBER_RESOLVED }}"
-            fi
-            CRITICAL: Do not stop after `git push`. You MUST complete `gh pr create` (or print the existing PR URL from the step above) and post that URL on the issue. Never ask a human to open the PR manually.
+            ${{ steps.check_fork.outputs.is_pr == 'true' && 'STEP 5 — SKIP: Already on an open PR. Do NOT run gh pr create.\n' || 'STEP 5 — COMMIT, PUSH, OPEN PR (mandatory if you produced commits):\ngit add -A\ngit commit -m "feat: <short summary> (fixes #${{ env.ISSUE_NUMBER_RESOLVED }})"\ngit push -u origin "$BRANCH"\nREPO="${{ github.repository }}"\nCOUNT=$(gh pr list --repo "$REPO" --head "$BRANCH" --json number --jq \'length\')\nif [ "$COUNT" -gt 0 ]; then\n  gh pr list --repo "$REPO" --head "$BRANCH" --json url --jq \'.[0].url\'\nelse\n  gh pr create --repo "$REPO" --base main --head "$BRANCH" --title "feat: <short title>" --body "Fixes #${{ env.ISSUE_NUMBER_RESOLVED }}"\nfi\nCRITICAL: Do not stop after `git push`. You MUST complete `gh pr create` (or print the existing PR URL from the step above) and post that URL on the issue. Never ask a human to open the PR manually.\n' }}
 
           allowed_tools: |
             Bash(git:*)
