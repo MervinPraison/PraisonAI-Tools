@@ -117,6 +117,7 @@ def __getattr__(name):
         # Firecrawl
         "FirecrawlTool": "firecrawl_tool",
         "firecrawl_scrape": "firecrawl_tool",
+        "firecrawl_search": "firecrawl_tool",
         # Serper
         "SerperTool": "serper_tool",
         "serper_search": "serper_tool",
@@ -659,6 +660,7 @@ __all__ = [
     # Firecrawl Tool
     "FirecrawlTool",
     "firecrawl_scrape",
+    "firecrawl_search",
     # Serper Tool
     "SerperTool",
     "serper_search",
