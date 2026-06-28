@@ -146,7 +146,7 @@ jobs:
             STEP 4 — TEST / VERIFY:
             Run targeted pytest or smoke checks relevant to your edits (e.g. pytest tests/unit -q).
 
-            ${{ steps.check_fork.outputs.is_pr == 'true' && 'STEP 5 — SKIP: Already on an open PR. Do NOT run gh pr create.\n' || 'STEP 5 — COMMIT, PUSH, OPEN PR (mandatory if you produced commits):\ngit add -A\ngit commit -m "feat: <short summary> (fixes #${{ env.ISSUE_NUMBER_RESOLVED }})"\ngit push -u origin "$BRANCH"\nREPO="${{ github.repository }}"\nCOUNT=$(gh pr list --repo "$REPO" --head "$BRANCH" --json number --jq \'length\')\nif [ "$COUNT" -gt 0 ]; then\n  gh pr list --repo "$REPO" --head "$BRANCH" --json url --jq \'.[0].url\'\nelse\n  gh pr create --repo "$REPO" --base main --head "$BRANCH" --title "feat: <short title>" --body "Fixes #${{ env.ISSUE_NUMBER_RESOLVED }}"\nfi\nCRITICAL: Do not stop after `git push`. You MUST complete `gh pr create` (or print the existing PR URL from the step above) and post that URL on the issue. Never ask a human to open the PR manually.\n' }}
+            ${{ steps.check_fork.outputs.is_pr == 'true' && 'STEP 5 — SKIP: Already on an open PR. Do NOT run gh pr create.\n' || format('STEP 5 — COMMIT, PUSH, OPEN PR (mandatory if you produced commits):\ngit add -A\ngit commit -m "feat: <short summary> (fixes #{0})"\ngit push -u origin "$BRANCH"\ngh pr create --repo "{1}" --base main --head "$BRANCH" --title "feat: <short title>" --body "Fixes #{0}"\nCRITICAL: Do not stop after `git push`. You MUST complete `gh pr create` and post the PR URL on the issue.\n', env.ISSUE_NUMBER_RESOLVED, github.repository) }}
 
           allowed_tools: |
             Bash(git:*)
