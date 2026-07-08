@@ -1,7 +1,7 @@
 """Tests for channel tools (Signal, LINE, iMessage)."""
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 class TestSignalTool:

@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 # Import shared data classes from generator
 try:
@@ -581,7 +581,7 @@ class RustDocParser:
         impl_pattern = r'impl(?:<[^>]*>)?\s+(?:(\w+)\s+for\s+)?(\w+)(?:<[^>]*>)?\s*\{'
         
         for match in re.finditer(impl_pattern, content):
-            trait_name = match.group(1)  # For trait impls
+            match.group(1)  # For trait impls
             struct_name = match.group(2)
             
             # Find the matching closing brace using brace counting

@@ -12,7 +12,6 @@ df = query_db("SELECT * FROM my_table")
 import logging
 from typing import List, Dict, Any, Optional, Union, TYPE_CHECKING
 from importlib import util
-import json
 import re
 
 if TYPE_CHECKING:

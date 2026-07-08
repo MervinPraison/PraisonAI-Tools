@@ -3,7 +3,7 @@
 import pytest
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 from praisonai_tools.video.motion_graphics.team import motion_graphics_team
 

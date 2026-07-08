@@ -249,7 +249,7 @@ class SignalTool(BaseTool):
             params["account"] = self.account
         
         # Add target parameters
-        target_type = target.pop("type")
+        target.pop("type")
         params.update(target)
         
         # Handle attachments

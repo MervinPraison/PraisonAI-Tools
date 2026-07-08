@@ -1,9 +1,8 @@
 """Tests for ObservabilityManager."""
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from praisonai_tools.observability.manager import ObservabilityManager, _NoOpContextManager
-from praisonai_tools.observability.config import ObservabilityConfig
 from praisonai_tools.observability.base import BaseObservabilityProvider, SpanKind
 
 

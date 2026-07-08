@@ -19,7 +19,6 @@ Dependencies:
 """
 
 import logging
-import os
 from typing import Any, Dict, List, Optional
 
 from praisonai_tools.tools.base import BaseTool

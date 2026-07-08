@@ -1,10 +1,7 @@
 """HTML/GSAP render backend using Playwright and FFmpeg."""
 
 import asyncio
-import json
-import os
 import shutil
-import subprocess
 import tempfile
 from pathlib import Path
 from typing import Optional
@@ -19,7 +16,7 @@ try:
 except ImportError:
     imageio_ffmpeg = None
 
-from .protocols import RenderBackendProtocol, RenderOpts, RenderResult, LintResult
+from .protocols import RenderOpts, RenderResult, LintResult
 
 
 class HtmlRenderBackend:

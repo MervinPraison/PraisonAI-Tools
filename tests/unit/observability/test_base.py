@@ -1,8 +1,6 @@
 """Tests for base observability classes."""
 
-import pytest
-from datetime import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from praisonai_tools.observability.base import (
     BaseObservabilityProvider,

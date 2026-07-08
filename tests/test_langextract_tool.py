@@ -1,10 +1,8 @@
 """Tests for LangExtract Tool."""
 
-import pytest
 import tempfile
 import os
-from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 from praisonai_tools.tools.langextract_tool import (
     LangExtractTool,

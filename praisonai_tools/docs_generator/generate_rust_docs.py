@@ -504,7 +504,7 @@ def update_docs_json(docs_json_path: Path, generated_files: list):
     with open(docs_json_path, 'w') as f:
         json.dump(docs_config, f, indent=2)
     
-    print(f"Updated docs.json with Rust SDK navigation")
+    print("Updated docs.json with Rust SDK navigation")
 
 
 def main():

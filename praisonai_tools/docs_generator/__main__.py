@@ -8,7 +8,6 @@ This can be run in two ways:
 
 import argparse
 import sys
-import os
 
 def main():
     parser = argparse.ArgumentParser(description="PraisonAI SDK Documentation Generator")

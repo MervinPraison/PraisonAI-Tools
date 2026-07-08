@@ -1,6 +1,5 @@
 """Render loop helper with bounded retries."""
 
-import asyncio
 from typing import Callable, Awaitable, Any
 from .protocols import RenderResult
 

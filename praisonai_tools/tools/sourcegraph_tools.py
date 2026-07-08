@@ -6,7 +6,7 @@ Provides code search across repositories using Sourcegraph API.
 
 import os
 import logging
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)

@@ -3,8 +3,7 @@ Comprehensive integration test for observability - verifying both explicit and a
 """
 
 import pytest
-from unittest.mock import MagicMock, patch, call
-import os
+from unittest.mock import MagicMock, patch
 
 
 class TestExplicitTracingPattern:
@@ -109,7 +108,7 @@ class TestAutoInstrumentationPattern:
         auto_instrument_param = sig.parameters.get('auto_instrument')
         
         assert auto_instrument_param is not None, "init() should have auto_instrument param"
-        assert auto_instrument_param.default == True, "auto_instrument should default to True"
+        assert auto_instrument_param.default, "auto_instrument should default to True"
         
         print("✓ auto_instrument defaults to True")
     

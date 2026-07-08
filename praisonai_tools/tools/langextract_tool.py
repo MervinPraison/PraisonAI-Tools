@@ -25,10 +25,9 @@ Installation:
     pip install praisonai-tools langextract
 """
 
-import os
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 from praisonai_tools.tools.base import BaseTool
 from praisonai_tools.tools.decorator import tool
@@ -152,7 +151,8 @@ class LangExtractTool(BaseTool):
             output_path = Path(output_path).resolve()
             
             # Save JSONL and generate HTML from it
-            import tempfile, os
+            import tempfile
+            import os
             jsonl_dir = tempfile.gettempdir()
             jsonl_path = os.path.join(jsonl_dir, f"{document_id}.jsonl")
             lx.io.save_annotated_documents(

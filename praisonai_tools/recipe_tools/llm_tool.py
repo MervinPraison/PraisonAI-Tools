@@ -10,12 +10,12 @@ import os
 import json
 import logging
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any, Union, Generator
+from typing import Optional, List, Dict, Any, Generator
 
 try:
     from .base import RecipeToolBase, RecipeToolResult, DependencyError
 except ImportError:
-    from base import RecipeToolBase, RecipeToolResult, DependencyError
+    from base import RecipeToolBase, RecipeToolResult
 
 logger = logging.getLogger(__name__)
 

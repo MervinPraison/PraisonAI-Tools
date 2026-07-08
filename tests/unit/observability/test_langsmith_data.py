@@ -8,10 +8,8 @@ Verifies that:
 4. Async safety with contextvars for span state
 """
 
-import os
 import pytest
-from unittest.mock import patch, MagicMock, call
-from contextlib import contextmanager
+from unittest.mock import patch, MagicMock
 
 
 # ---------------------------------------------------------------------------
@@ -226,7 +224,6 @@ class TestObservabilitySink:
         """LLM_RESPONSE event should populate token usage and end the span."""
         from praisonai_tools.observability.bridge import ObservabilitySink
         from praisonai_tools.observability.manager import ObservabilityManager
-        from praisonai_tools.observability.base import SpanKind
         from praisonaiagents.trace.context_events import ContextEvent, ContextEventType
         
         RecordingProvider = _make_mock_provider()
@@ -430,7 +427,6 @@ class TestAsyncSafetyContextVars:
     
     def test_span_stack_is_per_context(self):
         """Each async context should have its own span stack."""
-        from praisonai_tools.observability.base import BaseObservabilityProvider
         
         RecordingProvider = _make_mock_provider()
         

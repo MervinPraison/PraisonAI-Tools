@@ -9,11 +9,9 @@ Provides capabilities for:
 
 import os
 import re
-import email
 import logging
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any
-from pathlib import Path
 from email import policy
 from email.parser import BytesParser, Parser
 
