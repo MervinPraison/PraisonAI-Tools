@@ -11,8 +11,7 @@ More information: https://swarmsync.ai/docs/protocol-specs/swarmscore
 
 import json
 import logging
-from typing import Dict, Any, Optional
-from urllib.parse import urljoin
+from typing import Dict, Any
 
 try:
     import requests
@@ -39,6 +38,7 @@ class SwarmScoreTool(BaseTool):
         if requests is None:
             raise ImportError("requests is required for SwarmScoreTool. Install with: pip install requests")
         
+        super().__init__()
         self.api_base_url = api_base_url.rstrip('/')
         
     def load_swarmscore(self, slug: str) -> ToolResult:
@@ -58,22 +58,24 @@ class SwarmScoreTool(BaseTool):
             data = response.json()
             
             return ToolResult(
+                output=data,
                 success=True,
-                data=data,
-                message=f"Successfully loaded SwarmScore for agent '{slug}'"
+                metadata={"message": f"Successfully loaded SwarmScore for agent '{slug}'"}
             )
             
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to load SwarmScore for {slug}: {e}")
-            return ToolResult(
-                success=False,
-                error=f"Failed to load SwarmScore: {str(e)}"
-            )
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON response for SwarmScore {slug}: {e}")
             return ToolResult(
+                output=None,
                 success=False,
                 error="Invalid response format from SwarmScore API"
+            )
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to load SwarmScore for {slug}: {e}")
+            return ToolResult(
+                output=None,
+                success=False,
+                error=f"Failed to load SwarmScore: {str(e)}"
             )
     
     def verify_swarmscore(self, verify_payload: Dict[str, Any]) -> ToolResult:
@@ -98,22 +100,24 @@ class SwarmScoreTool(BaseTool):
             data = response.json()
             
             return ToolResult(
+                output=data,
                 success=True,
-                data=data,
-                message="SwarmScore verification completed"
+                metadata={"message": "SwarmScore verification completed"}
             )
             
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to verify SwarmScore: {e}")
-            return ToolResult(
-                success=False,
-                error=f"Failed to verify SwarmScore: {str(e)}"
-            )
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON response for SwarmScore verification: {e}")
             return ToolResult(
+                output=None,
                 success=False,
                 error="Invalid response format from verification API"
+            )
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to verify SwarmScore: {e}")
+            return ToolResult(
+                output=None,
+                success=False,
+                error=f"Failed to verify SwarmScore: {str(e)}"
             )
     
     def get_discovery_manifest(self) -> ToolResult:
@@ -123,29 +127,32 @@ class SwarmScoreTool(BaseTool):
             ToolResult containing discovery manifest data
         """
         try:
-            url = "https://api.swarmsync.ai/.well-known/agent-card.json"
+            base = self.api_base_url.split("/v1/")[0].rstrip('/')
+            url = f"{base}/.well-known/agent-card.json"
             response = requests.get(url, timeout=30)
             response.raise_for_status()
             
             data = response.json()
             
             return ToolResult(
+                output=data,
                 success=True,
-                data=data,
-                message="Retrieved SwarmScore discovery manifest"
+                metadata={"message": "Retrieved SwarmScore discovery manifest"}
             )
             
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to get discovery manifest: {e}")
-            return ToolResult(
-                success=False,
-                error=f"Failed to get discovery manifest: {str(e)}"
-            )
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON in discovery manifest: {e}")
             return ToolResult(
+                output=None,
                 success=False,
                 error="Invalid discovery manifest format"
+            )
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to get discovery manifest: {e}")
+            return ToolResult(
+                output=None,
+                success=False,
+                error=f"Failed to get discovery manifest: {str(e)}"
             )
 
     def run(self, action: str, **kwargs) -> ToolResult:
@@ -162,6 +169,7 @@ class SwarmScoreTool(BaseTool):
             slug = kwargs.get("slug")
             if not slug:
                 return ToolResult(
+                    output=None,
                     success=False,
                     error="Missing required parameter 'slug' for load action"
                 )
@@ -171,6 +179,7 @@ class SwarmScoreTool(BaseTool):
             verify_payload = kwargs.get("verify_payload")
             if not verify_payload:
                 return ToolResult(
+                    output=None,
                     success=False,
                     error="Missing required parameter 'verify_payload' for verify action"
                 )
@@ -181,6 +190,7 @@ class SwarmScoreTool(BaseTool):
         
         else:
             return ToolResult(
+                output=None,
                 success=False,
                 error=f"Unknown action '{action}'. Supported actions: load, verify, discover"
             )
@@ -205,7 +215,7 @@ def load_swarmscore_by_slug(slug: str) -> Dict[str, Any]:
     if not result.success:
         raise Exception(result.error)
     
-    return result.data
+    return result.output
 
 
 def verify_swarmscore_freshness(verify_payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -226,7 +236,7 @@ def verify_swarmscore_freshness(verify_payload: Dict[str, Any]) -> Dict[str, Any
     if not result.success:
         raise Exception(result.error)
     
-    return result.data
+    return result.output
 
 
 def get_agent_discovery_manifest() -> Dict[str, Any]:
@@ -244,4 +254,4 @@ def get_agent_discovery_manifest() -> Dict[str, Any]:
     if not result.success:
         raise Exception(result.error)
     
-    return result.data
+    return result.output

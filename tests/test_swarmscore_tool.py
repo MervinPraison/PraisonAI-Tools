@@ -2,7 +2,8 @@
 
 import json
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+import requests as real_requests
+from unittest.mock import Mock, patch
 from praisonai_tools.tools.swarmscore_tool import (
     SwarmScoreTool,
     load_swarmscore_by_slug,
@@ -44,15 +45,16 @@ class TestSwarmScoreTool:
         
         # Verify
         assert result.success is True
-        assert result.data == self.sample_score_data
-        assert "test-agent" in result.message
+        assert result.output == self.sample_score_data
+        assert "test-agent" in result.metadata["message"]
         mock_requests.get.assert_called_once()
     
     @patch('praisonai_tools.tools.swarmscore_tool.requests')
     def test_load_swarmscore_network_error(self, mock_requests):
         """Test SwarmScore loading with network error."""
         # Setup mock to raise exception
-        mock_requests.get.side_effect = Exception("Network error")
+        mock_requests.exceptions = real_requests.exceptions
+        mock_requests.get.side_effect = real_requests.exceptions.RequestException("Network error")
         
         # Execute
         result = self.tool.load_swarmscore("test-agent")
@@ -66,6 +68,7 @@ class TestSwarmScoreTool:
         """Test SwarmScore loading with invalid JSON response."""
         # Setup mock response with invalid JSON
         mock_response = Mock()
+        mock_requests.exceptions = real_requests.exceptions
         mock_response.json.side_effect = json.JSONDecodeError("Invalid JSON", "", 0)
         mock_response.raise_for_status.return_value = None
         mock_requests.get.return_value = mock_response
@@ -93,14 +96,15 @@ class TestSwarmScoreTool:
         
         # Verify
         assert result.success is True
-        assert result.data == verify_data
+        assert result.output == verify_data
         mock_requests.post.assert_called_once()
     
     @patch('praisonai_tools.tools.swarmscore_tool.requests')
     def test_verify_swarmscore_error(self, mock_requests):
         """Test SwarmScore verification with error."""
         # Setup mock to raise exception
-        mock_requests.post.side_effect = Exception("Verification failed")
+        mock_requests.exceptions = real_requests.exceptions
+        mock_requests.post.side_effect = real_requests.exceptions.RequestException("Verification failed")
         
         # Execute
         result = self.tool.verify_swarmscore({"test": "payload"})
@@ -128,14 +132,15 @@ class TestSwarmScoreTool:
         
         # Verify
         assert result.success is True
-        assert result.data == manifest_data
+        assert result.output == manifest_data
         mock_requests.get.assert_called_once()
     
     @patch('praisonai_tools.tools.swarmscore_tool.requests')
     def test_get_discovery_manifest_error(self, mock_requests):
         """Test discovery manifest retrieval with error."""
         # Setup mock to raise exception
-        mock_requests.get.side_effect = Exception("Manifest error")
+        mock_requests.exceptions = real_requests.exceptions
+        mock_requests.get.side_effect = real_requests.exceptions.RequestException("Manifest error")
         
         # Execute
         result = self.tool.get_discovery_manifest()
@@ -147,7 +152,7 @@ class TestSwarmScoreTool:
     def test_run_load_action(self):
         """Test run method with load action."""
         with patch.object(self.tool, 'load_swarmscore') as mock_load:
-            mock_load.return_value = ToolResult(success=True, data=self.sample_score_data)
+            mock_load.return_value = ToolResult(output=self.sample_score_data, success=True)
             
             result = self.tool.run("load", slug="test-agent")
             
@@ -157,7 +162,7 @@ class TestSwarmScoreTool:
     def test_run_verify_action(self):
         """Test run method with verify action."""
         with patch.object(self.tool, 'verify_swarmscore') as mock_verify:
-            mock_verify.return_value = ToolResult(success=True, data={"verified": True})
+            mock_verify.return_value = ToolResult(output={"verified": True}, success=True)
             
             verify_payload = {"test": "payload"}
             result = self.tool.run("verify", verify_payload=verify_payload)
@@ -168,7 +173,7 @@ class TestSwarmScoreTool:
     def test_run_discover_action(self):
         """Test run method with discover action."""
         with patch.object(self.tool, 'get_discovery_manifest') as mock_discover:
-            mock_discover.return_value = ToolResult(success=True, data={"agents": []})
+            mock_discover.return_value = ToolResult(output={"agents": []}, success=True)
             
             result = self.tool.run("discover")
             
@@ -212,8 +217,8 @@ class TestStandaloneFunctions:
         # Setup mock
         mock_tool = Mock()
         mock_tool.load_swarmscore.return_value = ToolResult(
-            success=True, 
-            data=self.sample_data
+            output=self.sample_data,
+            success=True
         )
         mock_tool_class.return_value = mock_tool
         
@@ -230,7 +235,8 @@ class TestStandaloneFunctions:
         # Setup mock
         mock_tool = Mock()
         mock_tool.load_swarmscore.return_value = ToolResult(
-            success=False, 
+            output=None,
+            success=False,
             error="Load failed"
         )
         mock_tool_class.return_value = mock_tool
@@ -246,8 +252,8 @@ class TestStandaloneFunctions:
         verify_data = {"verified": True}
         mock_tool = Mock()
         mock_tool.verify_swarmscore.return_value = ToolResult(
-            success=True, 
-            data=verify_data
+            output=verify_data,
+            success=True
         )
         mock_tool_class.return_value = mock_tool
         
@@ -265,7 +271,8 @@ class TestStandaloneFunctions:
         # Setup mock
         mock_tool = Mock()
         mock_tool.verify_swarmscore.return_value = ToolResult(
-            success=False, 
+            output=None,
+            success=False,
             error="Verification failed"
         )
         mock_tool_class.return_value = mock_tool
@@ -281,8 +288,8 @@ class TestStandaloneFunctions:
         manifest_data = {"agents": ["test1", "test2"]}
         mock_tool = Mock()
         mock_tool.get_discovery_manifest.return_value = ToolResult(
-            success=True, 
-            data=manifest_data
+            output=manifest_data,
+            success=True
         )
         mock_tool_class.return_value = mock_tool
         
@@ -299,7 +306,8 @@ class TestStandaloneFunctions:
         # Setup mock
         mock_tool = Mock()
         mock_tool.get_discovery_manifest.return_value = ToolResult(
-            success=False, 
+            output=None,
+            success=False,
             error="Discovery failed"
         )
         mock_tool_class.return_value = mock_tool
@@ -355,21 +363,22 @@ class TestIntegrationScenarios:
         ]
         
         # Configure mock to return different responses for different calls
+        mock_requests.exceptions = real_requests.exceptions
         mock_requests.get.side_effect = [mock_responses[0], mock_responses[2]]
         mock_requests.post.return_value = mock_responses[1]
         
         # Execute workflow
         load_result = tool.load_swarmscore("test-agent")
         assert load_result.success is True
-        assert load_result.data["score"] == 90
+        assert load_result.output["score"] == 90
         
         verify_result = tool.verify_swarmscore(load_data["verify_payload"])
         assert verify_result.success is True
-        assert verify_result.data["verified"] is True
+        assert verify_result.output["verified"] is True
         
         manifest_result = tool.get_discovery_manifest()
         assert manifest_result.success is True
-        assert "agent1" in manifest_result.data["agents"]
+        assert "agent1" in manifest_result.output["agents"]
     
     @patch('praisonai_tools.tools.swarmscore_tool.requests')
     def test_error_recovery(self, mock_requests):
@@ -377,8 +386,9 @@ class TestIntegrationScenarios:
         tool = SwarmScoreTool()
         
         # First call fails, second succeeds
+        mock_requests.exceptions = real_requests.exceptions
         mock_requests.get.side_effect = [
-            Exception("Network timeout"),
+            real_requests.exceptions.RequestException("Network timeout"),
             Mock(
                 json=lambda: {"score": 80}, 
                 raise_for_status=lambda: None
@@ -393,4 +403,4 @@ class TestIntegrationScenarios:
         # Second attempt succeeds
         result2 = tool.load_swarmscore("test-agent")
         assert result2.success is True
-        assert result2.data["score"] == 80
+        assert result2.output["score"] == 80
