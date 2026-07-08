@@ -1,0 +1,135 @@
+name: PyPI Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump type'
+        required: true
+        default: patch
+        type: choice
+        options: [patch, minor, major]
+      dry_run:
+        description: 'Preview only; do not publish'
+        required: false
+        default: false
+        type: boolean
+      version:
+        description: 'Override version (empty = auto bump)'
+        required: false
+        default: ''
+        type: string
+      source:
+        description: 'Trigger source (audit trail)'
+        required: false
+        default: manual
+        type: string
+      trigger_sha:
+        description: 'SHA that triggered this release'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pypi-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: >-
+      ${{
+        (inputs.source == 'ci' || inputs.source == 'nightly') &&
+        inputs.bump == 'patch' &&
+        'pypi-auto' || 'pypi'
+      }}
+    env:
+      PACKAGE: praisonai-tools
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GH_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - uses: astral-sh/setup-uv@v4
+
+      - name: Configure git
+        run: |
+          git config user.name "MervinPraison"
+          git config user.email "454862+MervinPraison@users.noreply.github.com"
+          gh auth setup-git
+
+      - name: Compute release version
+        id: versions
+        env:
+          BUMP: ${{ inputs.bump }}
+          VERSION_OVERRIDE: ${{ inputs.version }}
+        run: |
+          python <<'PY'
+          import os, re, sys
+          from pathlib import Path
+          bump = os.environ["BUMP"]
+          override = os.environ.get("VERSION_OVERRIDE", "").strip()
+          content = Path("pyproject.toml").read_text()
+          match = re.search(r'^version\s*=\s*"([^"]+)"', content, re.MULTILINE)
+          if not match:
+              sys.exit("Could not read version from pyproject.toml")
+          current = match.group(1)
+          maj, min_, patch = map(int, current.split("."))
+          if override:
+              new_version = override
+          elif bump == "major":
+              new_version = f"{maj + 1}.0.0"
+          elif bump == "minor":
+              new_version = f"{maj}.{min_ + 1}.0"
+          else:
+              new_version = f"{maj}.{min_}.{patch + 1}"
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write(f"current_version={current}\nnew_version={new_version}\n")
+          PY
+
+      - name: Bump pyproject.toml
+        if: inputs.dry_run != true
+        env:
+          CURRENT: ${{ steps.versions.outputs.current_version }}
+          NEW_VERSION: ${{ steps.versions.outputs.new_version }}
+        run: |
+          python -c "
+          from pathlib import Path
+          import os
+          p = Path('pyproject.toml')
+          p.write_text(p.read_text().replace(f'version = \"{os.environ[\"CURRENT\"]}\"', f'version = \"{os.environ[\"NEW_VERSION\"]}\"', 1))
+          "
+
+      - name: Publish to PyPI
+        if: inputs.dry_run != true
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN || secrets.PYPI_API_TOKEN }}
+        run: |
+          uv lock
+          uv build
+          uv publish
+
+      - name: Commit, tag, and release
+        if: inputs.dry_run != true
+        env:
+          VERSION: ${{ steps.versions.outputs.new_version }}
+        run: |
+          TAG="v${VERSION}"
+          git add pyproject.toml uv.lock
+          git commit -m "Release ${TAG}" || exit 0
+          git tag -f "${TAG}"
+          git pull --rebase origin main
+          git push origin main
+          git push --tags -f
+          gh release create "${TAG}" --title "praisonai-tools ${TAG}" --notes "Release ${TAG}" --latest

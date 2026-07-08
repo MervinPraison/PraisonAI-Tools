@@ -1,45 +1,96 @@
 name: Auto PR Comment
 
-# Sequential: wait for first reviewer, then trigger Copilot
+# Review chain: CodeRabbit/Qodo/Gemini review first → Copilot → Claude (final)
+# For human PRs: CodeRabbit/Qodo auto-review → this workflow triggers Copilot → then Claude
+# For bot PRs: CodeRabbit/Qodo skip bots, so we trigger them explicitly first
+#
+# IMPORTANT: @copilot ignores bot comments. All @copilot mentions must use
+# PAT_TOKEN so the comment posts as MervinPraison (a real user).
+#
+# Claude trigger runs IN-BAND (same workflow) to avoid GitHub Actions
+# blocking bot-triggered workflows with action_required approval gates.
 on:
   issue_comment:
     types: [created]
   pull_request_review:
     types: [submitted]
+  pull_request:
+    types: [opened, synchronize]
+  pull_request_target:
+    types: [synchronize]
+  schedule:
+    - cron: '30 3,9,15,21 * * *'
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number for manual FINAL (leave empty to sweep all open PRs)'
+        required: false
+        type: number
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+env:
+  MAX_POLL_ATTEMPTS: 20
+  POLL_DELAY_MS: 30000
+  CLAUDE_TRIGGER_LOGINS: '["MervinPraison","github-actions[bot]"]'
+  # GH_TOKEN (user PAT) posts as MervinPraison for @copilot; fallback to github.token for @claude
+  GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
+  CLAUDE_UI_SCOPE: 'SCOPE: Focus ONLY on PraisonAI-Tools (praisonai_tools/, tests). Do not expand into praisonaiagents or the monorepo unless the issue explicitly requires it.'
+  CLAUDE_FINAL_PHASES_COMPACT: "**Phase 1: Review per AGENTS.md** (lazy imports, backward compat, import-time <200ms; SDK/product value gate — genuine agent-tool value, correct tool vs SDK vs Plugins layering, no scope creep)\n**Phase 2: FIX valid issues** found by prior reviewers — push to THIS branch\n**Phase 3: Final verdict** — approve PR if ready, else request changes"
+  CLAUDE_FINAL_PHASES_DETAILED: "**Phase 1: Review per AGENTS.md**\n1. Protocol-driven: check heavy implementations vs core SDK\n2. Backward compatible: ensure zero feature regressions\n3. Performance: no hot-path regressions (lazy imports, import-time <200ms)\n4. SDK/product value: review whether the change genuinely adds value — correct tool layering (agent-callable integrations here; lifecycle plugins in PraisonAI-Plugins; core SDK in praisonaiagents). Reject scope creep; request changes or recommend closing if value is unclear\n\n**Phase 2: FIX Valid Issues**\n5. For any VALID bugs or architectural flaws found by Gemini, CodeRabbit, Qodo, Copilot, or any other reviewer: implement the fix\n6. Push all code fixes directly to THIS branch (do NOT create a new PR)\n7. Comment a summary of exact files modified and what you skipped\n\n**Phase 3: Final Verdict**\n8. If all issues are resolved, approve the PR / close the Issue\n9. If blocking issues remain, request changes / leave clear action items"
 
 jobs:
+  # ================================================================
+  # HUMAN PRs: Trigger @copilot AFTER CodeRabbit posts its summary
+  # ================================================================
   copilot-after-coderabbit:
     if: |
       github.event_name == 'issue_comment' &&
       github.event.issue.pull_request &&
       github.event.comment.user.login == 'coderabbitai[bot]' &&
-      contains(github.event.comment.body, 'summary by coderabbit')
+      contains(github.event.comment.body, 'summarize by coderabbit')
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
+    outputs:
+      pr_number: ${{ steps.trigger.outputs.pr_number }}
+      triggered: ${{ steps.trigger.outputs.triggered }}
     steps:
-      - name: Post Copilot review request
+      - name: Post Copilot review request (as user via PAT)
+        id: trigger
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GH_TOKEN }}
+          github-token: ${{ env.GH_TOKEN }}
           script: |
             const comments = await github.rest.issues.listComments({
               issue_number: context.issue.number,
               owner: context.repo.owner,
-              repo: context.repo.repo,
-              per_page: 100
+              repo: context.repo.repo
             });
-            if (comments.data.some(c => c.body && c.body.includes('@copilot') && c.body.includes('thorough review'))) {
+            // Check for duplicates — posted by MervinPraison (PAT) or github-actions[bot] (legacy)
+            const alreadyPosted = comments.data.some(c =>
+              c.body.includes('@copilot') &&
+              (c.user.login === 'MervinPraison' || c.user.login === 'github-actions[bot]')
+            );
+            if (alreadyPosted) {
               console.log('Copilot already triggered, skipping');
+              core.setOutput('triggered', 'false');
+              core.setOutput('pr_number', context.issue.number.toString());
               return;
             }
             await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: '@copilot Do a thorough review of this PR. Read ALL existing reviewer comments first.\n\n1. **Bloat check**: Minimal and focused?\n2. **Security**: Hardcoded secrets, unsafe eval?\n3. **Performance**: Module-level heavy imports?\n4. **Tests**: Adequate coverage?\n5. **Code quality**: DRY, naming, error handling?'
-            })
+              body: '@copilot Do a thorough review of this PR. Read ALL existing reviewer comments above from Qodo, Coderabbit, and Gemini first — incorporate their findings.\n\nReview areas:\n1. **Bloat check**: Are changes minimal and focused? Any unnecessary code or scope creep?\n2. **Security**: Any hardcoded secrets, unsafe eval/exec, missing input validation?\n3. **Performance**: Any module-level heavy imports? Hot-path regressions?\n4. **Tests**: Are tests included? Do they cover the changes adequately?\n5. **Backward compat**: Any public API changes without deprecation?\n6. **Code quality**: DRY violations, naming conventions, error handling?\n7. **Address reviewer feedback**: If Qodo, Coderabbit, or Gemini flagged valid issues, include them in your review\n8. Suggest specific improvements with code examples where possible'
+            });
+            core.setOutput('triggered', 'true');
+            core.setOutput('pr_number', context.issue.number.toString());
 
+  # Fallback: Trigger @copilot after Qodo review (if Coderabbit doesn't fire)
   copilot-after-qodo:
     if: |
       github.event_name == 'pull_request_review' &&
@@ -47,26 +98,712 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
+    outputs:
+      pr_number: ${{ steps.trigger.outputs.pr_number }}
+      triggered: ${{ steps.trigger.outputs.triggered }}
     steps:
-      - name: Post Copilot review request (fallback)
+      - name: Post Copilot review request (as user via PAT)
+        id: trigger
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GH_TOKEN }}
+          github-token: ${{ env.GH_TOKEN }}
           script: |
-            const issue_number = context.payload.pull_request?.number ?? context.issue?.number;
             const comments = await github.rest.issues.listComments({
-              issue_number,
+              issue_number: context.issue.number,
               owner: context.repo.owner,
-              repo: context.repo.repo,
-              per_page: 100
+              repo: context.repo.repo
             });
-            if (comments.data.some(c => c.body && c.body.includes('@copilot') && c.body.includes('thorough review'))) {
+            const alreadyPosted = comments.data.some(c =>
+              c.body.includes('@copilot') &&
+              (c.user.login === 'MervinPraison' || c.user.login === 'github-actions[bot]')
+            );
+            if (alreadyPosted) {
               console.log('Copilot already triggered, skipping');
+              core.setOutput('triggered', 'false');
+              core.setOutput('pr_number', context.issue.number.toString());
               return;
             }
             await github.rest.issues.createComment({
-              issue_number,
+              issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: '@copilot Do a thorough review of this PR. Read ALL existing reviewer comments first.\n\n1. **Bloat check**: Minimal and focused?\n2. **Security**: Hardcoded secrets?\n3. **Performance**: Heavy imports?\n4. **Tests**: Coverage?\n5. **Code quality**: DRY, naming, errors?'
-            })
+              body: '@copilot Do a thorough review of this PR. Read ALL existing reviewer comments above first.\n\nReview areas:\n1. **Bloat check**: Are changes minimal and focused?\n2. **Security**: Any hardcoded secrets, unsafe eval/exec, missing input validation?\n3. **Performance**: Any module-level heavy imports? Hot-path regressions?\n4. **Tests**: Are tests included? Do they cover the changes adequately?\n5. **Backward compat**: Any public API changes without deprecation?\n6. **Code quality**: DRY violations, naming conventions, error handling?\n7. Suggest specific improvements with code examples where possible'
+            });
+            core.setOutput('triggered', 'true');
+            core.setOutput('pr_number', context.issue.number.toString());
+
+  # ================================================================
+  # FALLBACK: Claude trigger for cases where Copilot chain fails/skips
+  # Ensures Claude always runs after sufficient review time
+  # ================================================================
+  claude-fallback-timeout:
+    if: |
+      github.event_name == 'pull_request' &&
+      github.event.action == 'opened'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Wait for review window (15 min)
+        run: sleep 900
+      
+      - name: Check if Claude already triggered
+        id: check_claude
+        uses: actions/github-script@v7
+        env:
+          TRIGGER_LOGINS: ${{ env.CLAUDE_TRIGGER_LOGINS }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        with:
+          github-token: ${{ env.GH_TOKEN }}
+          script: |
+            const pr = parseInt(process.env.PR_NUMBER, 10);
+            const triggerLogins = JSON.parse(process.env.TRIGGER_LOGINS);
+            const comments = await github.rest.issues.listComments({
+              issue_number: pr,
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+            const alreadyPosted = comments.data.some(c =>
+              c.body.includes('@claude') && triggerLogins.includes(c.user.login)
+            );
+            core.setOutput('already_triggered', alreadyPosted ? 'true' : 'false');
+            core.setOutput('comments_count', comments.data.length.toString());
+
+            const botReviews = comments.data.filter(c =>
+              ['coderabbitai[bot]', 'qodo-code-review[bot]', 'gemini-code-assist[bot]',
+               'copilot-swe-agent', 'Copilot', 'greptile-apps[bot]'].some(bot =>
+                c.user.login.toLowerCase().includes(bot.toLowerCase())
+              )
+            );
+            core.setOutput('review_count', botReviews.length.toString());
+
+      - name: Aggregate reviews and trigger Claude
+        if: steps.check_claude.outputs.already_triggered != 'true'
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        with:
+          github-token: ${{ env.GH_TOKEN }}
+          script: |
+            const pr = parseInt(process.env.PR_NUMBER, 10);
+            const comments = await github.rest.issues.listComments({issue_number: pr, owner: context.repo.owner, repo: context.repo.repo, per_page: 100});
+            const reviews = {coderabbit: [], qodo: [], gemini: [], copilot: [], greptile: [], others: []};
+            comments.data.forEach(c => {
+              const login = c.user.login.toLowerCase();
+              const body = c.body.substring(0, 500);
+              if (login.includes('coderabbit')) reviews.coderabbit.push(body);
+              else if (login.includes('qodo')) reviews.qodo.push(body);
+              else if (login.includes('gemini')) reviews.gemini.push(body);
+              else if (login.includes('copilot')) reviews.copilot.push(body);
+              else if (login.includes('greptile')) reviews.greptile.push(body);
+              else if (c.user.type === 'Bot') reviews.others.push(body);
+            });
+            const summaryParts = [];
+            if (reviews.coderabbit.length) summaryParts.push('CodeRabbit: ' + reviews.coderabbit.length + ' comments');
+            if (reviews.qodo.length) summaryParts.push('Qodo: ' + reviews.qodo.length + ' comments');
+            if (reviews.gemini.length) summaryParts.push('Gemini: ' + reviews.gemini.length + ' comments');
+            if (reviews.copilot.length) summaryParts.push('Copilot: ' + reviews.copilot.length + ' comments');
+            if (reviews.greptile.length) summaryParts.push('Greptile: ' + reviews.greptile.length + ' comments');
+            const reviewSummary = summaryParts.length ? summaryParts.join(' | ') : 'No bot reviews detected';
+            const scope = process.env.CLAUDE_UI_SCOPE;
+            const phases = process.env.CLAUDE_FINAL_PHASES_COMPACT;
+            const claudeBody = '@claude You are the FINAL architecture reviewer. If the branch is under MervinPraison/PraisonAI-Tools (not a fork), you are able to make modifications to this branch and push directly. ' + scope + ' Read ALL prior reviewer comments. ' + reviewSummary + '.\n\n' +
+              'Review Context: ' + comments.data.length + ' total comments, ' +
+              (reviews.coderabbit.length + reviews.qodo.length + reviews.gemini.length + reviews.copilot.length + reviews.greptile.length) + ' bot reviews.\n\n' +
+              phases;
+            await github.rest.issues.createComment({issue_number: pr, owner: context.repo.owner, repo: context.repo.repo, body: claudeBody});
+            console.log('Claude fallback triggered on PR #' + pr + ' with ' + reviewSummary);
+
+  # ================================================================
+  # Claude FINAL review — polls for Copilot's response, then triggers
+  # This runs IN-BAND under the PAT context (MervinPraison), avoiding
+  # the action_required approval gate that blocks bot-triggered workflows.
+  # ================================================================
+  claude-after-copilot:
+    needs: [copilot-after-coderabbit]
+    if: |
+      always() &&
+      needs.copilot-after-coderabbit.result == 'success' &&
+      needs.copilot-after-coderabbit.outputs.triggered == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Wait for Copilot to respond (poll)
+        id: poll
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ needs.copilot-after-coderabbit.outputs.pr_number }}
+          MAX_POLL_ATTEMPTS: ${{ env.MAX_POLL_ATTEMPTS }}
+          POLL_DELAY_MS: ${{ env.POLL_DELAY_MS }}
+        with:
+          github-token: ${{ env.GH_TOKEN }}
+          script: |
+            const pr = parseInt(process.env.PR_NUMBER, 10);
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            // Poll for Copilot's response — check every 30s for up to 10 minutes
+            const maxAttempts = parseInt(process.env.MAX_POLL_ATTEMPTS, 10);
+            const delayMs = parseInt(process.env.POLL_DELAY_MS, 10);
+
+            for (let i = 0; i < maxAttempts; i++) {
+              console.log(`Poll attempt ${i + 1}/${maxAttempts}...`);
+
+              const comments = await github.rest.issues.listComments({
+                issue_number: pr,
+                owner,
+                repo,
+                per_page: 50,
+                sort: 'created',
+                direction: 'desc'
+              });
+
+              // Look for Copilot's response (copilot-swe-agent or Copilot)
+              const copilotResponse = comments.data.find(c =>
+                (c.user.login === 'copilot-swe-agent' ||
+                 c.user.login === 'Copilot' ||
+                 c.user.login.toLowerCase().includes('copilot')) &&
+                c.user.type === 'Bot'
+              );
+
+              if (copilotResponse) {
+                console.log(`Copilot responded at ${copilotResponse.created_at}`);
+                core.setOutput('copilot_responded', 'true');
+                return;
+              }
+
+              // Also check PR reviews for Copilot
+              const reviews = await github.rest.pulls.listReviews({
+                pull_number: pr,
+                owner,
+                repo
+              });
+
+              const copilotReview = reviews.data.find(r =>
+                r.user.login.toLowerCase().includes('copilot')
+              );
+
+              if (copilotReview) {
+                console.log(`Copilot review submitted at ${copilotReview.submitted_at}`);
+                core.setOutput('copilot_responded', 'true');
+                return;
+              }
+
+              if (i < maxAttempts - 1) {
+                console.log(`Copilot hasn't responded yet, waiting ${delayMs/1000}s...`);
+                await new Promise(resolve => setTimeout(resolve, delayMs));
+              }
+            }
+
+            console.log('Copilot did not respond within timeout, triggering Claude anyway');
+            core.setOutput('copilot_responded', 'timeout');
+
+      - name: Check if Claude already triggered
+        id: check_claude
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ needs.copilot-after-coderabbit.outputs.pr_number }}
+          TRIGGER_LOGINS: ${{ env.CLAUDE_TRIGGER_LOGINS }}
+        with:
+          github-token: ${{ env.GH_TOKEN }}
+          script: |
+            const pr = parseInt(process.env.PR_NUMBER, 10);
+            const triggerLogins = JSON.parse(process.env.TRIGGER_LOGINS);
+            const comments = await github.rest.issues.listComments({
+              issue_number: pr,
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+            const alreadyPosted = comments.data.some(c =>
+              c.body.includes('@claude') && triggerLogins.includes(c.user.login)
+            );
+            core.setOutput('already_triggered', alreadyPosted ? 'true' : 'false');
+
+      - name: Trigger Claude final review
+        if: steps.check_claude.outputs.already_triggered != 'true'
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ needs.copilot-after-coderabbit.outputs.pr_number }}
+        with:
+          github-token: ${{ env.GH_TOKEN }}
+          script: |
+            const pr = parseInt(process.env.PR_NUMBER, 10);
+            const scope = process.env.CLAUDE_UI_SCOPE;
+            const phases = process.env.CLAUDE_FINAL_PHASES_DETAILED;
+            await github.rest.issues.createComment({
+              issue_number: pr,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '@claude You are the FINAL architecture reviewer. If the branch is under MervinPraison/PraisonAI-Tools (not a fork), you are able to make modifications to this branch and push directly. ' + scope + ' Read ALL comments above from Gemini, Qodo, CodeRabbit, and Copilot carefully before responding.\n\n' + phases
+            });
+            console.log(`Claude triggered on PR #${pr}`);
+
+      - name: Sync pipeline status labels
+        if: steps.check_claude.outputs.already_triggered != 'true'
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ needs.copilot-after-coderabbit.outputs.pr_number }}
+        with:
+          github-token: ${{ env.GH_TOKEN }}
+          script: |
+            const path = require('path');
+            const ps = require(path.join(process.env.GITHUB_WORKSPACE, '.github/scripts/pipeline-status.js'));
+            const pr = parseInt(process.env.PR_NUMBER, 10);
+            await ps.ensurePipelineLabels(github, context.repo.owner, context.repo.repo, core);
+            await ps.syncPipelineLabels(github, context.repo.owner, context.repo.repo, pr, core);
+
+  # ================================================================
+  # Claude after Qodo fallback path (same polling approach)
+  # ================================================================
+  claude-after-copilot-qodo:
+    needs: [copilot-after-qodo]
+    if: |
+      always() &&
+      needs.copilot-after-qodo.result == 'success' &&
+      needs.copilot-after-qodo.outputs.triggered == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Wait for Copilot to respond (poll)
+        id: poll
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ needs.copilot-after-qodo.outputs.pr_number }}
+          MAX_POLL_ATTEMPTS: ${{ env.MAX_POLL_ATTEMPTS }}
+          POLL_DELAY_MS: ${{ env.POLL_DELAY_MS }}
+        with:
+          github-token: ${{ env.GH_TOKEN }}
+          script: |
+            const pr = parseInt(process.env.PR_NUMBER, 10);
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const maxAttempts = parseInt(process.env.MAX_POLL_ATTEMPTS, 10);
+            const delayMs = parseInt(process.env.POLL_DELAY_MS, 10);
+
+            for (let i = 0; i < maxAttempts; i++) {
+              console.log(`Poll attempt ${i + 1}/${maxAttempts}...`);
+              const comments = await github.rest.issues.listComments({
+                issue_number: pr, owner, repo,
+                per_page: 50, sort: 'created', direction: 'desc'
+              });
+              const copilotResponse = comments.data.find(c =>
+                (c.user.login === 'copilot-swe-agent' ||
+                 c.user.login === 'Copilot' ||
+                 c.user.login.toLowerCase().includes('copilot')) &&
+                c.user.type === 'Bot'
+              );
+              if (copilotResponse) {
+                console.log(`Copilot responded at ${copilotResponse.created_at}`);
+                core.setOutput('copilot_responded', 'true');
+                return;
+              }
+              const reviews = await github.rest.pulls.listReviews({
+                pull_number: pr, owner, repo
+              });
+              const copilotReview = reviews.data.find(r =>
+                r.user.login.toLowerCase().includes('copilot')
+              );
+              if (copilotReview) {
+                console.log(`Copilot review submitted at ${copilotReview.submitted_at}`);
+                core.setOutput('copilot_responded', 'true');
+                return;
+              }
+              if (i < maxAttempts - 1) {
+                await new Promise(resolve => setTimeout(resolve, delayMs));
+              }
+            }
+            console.log('Copilot did not respond within timeout, triggering Claude anyway');
+            core.setOutput('copilot_responded', 'timeout');
+
+      - name: Check if Claude already triggered
+        id: check_claude
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ needs.copilot-after-qodo.outputs.pr_number }}
+          TRIGGER_LOGINS: ${{ env.CLAUDE_TRIGGER_LOGINS }}
+        with:
+          github-token: ${{ env.GH_TOKEN }}
+          script: |
+            const pr = parseInt(process.env.PR_NUMBER, 10);
+            const triggerLogins = JSON.parse(process.env.TRIGGER_LOGINS);
+            const comments = await github.rest.issues.listComments({
+              issue_number: pr,
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+            const alreadyPosted = comments.data.some(c =>
+              c.body.includes('@claude') && triggerLogins.includes(c.user.login)
+            );
+            core.setOutput('already_triggered', alreadyPosted ? 'true' : 'false');
+
+      - name: Trigger Claude final review
+        if: steps.check_claude.outputs.already_triggered != 'true'
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ needs.copilot-after-qodo.outputs.pr_number }}
+        with:
+          github-token: ${{ env.GH_TOKEN }}
+          script: |
+            const pr = parseInt(process.env.PR_NUMBER, 10);
+            const scope = process.env.CLAUDE_UI_SCOPE;
+            const phases = process.env.CLAUDE_FINAL_PHASES_DETAILED;
+            await github.rest.issues.createComment({
+              issue_number: pr,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '@claude You are the FINAL architecture reviewer. If the branch is under MervinPraison/PraisonAI-Tools (not a fork), you are able to make modifications to this branch and push directly. ' + scope + ' Read ALL comments above from Gemini, Qodo, CodeRabbit, and Copilot carefully before responding.\n\n' + phases
+            });
+            console.log(`Claude triggered on PR #${pr}`);
+
+  # ================================================================
+  # Claude after Gemini — restores the trigger lost from the deleted
+  # chain-claude-after-copilot.yml workflow.
+  # Fires when Gemini posts a review comment on a PR or issue.
+  # ================================================================
+  claude-after-gemini:
+    if: |
+      github.event_name == 'issue_comment' &&
+      (
+        github.event.comment.user.login == 'gemini-code-assist[bot]' ||
+        contains(github.event.comment.body, 'Review completed by Gemini CLI') ||
+        contains(github.event.comment.body, 'The fix is ready for review. Please test')
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Check if Claude already triggered
+        id: check_claude
+        uses: actions/github-script@v7
+        env:
+          TRIGGER_LOGINS: ${{ env.CLAUDE_TRIGGER_LOGINS }}
+        with:
+          github-token: ${{ env.GH_TOKEN }}
+          script: |
+            const triggerLogins = JSON.parse(process.env.TRIGGER_LOGINS);
+            const comments = await github.rest.issues.listComments({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+            const alreadyPosted = comments.data.some(c =>
+              c.body.includes('@claude') && triggerLogins.includes(c.user.login)
+            );
+            core.setOutput('already_triggered', alreadyPosted ? 'true' : 'false');
+
+      - name: Post Claude analysis request (Lead Engineer)
+        if: steps.check_claude.outputs.already_triggered != 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ env.GH_TOKEN }}
+          script: |
+            const scope = process.env.CLAUDE_UI_SCOPE;
+            const phases = process.env.CLAUDE_FINAL_PHASES_DETAILED;
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '@claude You are the Lead Engineer. If the branch is under MervinPraison/PraisonAI-Tools (not a fork), you are able to make modifications to this branch and push directly. ' + scope + ' Read ALL analysis and reviews above carefully (Gemini, CodeRabbit, Qodo, Copilot, etc).\n\n' + phases
+            });
+
+  # ================================================================
+  # Recovery: re-post FINAL @claude after push or when chain missed
+  # ================================================================
+  claude-review-recovery:
+    if: |
+      github.event_name == 'pull_request_target' &&
+      github.event.action == 'synchronize'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Re-post FINAL Claude review when stale or missing
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ env.GH_TOKEN }}
+          script: |
+            const path = require('path');
+            const mergeGate = require(path.join(process.env.GITHUB_WORKSPACE, '.github/scripts/merge-gate.js'));
+            const chain = require(path.join(process.env.GITHUB_WORKSPACE, '.github/scripts/pr-review-chain.js'));
+            const pr = context.payload.pull_request.number;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            const comments = await mergeGate.listAllComments(github, owner, repo, pr);
+            const headPushedAt = (await mergeGate.getHeadCommitDate(github, owner, repo, pr))
+              || context.payload.pull_request.updated_at;
+            const headPusher = context.payload.sender?.login || null;
+
+            const hasFinal = mergeGate.hasFinalClaudeReviewTrigger(comments);
+            const isStale = mergeGate.isStaleFinalAfterPush(comments, headPushedAt);
+
+            if (mergeGate.shouldSkipFinalRecovery(comments, headPushedAt)) {
+              core.info('Recent @claude within 35min and FINAL not stale — skip recovery');
+              return;
+            }
+
+            if (await mergeGate.hasInProgressClaudeAssistant(github, owner, repo, pr)) {
+              core.info('Claude workflow in progress — skip recovery');
+              return;
+            }
+
+            const finalBody = mergeGate.FINAL_CLAUDE_REVIEW_BODY;
+            const staleOpts = { allowStaleRepost: true, skipCopilot: true, optionalWaitMs: 0 };
+            const missingOpts = { allowCopilotTimeout: true, optionalWaitMs: 0 };
+
+            if (hasFinal && isStale) {
+              const gate = mergeGate.shouldSkipStaleFinalRecovery(comments, headPushedAt, headPusher);
+              if (gate.skip) {
+                core.info(`Skip stale-FINAL recovery: ${gate.reason}`);
+                return;
+              }
+              const result = await chain.maybeTriggerClaudeFinal(
+                github, owner, repo, pr, finalBody, core, staleOpts
+              );
+              if (result.posted) core.info(`Posted stale-FINAL recovery @claude on PR #${pr}`);
+              return;
+            }
+
+            if (hasFinal) {
+              core.info('FINAL Claude review current on HEAD — skip recovery');
+              return;
+            }
+
+            const result = await chain.maybeTriggerClaudeFinal(
+              github, owner, repo, pr, finalBody, core, missingOpts
+            );
+            if (result.posted) core.info(`Posted missing FINAL Claude review on PR #${pr}`);
+
+      - name: Sync pipeline status labels
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ env.GH_TOKEN }}
+          script: |
+            const path = require('path');
+            const ps = require(path.join(process.env.GITHUB_WORKSPACE, '.github/scripts/pipeline-status.js'));
+            const pr = context.payload.pull_request.number;
+            await ps.ensurePipelineLabels(github, context.repo.owner, context.repo.repo, core);
+            await ps.syncPipelineLabels(github, context.repo.owner, context.repo.repo, pr, core);
+
+  # Scheduled + manual: post missing or stale FINAL @claude on all open PRs
+  post-missing-claude-final:
+    if: |
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && !inputs.pr_number)
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Post missing/stale FINAL @claude on open PRs
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ env.GH_TOKEN }}
+          script: |
+            const path = require('path');
+            const mergeGate = require(path.join(process.env.GITHUB_WORKSPACE, '.github/scripts/merge-gate.js'));
+            const chain = require(path.join(process.env.GITHUB_WORKSPACE, '.github/scripts/pr-review-chain.js'));
+            const ps = require(path.join(process.env.GITHUB_WORKSPACE, '.github/scripts/pipeline-status.js'));
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const prs = await github.paginate(github.rest.pulls.list, {
+              owner, repo, state: 'open', per_page: 100,
+            });
+            let posted = 0;
+            for (const pr of prs) {
+              if (pr.draft) continue;
+              const comments = await mergeGate.listAllComments(github, owner, repo, pr.number);
+              const headPushedAt = (await mergeGate.getHeadCommitDate(github, owner, repo, pr.number)) || pr.updated_at;
+              const hasFinal = mergeGate.hasFinalClaudeReviewTrigger(comments);
+              const isStale = mergeGate.isStaleFinalAfterPush(comments, headPushedAt);
+
+              if (hasFinal && !isStale) continue;
+              if (mergeGate.hasRecentClaudeTrigger(comments, 10)) {
+                core.info(`PR #${pr.number}: @claude within 10min — skip`);
+                continue;
+              }
+              if (await mergeGate.hasInProgressClaudeAssistant(github, owner, repo, pr.number)) {
+                core.info(`PR #${pr.number}: Claude in progress — skip`);
+                continue;
+              }
+              if (hasFinal && isStale) {
+                const gate = mergeGate.shouldSkipStaleFinalRecovery(comments, headPushedAt);
+                if (gate.skip) {
+                  core.info(`PR #${pr.number}: skip stale — ${gate.reason}`);
+                  continue;
+                }
+              }
+
+              const opts = hasFinal && isStale
+                ? { allowStaleRepost: true, skipCopilot: true, optionalWaitMs: 0 }
+                : { allowCopilotTimeout: true, optionalWaitMs: 0 };
+              const result = await chain.maybeTriggerClaudeFinal(
+                github, owner, repo, pr.number,
+                mergeGate.FINAL_CLAUDE_REVIEW_BODY, core, opts
+              );
+              if (result.posted) {
+                posted++;
+                core.info(`Posted Claude FINAL on PR #${pr.number}`);
+              }
+              await ps.syncPipelineLabels(github, owner, repo, pr.number, core);
+              if (posted >= 10) break;
+            }
+            core.info(`Missing/stale Claude FINAL sweep complete (${posted} posted)`);
+
+  # ================================================================
+  # BOT PRs: CodeRabbit → Claude directly (skip Copilot when no user PAT)
+  # Copilot ignores github-actions[bot] comments; bot PRs use this path.
+  # ================================================================
+  claude-after-coderabbit-bot-pr:
+    if: |
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request &&
+      github.event.comment.user.login == 'coderabbitai[bot]' &&
+      contains(github.event.comment.body, 'summarize by coderabbit')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: read
+    steps:
+      - name: Trigger Claude final review on bot PR
+        uses: actions/github-script@v7
+        env:
+          TRIGGER_LOGINS: ${{ env.CLAUDE_TRIGGER_LOGINS }}
+        with:
+          github-token: ${{ env.GH_TOKEN }}
+          script: |
+            const pr = context.issue.number;
+            const { data: pull } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr,
+            });
+            const author = pull.user.login;
+            const isBot = author === 'github-actions[bot]' ||
+              author === 'praisonai-triage-agent[bot]' ||
+              pull.user.type === 'Bot';
+            if (!isBot) {
+              console.log('Human PR — Copilot chain handles Claude trigger');
+              return;
+            }
+            const triggerLogins = JSON.parse(process.env.TRIGGER_LOGINS);
+            const comments = await github.rest.issues.listComments({
+              issue_number: pr,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100,
+            });
+            const alreadyPosted = comments.data.some(c =>
+              c.body.includes('@claude') && triggerLogins.includes(c.user.login)
+            );
+            if (alreadyPosted) {
+              console.log('Claude already triggered on PR #' + pr);
+              return;
+            }
+            await github.rest.issues.createComment({
+              issue_number: pr,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '@claude You are the FINAL architecture reviewer on this bot-authored PR. Push fixes directly to THIS branch (do NOT open a new PR). ' + process.env.CLAUDE_UI_SCOPE + ' Read ALL CodeRabbit/Qodo comments above.\n\n' + process.env.CLAUDE_FINAL_PHASES_COMPACT
+            });
+            console.log('Claude final review triggered on bot PR #' + pr);
+
+  # ================================================================
+  # Manual: trigger Claude final review on any PR
+  # ================================================================
+  claude-manual-dispatch:
+    if: github.event_name == 'workflow_dispatch' && inputs.pr_number
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Trigger Claude final review
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ inputs.pr_number }}
+          TRIGGER_LOGINS: ${{ env.CLAUDE_TRIGGER_LOGINS }}
+        with:
+          github-token: ${{ env.GH_TOKEN }}
+          script: |
+            const pr = parseInt(process.env.PR_NUMBER, 10);
+            const triggerLogins = JSON.parse(process.env.TRIGGER_LOGINS);
+            const comments = await github.rest.issues.listComments({
+              issue_number: pr,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100,
+            });
+            const alreadyPosted = comments.data.some(c =>
+              c.body.includes('@claude') && triggerLogins.includes(c.user.login)
+            );
+            if (alreadyPosted) {
+              console.log('Claude already triggered on PR #' + pr);
+              return;
+            }
+            await github.rest.issues.createComment({
+              issue_number: pr,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '@claude You are the FINAL architecture reviewer. If the branch is under MervinPraison/PraisonAI-Tools (not a fork), you are able to make modifications to this branch and push directly. ' + process.env.CLAUDE_UI_SCOPE + ' Read all prior reviewer comments.\n\n' + process.env.CLAUDE_FINAL_PHASES_COMPACT
+            });
+            console.log('Claude manually triggered on PR #' + pr);
+
+  # ================================================================
+  # BOT PRs: kick CodeRabbit + Qodo
+  # ================================================================
+  bot-pr-trigger-reviews:
+    if: |
+      github.event_name == 'pull_request' &&
+      github.event.action == 'opened' &&
+      (
+        github.event.pull_request.user.login == 'github-actions[bot]' ||
+        github.event.pull_request.user.login == 'praisonai-triage-agent[bot]' ||
+        github.event.pull_request.user.type == 'Bot'
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Trigger CodeRabbit and Qodo reviews
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ env.GH_TOKEN }}
+          script: |
+            const path = require('path');
+            const chain = require(path.join(process.env.GITHUB_WORKSPACE, '.github/scripts/bot-pr-review-chain.js'));
+            const pr = context.payload.pull_request.number;
+            await chain.kickReviewChain(github, context.repo.owner, context.repo.repo, pr, core);
+
+      - name: Sync pipeline status labels
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ env.GH_TOKEN }}
+          script: |
+            const path = require('path');
+            const ps = require(path.join(process.env.GITHUB_WORKSPACE, '.github/scripts/pipeline-status.js'));
+            const pr = context.payload.pull_request.number;
+            await ps.ensurePipelineLabels(github, context.repo.owner, context.repo.repo, core);
+            await ps.syncPipelineLabels(github, context.repo.owner, context.repo.repo, pr, core);
