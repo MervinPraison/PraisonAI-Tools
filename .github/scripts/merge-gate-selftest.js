@@ -212,6 +212,33 @@ assert('conflict still blocks without FINAL on HEAD', mg.hasRecentConflictCommen
   [conflictTrigger, rebaseDone],
   headAfterRebase
 ));
+assert(
+  'CLEAN + head after conflict clears without completion comment',
+  !mg.hasRecentConflictComment([conflictTrigger], headAfterRebase, 'CLEAN')
+);
+assert(
+  'UNSTABLE + head after conflict clears without completion comment',
+  !mg.hasRecentConflictComment([conflictTrigger], headAfterRebase, 'UNSTABLE')
+);
+assert(
+  'DIRTY still blocks even with head after conflict',
+  mg.hasRecentConflictComment([conflictTrigger], headAfterRebase, 'DIRTY')
+);
+assert(
+  'owner rebase-complete comment clears conflict',
+  !mg.hasRecentConflictComment(
+    [
+      conflictTrigger,
+      {
+        user: { login: 'MervinPraison' },
+        body: '**Rebase complete** — conflicts resolved.',
+        created_at: conflictIso(-29 * 60 * 1000),
+      },
+      finalAfterRebase,
+    ],
+    headAfterRebase
+  )
+);
 
 // Tests heuristic
 assert('product code without tests', mg.missingTestsReason([{ filename: productSample, additions: 3 }]) !== null);
