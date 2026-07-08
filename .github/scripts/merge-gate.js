@@ -135,14 +135,18 @@ function hasRecentConflictComment(comments, headPushedAt = null, mergeStateStatu
   // GitHub mergeable (CLEAN/UNSTABLE) and HEAD pushed after the conflict trigger → resolved
   const status = String(mergeStateStatus || '').toUpperCase();
   if (headPushedAt && ALLOWED_MERGE_STATES.has(status)) {
+    // conflictTriggers is guaranteed non-empty here (hasRecentTrigger is true above);
+    // the null seed keeps reduce() safe if that invariant ever changes.
     const conflictTriggers = comments.filter(isConflictRebaseTriggerComment);
-    if (conflictTriggers.length > 0) {
-      const latestConflict = conflictTriggers.reduce((a, b) =>
-        new Date(a.created_at) > new Date(b.created_at) ? a : b
-      );
-      if (new Date(headPushedAt).getTime() > new Date(latestConflict.created_at).getTime()) {
-        return false;
-      }
+    const latestConflict = conflictTriggers.reduce(
+      (a, b) => (a && new Date(a.created_at) > new Date(b.created_at) ? a : b),
+      null
+    );
+    if (
+      latestConflict &&
+      new Date(headPushedAt).getTime() > new Date(latestConflict.created_at).getTime()
+    ) {
+      return false;
     }
   }
   return true;
