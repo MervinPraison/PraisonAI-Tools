@@ -38,8 +38,12 @@ from praisonai_tools.tools.base import BaseTool
 logger = logging.getLogger(__name__)
 
 
-def _check_inkog_available() -> tuple[bool, Optional[str]]:
+def _check_inkog_available(api_key: Optional[str] = None) -> tuple[bool, Optional[str]]:
     """Check if inkog CLI is available and properly configured.
+    
+    Args:
+        api_key: Optional API key to validate. Falls back to the
+            INKOG_API_KEY environment variable when not provided.
     
     Returns:
         Tuple of (is_available, error_message)
@@ -61,8 +65,8 @@ def _check_inkog_available() -> tuple[bool, Optional[str]]:
     except Exception as e:
         return False, f"Error checking inkog installation: {e}"
     
-    # Check for API key
-    api_key = os.environ.get("INKOG_API_KEY")
+    # Check for API key (instance-provided key takes precedence over env var)
+    api_key = api_key or os.environ.get("INKOG_API_KEY")
     if not api_key:
         return False, "INKOG_API_KEY environment variable is required. Get your free key at https://app.inkog.io"
     
@@ -183,7 +187,7 @@ class InkogTool(BaseTool):
         Returns:
             Scan results as dict (JSON format) or string (other formats)
         """
-        is_available, error = _check_inkog_available()
+        is_available, error = _check_inkog_available(self._get_api_key())
         if not is_available:
             logger.error(error)
             return {"error": error}
@@ -268,7 +272,7 @@ class InkogTool(BaseTool):
         Returns:
             Scan results as dict (JSON format) or string (other formats)
         """
-        is_available, error = _check_inkog_available()
+        is_available, error = _check_inkog_available(self._get_api_key())
         if not is_available:
             logger.error(error)
             return {"error": error}
@@ -343,7 +347,7 @@ class InkogTool(BaseTool):
         Returns:
             Scan results as dict (JSON format) or string (other formats)
         """
-        is_available, error = _check_inkog_available()
+        is_available, error = _check_inkog_available(self._get_api_key())
         if not is_available:
             logger.error(error)
             return {"error": error}
@@ -465,6 +469,7 @@ def scan_agent_code(
     path: str = ".",
     output_format: str = "json", 
     policy: str = "balanced",
+    severity: str = "low",
     deep: bool = False
 ) -> Union[Dict[str, Any], str]:
     """Scan AI agent code for security vulnerabilities using Inkog.
@@ -473,6 +478,7 @@ def scan_agent_code(
         path: Path to scan (directory or file)
         output_format: Output format ("json", "text", "html", "sarif")
         policy: Security policy ("low-noise", "balanced", "comprehensive")
+        severity: Minimum severity level ("critical", "high", "medium", "low")
         deep: Enable deep scan with AI orchestrator analysis
         
     Returns:
@@ -483,6 +489,7 @@ def scan_agent_code(
         path=path,
         output_format=output_format,
         policy=policy,
+        severity=severity,
         deep=deep
     )
 

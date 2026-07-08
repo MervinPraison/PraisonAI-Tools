@@ -114,6 +114,16 @@ class TestInkogAvailability:
             is_available, error = _check_inkog_available()
             assert is_available is False
             assert "INKOG_API_KEY" in error
+    
+    @patch("subprocess.run")
+    def test_check_inkog_available_with_instance_api_key(self, mock_run):
+        """Instance-provided api_key satisfies the availability check."""
+        mock_run.return_value = MagicMock(returncode=0)
+        
+        with patch.dict("os.environ", {}, clear=True):
+            is_available, error = _check_inkog_available(api_key="instance_key")
+            assert is_available is True
+            assert error is None
 
 
 class TestInkogScanOperations:
@@ -260,7 +270,8 @@ class TestStandaloneFunctions:
         mock_tool.scan_directory.assert_called_once_with(
             path="./test",
             output_format="json",
-            policy="balanced", 
+            policy="balanced",
+            severity="low",
             deep=True
         )
 
