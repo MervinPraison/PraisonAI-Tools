@@ -660,6 +660,29 @@ agent.start("Check the weather in London and send a Slack message about it")
 
 ---
 
+## Composio Integration
+
+Load 250+ managed app integrations (GitHub, Slack, Gmail, Jira, etc.) as agent-callable tools:
+
+```bash
+pip install praisonai-tools[composio]
+export COMPOSIO_API_KEY=your_api_key
+```
+
+```python
+from praisonaiagents import Agent
+from praisonai_tools import composio_tools, composio_list_apps
+
+print(composio_list_apps()[:5])  # ["github", "slack", ...]
+
+agent = Agent(name="dev", tools=composio_tools(apps=["github"]))
+agent.start("Star the praisonai/PraisonAI repository")
+```
+
+For explicit action execution, use `ComposioTool` or `composio_execute()`.
+
+---
+
 ## Contributing
 
 We welcome contributions! To add a new tool:

@@ -144,4 +144,10 @@ __all__ = [
     "AgentFolioTool",
     "check_behavioral_trust",
     "verify_task_delegation_safety",
+    # Composio
+    "ComposioTool",
+    "ComposioTools",
+    "composio_execute",
+    "composio_tools",
+    "composio_list_apps",
 ]
