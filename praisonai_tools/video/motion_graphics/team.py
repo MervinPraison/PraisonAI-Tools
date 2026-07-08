@@ -2,7 +2,7 @@
 
 import tempfile
 from pathlib import Path
-from typing import Union, Any, Optional
+from typing import Union, Any
 
 try:
     from praisonaiagents import Agent, AgentTeam

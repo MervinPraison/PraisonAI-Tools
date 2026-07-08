@@ -35,7 +35,7 @@ Environment Variables:
 import os
 import logging
 import time
-from typing import Any, Dict, Optional, Union, Callable, List
+from typing import Any, Dict, Optional, Union, Callable
 from dataclasses import dataclass
 from functools import wraps
 

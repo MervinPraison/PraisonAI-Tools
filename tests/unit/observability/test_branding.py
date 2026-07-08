@@ -7,8 +7,7 @@ Verifies:
 - Workflow span names are simplified
 """
 
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 
 class TestTracerName:
@@ -45,7 +44,6 @@ class TestBrandingAttributes:
 
     def test_branding_attrs_set_on_agent_span(self):
         """Agent spans should carry praisonai.version and praisonai.framework."""
-        from praisonai_tools.observability.base import SpanKind
 
         manager = self._make_manager()
 

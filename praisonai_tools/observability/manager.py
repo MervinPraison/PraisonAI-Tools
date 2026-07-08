@@ -183,7 +183,6 @@ class ObservabilityManager:
             # Register bridge sink for ContextTraceEmitter events
             self._setup_bridge_sink()
             
-            from functools import wraps
             
             # Try to import praisonaiagents classes
             try:
@@ -514,7 +513,7 @@ class ObservabilityManager:
         if name in provider_modules:
             try:
                 import importlib
-                module = importlib.import_module(
+                importlib.import_module(
                     f"praisonai_tools.observability.providers.{provider_modules[name]}"
                 )
                 # Provider should auto-register on import

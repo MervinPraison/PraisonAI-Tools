@@ -12,16 +12,11 @@ df = read_excel("data.xlsx")
 import logging
 from typing import List, Dict, Union, Optional, Any, TYPE_CHECKING, Tuple
 from importlib import util
-import json
-from pathlib import Path
 import tempfile
 import os
 
 if TYPE_CHECKING:
     import pandas as pd
-    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-    from openpyxl.chart import BarChart, LineChart, PieChart, Reference
-    from openpyxl.chart.label import DataLabelList
 
 class ExcelTools:
     """Tools for working with Excel files."""

@@ -43,7 +43,7 @@ class OpikProvider(BaseObservabilityProvider):
         try:
             import opik
             
-            api_key = kwargs.get("api_key") or os.getenv("OPIK_API_KEY") or os.getenv("COMET_API_KEY")
+            kwargs.get("api_key") or os.getenv("OPIK_API_KEY") or os.getenv("COMET_API_KEY")
             use_local = kwargs.get("use_local", False)
             
             opik.configure(use_local=use_local)

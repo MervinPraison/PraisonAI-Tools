@@ -4,7 +4,6 @@ import os
 import re
 import subprocess
 import tempfile
-import urllib.parse
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
@@ -313,7 +312,7 @@ class GitTools:
             branches = []
             
             for line in output.strip().split("\n"):
-                if line and not "origin/HEAD" in line:
+                if line and "origin/HEAD" not in line:
                     branch = line.strip().replace("origin/", "")
                     branches.append(branch)
             

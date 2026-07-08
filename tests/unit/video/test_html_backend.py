@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch, AsyncMock
 
 from praisonai_tools.video.motion_graphics.backend_html import HtmlRenderBackend
-from praisonai_tools.video.motion_graphics.protocols import RenderOpts, LintResult, RenderResult
+from praisonai_tools.video.motion_graphics.protocols import RenderOpts
 
 
 class TestHtmlRenderBackend:

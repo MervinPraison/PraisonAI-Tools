@@ -6,12 +6,11 @@ https://agentops.ai/
 """
 
 import os
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from praisonai_tools.observability.base import (
     BaseObservabilityProvider,
     Span,
-    SpanStatus,
     Trace,
 )
 from praisonai_tools.observability.config import ObservabilityConfig

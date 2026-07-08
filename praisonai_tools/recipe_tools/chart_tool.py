@@ -7,9 +7,8 @@ Uses matplotlib for rendering with optional AI-assisted chart selection.
 
 import os
 import logging
-from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any, Union
-from pathlib import Path
+from dataclasses import dataclass
+from typing import Optional, List, Dict, Union
 
 try:
     from .base import RecipeToolBase, RecipeToolResult

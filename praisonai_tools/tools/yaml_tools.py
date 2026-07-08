@@ -263,23 +263,17 @@ class YAMLTools:
                 
                 # Get reference to target location
                 target = result
-                parent = None
-                last_key = None
                 
                 for part in parts[:-1]:
                     if isinstance(target, dict):
                         if part not in target:
                             target[part] = {}
-                        parent = target
                         target = target[part]
-                        last_key = part
                     elif isinstance(target, list):
                         idx = int(part)
                         while len(target) <= idx:
                             target.append({})
-                        parent = target
                         target = target[idx]
-                        last_key = idx
                 
                 if parts:
                     last_part = parts[-1]

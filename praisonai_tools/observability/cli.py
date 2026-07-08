@@ -6,7 +6,6 @@ Can be run standalone: python -m praisonai_tools.observability.cli doctor
 Or via the praisonai wrapper: praisonai obs doctor
 """
 
-from typing import Optional
 
 import typer
 
@@ -125,7 +124,6 @@ def obs_verify(
         python -m praisonai_tools.observability.cli verify --json
     """
     from rich.console import Console
-    from rich.table import Table
 
     console = Console()
 
@@ -195,7 +193,7 @@ def _verify_langsmith(console, project: str, limit: int, json_output: bool):
         raise typer.Exit(0)
 
     # Pretty print
-    console.print(f"\n[bold cyan]🔍 PraisonAI Trace Verification[/bold cyan]")
+    console.print("\n[bold cyan]🔍 PraisonAI Trace Verification[/bold cyan]")
     console.print(f"[dim]Project: {project} | Endpoint: {endpoint}[/dim]\n")
 
     if not results:
@@ -237,7 +235,7 @@ def _verify_langsmith(console, project: str, limit: int, json_output: bool):
     elif branded_count > 0:
         console.print(f"[yellow]⚠ {branded_count}/{total} runs have PraisonAI branding[/yellow]")
     else:
-        console.print(f"[red]✗ No runs have PraisonAI branding[/red]")
+        console.print("[red]✗ No runs have PraisonAI branding[/red]")
 
     console.print()
     raise typer.Exit(0)

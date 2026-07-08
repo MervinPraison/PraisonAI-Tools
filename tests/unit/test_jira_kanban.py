@@ -77,7 +77,7 @@ class TestJiraKanbanBoards:
         
         mock_client.boards.return_value = [mock_board]
         
-        boards = jira.list_boards(board_type="kanban")
+        jira.list_boards(board_type="kanban")
         
         mock_client.boards.assert_called_once()
         # Check that type parameter was passed
@@ -397,7 +397,7 @@ class TestJiraRunAction:
         with patch.object(jira, 'list_boards') as mock_method:
             mock_method.return_value = [{"id": 1}]
             
-            result = jira.run(action="list_boards")
+            jira.run(action="list_boards")
             
             mock_method.assert_called_once()
     
@@ -415,7 +415,7 @@ class TestJiraRunAction:
         with patch.object(jira, 'get_board') as mock_method:
             mock_method.return_value = {"id": 2}
             
-            result = jira.run(action="get_board", board_id=2)
+            jira.run(action="get_board", board_id=2)
             
             mock_method.assert_called_once_with(board_id=2)
     
@@ -433,7 +433,7 @@ class TestJiraRunAction:
         with patch.object(jira, 'transition_issue') as mock_method:
             mock_method.return_value = {"success": True}
             
-            result = jira.run(
+            jira.run(
                 action="transition_issue",
                 issue_key="KAN-1",
                 transition_name="In Progress"
@@ -492,7 +492,7 @@ class TestJiraAgileRequest:
         mock_session.get.return_value = mock_response
         jira._session = mock_session
         
-        result = jira._agile_request("/board", params={"type": "kanban"})
+        jira._agile_request("/board", params={"type": "kanban"})
         
         call_args = mock_session.get.call_args
         assert call_args[1]["params"]["type"] == "kanban"

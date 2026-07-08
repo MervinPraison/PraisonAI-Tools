@@ -6,7 +6,7 @@ without requiring explicit obs.trace() context manager wrappers.
 """
 
 import pytest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 import os
 
 
@@ -94,7 +94,7 @@ class TestAutoInstrumentation:
             
             # Create agent WITHOUT obs.init()
             start = time.time()
-            agent = Agent(name="TestAgent", instructions="Test")
+            Agent(name="TestAgent", instructions="Test")
             creation_time = time.time() - start
             
             # Should be fast (no instrumentation overhead)

@@ -1,6 +1,4 @@
-import pytest
 import sys
-import os
 from pathlib import Path
 
 # Add scripts to path so we can import the generator

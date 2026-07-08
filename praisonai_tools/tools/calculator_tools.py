@@ -48,7 +48,6 @@ class CalculatorTools:
                 return {"error": error_msg}
 
             # Import sympy only when needed
-            import sympy
 
             # Replace common mathematical functions
             expression = expression.lower()

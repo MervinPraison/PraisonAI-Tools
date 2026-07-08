@@ -6,12 +6,10 @@ Generates Mintlify-compatible MDX documentation from Python and TypeScript sourc
 
 from __future__ import annotations
 
-import shutil
-import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 import ast
 import re
 import json
@@ -2165,7 +2163,7 @@ class TypeScriptDocParser:
             # Find line number
             line_no = content[:match.start()].count('\n') + 1
             # Extract class body for function calls
-            class_body = self._extract_block(content, match.end())
+            self._extract_block(content, match.end())
             classes.append(ClassInfo(
                 name=name,
                 bases=[base] if base else [],
@@ -2989,9 +2987,9 @@ class ReferenceDocsGenerator:
                                 print(f"      Generated: {r.name}")
             
             if generator.generated_files and not dry_run:
-                print(f"\nCleaning up orphaned MDX files...")
+                print("\nCleaning up orphaned MDX files...")
                 self.cleanup_orphaned_files(config["output"], generator.generated_files)
-                print(f"\nUpdating docs.json navigation...")
+                print("\nUpdating docs.json navigation...")
                 self.update_docs_json(package_name, sorted(list(generator.generated_files)))
             return
         else:
@@ -3003,7 +3001,7 @@ class ReferenceDocsGenerator:
         
         # Two-pass generation for Used By cross-references:
         # Pass 1: Parse all modules and build the index
-        print(f"  Pass 1: Building cross-reference index...")
+        print("  Pass 1: Building cross-reference index...")
         parsed_modules = []
         for module in modules:
             module_name = module.split(".")[-1] if "." in module else module
@@ -3018,7 +3016,7 @@ class ReferenceDocsGenerator:
         print(f"  Built index with {len(generator.used_by_index)} functions tracked")
         
         # Pass 2: Generate documentation with cross-references
-        print(f"  Pass 2: Generating documentation...")
+        print("  Pass 2: Generating documentation...")
         generated = 0
         for info in parsed_modules:
             print(f"  Processing: {info.name}")
@@ -3036,7 +3034,7 @@ class ReferenceDocsGenerator:
             # print(f"\nCleaning up orphaned MDX files...")
             # self.cleanup_orphaned_files(config["output"], generator.generated_files)
             
-            print(f"\nUpdating docs.json navigation...")
+            print("\nUpdating docs.json navigation...")
             self.update_docs_json(package_name, sorted(list(generator.generated_files)))
 
     def cleanup_orphaned_files(self, output_dir: Path, current_files: set):

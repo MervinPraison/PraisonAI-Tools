@@ -14,8 +14,6 @@ from typing import List, Dict, Union, Optional, Any, Tuple
 from importlib import util
 import xml.etree.ElementTree as ET
 import xml.dom.minidom as minidom
-from io import StringIO
-import json
 
 class XMLTools:
     """Tools for working with XML files."""

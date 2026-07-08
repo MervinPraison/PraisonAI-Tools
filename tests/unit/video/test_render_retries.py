@@ -3,7 +3,6 @@
 import pytest
 import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock
 
 try:
     from praisonai_tools.video.motion_graphics.agent import RenderTools

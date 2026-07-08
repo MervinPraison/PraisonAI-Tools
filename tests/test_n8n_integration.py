@@ -24,7 +24,7 @@ class TestN8nWorkflowTool:
         
         mock_module.HTTPStatusError = MockHTTPStatusError
         
-        with patch.dict('sys.modules', {'httpx': mock_module}) as mock_modules:
+        with patch.dict('sys.modules', {'httpx': mock_module}):
             yield mock_module
     
     def test_import_n8n_tools(self):

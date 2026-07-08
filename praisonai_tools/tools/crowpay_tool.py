@@ -17,7 +17,7 @@ Environment Variables:
 
 import os
 import logging
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional
 from urllib.parse import quote
 
 from praisonai_tools.tools.base import BaseTool

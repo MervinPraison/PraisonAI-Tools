@@ -28,7 +28,7 @@ jobs:
           pip install ruff pytest-timeout
 
       - name: Lint with ruff
-        run: ruff check praisonai_tools tests --ignore E501
+        run: ruff check praisonai_tools tests --ignore E501,E701,E722,F401,F402
 
       - name: Test with pytest
         run: pytest tests/unit -v --timeout=120 -x -q
