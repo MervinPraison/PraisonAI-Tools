@@ -1,0 +1,314 @@
+"""Unit tests for JIRA watch tools."""
+
+import sys
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
+
+# Optional dependency — stub so @patch("jira.JIRA") resolves in CI without jira installed.
+sys.modules.setdefault("jira", MagicMock())
+
+from praisonai_tools.tools.jira_watch_tool import (  # noqa: E402
+    jira_watch_issue,
+    jira_watch_project,
+    jira_get_issue_info,
+    jira_search_issues,
+    jira_tools,
+    _get_jira_connection,
+    _validate_project_key,
+    _validate_issue_key,
+    _validate_timestamp,
+)
+
+
+class TestJIRAConnection:
+    @patch("jira.JIRA")
+    def test_connection_with_email_token(self, mock_jira):
+        _get_jira_connection(
+            url="https://test.atlassian.net",
+            email="test@example.com",
+            token="test_token",
+        )
+        mock_jira.assert_called_once_with(
+            server="https://test.atlassian.net",
+            basic_auth=("test@example.com", "test_token"),
+        )
+
+    @patch("jira.JIRA")
+    def test_connection_with_username_token(self, mock_jira):
+        _get_jira_connection(
+            url="https://test.atlassian.net",
+            username="test_user",
+            token="test_token",
+        )
+        mock_jira.assert_called_once_with(
+            server="https://test.atlassian.net",
+            basic_auth=("test_user", "test_token"),
+        )
+
+    def test_connection_missing_auth(self, monkeypatch):
+        for var in ("JIRA_EMAIL", "JIRA_USERNAME", "JIRA_API_TOKEN"):
+            monkeypatch.delenv(var, raising=False)
+        with pytest.raises(ValueError, match="JIRA authentication required"):
+            _get_jira_connection(url="https://test.atlassian.net")
+
+    def test_connection_missing_url(self, monkeypatch):
+        monkeypatch.delenv("JIRA_URL", raising=False)
+        with pytest.raises(ValueError, match="JIRA URL is required"):
+            _get_jira_connection(email="test@example.com", token="token")
+
+
+class TestJIRAGetIssueInfo:
+    @patch("praisonai_tools.tools.jira_watch_tool._get_jira_connection")
+    def test_get_issue_info_success(self, mock_connection):
+        mock_jira = Mock()
+        mock_connection.return_value = mock_jira
+
+        mock_issue = Mock()
+        mock_issue.key = "PROJ-123"
+        mock_issue.fields.summary = "Test issue"
+        mock_issue.fields.status.name = "Open"
+        mock_issue.fields.priority.name = "High"
+        mock_issue.fields.assignee.displayName = "John Doe"
+        mock_issue.fields.reporter.displayName = "Jane Smith"
+        mock_issue.fields.created = "2024-01-01T10:00:00"
+        mock_issue.fields.updated = "2024-01-02T15:30:00"
+        mock_issue.fields.description = "Test description"
+
+        mock_jira.issue.return_value = mock_issue
+        mock_jira.comments.return_value = []
+
+        result = jira_get_issue_info(
+            issue_key="PROJ-123",
+            url="https://test.atlassian.net",
+            email="test@example.com",
+            token="test_token",
+        )
+
+        assert "PROJ-123" in result
+        assert "Test issue" in result
+        assert "Open" in result
+
+
+class TestJIRASearchIssues:
+    @patch("praisonai_tools.tools.jira_watch_tool._get_jira_connection")
+    def test_search_issues_success(self, mock_connection):
+        mock_jira = Mock()
+        mock_connection.return_value = mock_jira
+
+        mock_issue = Mock()
+        mock_issue.key = "PROJ-123"
+        mock_issue.fields.summary = "First issue"
+        mock_issue.fields.status.name = "Open"
+        mock_issue.fields.assignee.displayName = "John Doe"
+        mock_issue.fields.updated = "2024-01-01T10:00:00"
+
+        mock_jira.search_issues.return_value = [mock_issue]
+
+        result = jira_search_issues(
+            jql="project = PROJ",
+            url="https://test.atlassian.net",
+            email="test@example.com",
+            token="test_token",
+        )
+
+        assert "Found 1 issues" in result
+        assert "PROJ-123" in result
+
+
+class TestJIRAWatchIssue:
+    @patch("praisonai_tools.tools.jira_watch_tool._get_jira_connection")
+    def test_watch_issue_current_state(self, mock_connection):
+        mock_jira = Mock()
+        mock_connection.return_value = mock_jira
+
+        mock_issue = Mock()
+        mock_issue.fields.updated = "2024-01-01T10:00:00"
+        mock_issue.fields.status.name = "Open"
+        mock_issue.fields.summary = "Test issue"
+        mock_issue.fields.assignee.displayName = "John Doe"
+        mock_issue.fields.priority.name = "High"
+
+        mock_jira.issue.return_value = mock_issue
+
+        result = jira_watch_issue(
+            issue_key="PROJ-123",
+            url="https://test.atlassian.net",
+            email="test@example.com",
+            token="test_token",
+        )
+
+        assert "current state" in result
+        assert "PROJ-123" in result
+
+
+class TestJIRAWatchProject:
+    @patch("praisonai_tools.tools.jira_watch_tool._get_jira_connection")
+    def test_watch_project_recent_activity(self, mock_connection):
+        mock_jira = Mock()
+        mock_connection.return_value = mock_jira
+
+        mock_issue = Mock()
+        mock_issue.key = "PROJ-123"
+        mock_issue.fields.summary = "Test issue"
+        mock_issue.fields.status.name = "Open"
+        mock_issue.fields.updated = "2024-01-01T10:00:00"
+
+        mock_jira.search_issues.return_value = [mock_issue]
+
+        result = jira_watch_project(
+            project_key="PROJ",
+            url="https://test.atlassian.net",
+            email="test@example.com",
+            token="test_token",
+        )
+
+        assert "recent activity" in result
+        assert "PROJ-123" in result
+
+
+class TestJIRAValidation:
+    def test_validate_project_key_valid(self):
+        assert _validate_project_key("PROJ")
+        assert _validate_project_key("MY_PROJECT")
+
+    def test_validate_project_key_invalid(self):
+        with pytest.raises(ValueError):
+            _validate_project_key("proj")
+        with pytest.raises(ValueError):
+            _validate_project_key("PROJ OR 1=1")
+
+    def test_validate_issue_key_valid(self):
+        assert _validate_issue_key("PROJ-123")
+        assert _validate_issue_key("abc_123")
+
+    def test_validate_issue_key_invalid(self):
+        with pytest.raises(ValueError):
+            _validate_issue_key("../secret")
+        with pytest.raises(ValueError):
+            _validate_issue_key('PROJ-1" OR "1"="1')
+
+    def test_validate_timestamp_valid(self):
+        assert _validate_timestamp("2024-01-01T00:00:00Z") == "2024-01-01 00:00"
+        assert _validate_timestamp("2024-01-01T10:30:00") == "2024-01-01 10:30"
+
+    def test_validate_timestamp_rejects_injection(self):
+        with pytest.raises(ValueError):
+            _validate_timestamp('2024-01-01" OR project = SECRET AND created >= "2024-01-01')
+
+
+class TestJIRAWatchSinceTimestamp:
+    @patch("praisonai_tools.tools.jira_watch_tool._get_jira_connection")
+    def test_watch_issue_no_change(self, mock_connection):
+        mock_jira = Mock()
+        mock_connection.return_value = mock_jira
+        mock_issue = Mock()
+        mock_issue.fields.updated = "2024-01-01T10:00:00+00:00"
+        mock_issue.fields.status.name = "Open"
+        mock_issue.fields.summary = "Test issue"
+        mock_issue.changelog.histories = []
+        mock_jira.issue.return_value = mock_issue
+
+        result = jira_watch_issue(
+            issue_key="PROJ-123",
+            url="https://test.atlassian.net",
+            email="test@example.com",
+            token="test_token",
+            since_timestamp="2024-06-01T00:00:00Z",
+        )
+        assert "No changes detected" in result
+
+    @patch("praisonai_tools.tools.jira_watch_tool._get_jira_connection")
+    def test_watch_issue_change_detected(self, mock_connection):
+        mock_jira = Mock()
+        mock_connection.return_value = mock_jira
+        mock_issue = Mock()
+        mock_issue.fields.updated = "2024-06-15T10:00:00+00:00"
+        mock_issue.fields.status.name = "Done"
+        mock_issue.fields.summary = "Test issue"
+        mock_issue.fields.assignee.displayName = "John Doe"
+        mock_issue.fields.priority.name = "High"
+        mock_issue.changelog.histories = []
+        mock_jira.issue.return_value = mock_issue
+        mock_jira.comments.return_value = []
+
+        result = jira_watch_issue(
+            issue_key="PROJ-123",
+            url="https://test.atlassian.net",
+            email="test@example.com",
+            token="test_token",
+            since_timestamp="2024-01-01T00:00:00Z",
+        )
+        assert "changes detected" in result
+        assert "PROJ-123" in result
+
+    @patch("praisonai_tools.tools.jira_watch_tool._get_jira_connection")
+    def test_watch_issue_reports_all_in_window_changes(self, mock_connection):
+        mock_jira = Mock()
+        mock_connection.return_value = mock_jira
+        mock_issue = Mock()
+        mock_issue.fields.updated = "2024-06-15T10:00:00+00:00"
+        mock_issue.fields.status.name = "Done"
+        mock_issue.fields.summary = "Test issue"
+        mock_issue.fields.assignee.displayName = "John Doe"
+        mock_issue.fields.priority.name = "High"
+
+        histories = []
+        for idx in range(5):
+            hist = Mock()
+            hist.created = f"2024-06-1{idx}T10:00:00+00:00"
+            hist.author.displayName = "Editor"
+            item = Mock()
+            item.field = f"field{idx}"
+            item.fromString = "old"
+            item.toString = "new"
+            hist.items = [item]
+            histories.append(hist)
+        mock_issue.changelog.histories = histories
+        mock_jira.issue.return_value = mock_issue
+        mock_jira.comments.return_value = []
+
+        result = jira_watch_issue(
+            issue_key="PROJ-123",
+            url="https://test.atlassian.net",
+            email="test@example.com",
+            token="test_token",
+            since_timestamp="2024-01-01T00:00:00Z",
+        )
+        for idx in range(5):
+            assert f"field{idx}" in result
+
+    @patch("praisonai_tools.tools.jira_watch_tool._get_jira_connection")
+    def test_watch_project_since_timestamp_no_injection(self, mock_connection):
+        mock_jira = Mock()
+        mock_connection.return_value = mock_jira
+        mock_jira.search_issues.return_value = []
+
+        result = jira_watch_project(
+            project_key="PROJ",
+            url="https://test.atlassian.net",
+            email="test@example.com",
+            token="test_token",
+            since_timestamp="2024-01-01T00:00:00Z",
+        )
+        assert "No changes detected" in result
+        for call in mock_jira.search_issues.call_args_list:
+            assert '2024-01-01 00:00' in call.args[0]
+
+    @patch("praisonai_tools.tools.jira_watch_tool._get_jira_connection")
+    def test_watch_project_rejects_bad_timestamp(self, mock_connection):
+        mock_connection.return_value = Mock()
+        result = jira_watch_project(
+            project_key="PROJ",
+            url="https://test.atlassian.net",
+            email="test@example.com",
+            token="test_token",
+            since_timestamp='bad" OR "1"="1',
+        )
+        assert "Error" in result
+
+
+def test_jira_tools_collection():
+    tools = jira_tools()
+    assert isinstance(tools, list)
+    assert len(tools) == 4

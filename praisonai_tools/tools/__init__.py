@@ -139,6 +139,11 @@ def __getattr__(name):
         "jira_get_transitions": "jira_tool",
         "jira_move_issue": "jira_tool",
         "jira_create_task": "jira_tool",
+        "jira_watch_issue": "jira_watch_tool",
+        "jira_watch_project": "jira_watch_tool",
+        "jira_get_issue_info": "jira_watch_tool",
+        "jira_search_issues": "jira_watch_tool",
+        "jira_tools": "jira_watch_tool",
         # Trello
         "TrelloTool": "trello_tool",
         "list_trello_boards": "trello_tool",
@@ -684,6 +689,11 @@ __all__ = [
     "jira_get_transitions",
     "jira_move_issue",
     "jira_create_task",
+    "jira_watch_issue",
+    "jira_watch_project",
+    "jira_get_issue_info",
+    "jira_search_issues",
+    "jira_tools",
     # Trello Tool
     "TrelloTool",
     "list_trello_boards",
