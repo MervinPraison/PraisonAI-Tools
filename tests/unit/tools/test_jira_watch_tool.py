@@ -8,7 +8,7 @@ import pytest
 # Optional dependency — stub so @patch("jira.JIRA") resolves in CI without jira installed.
 sys.modules.setdefault("jira", MagicMock())
 
-from praisonai_tools.tools.jira_watch_tool import (
+from praisonai_tools.tools.jira_watch_tool import (  # noqa: E402
     jira_watch_issue,
     jira_watch_project,
     jira_get_issue_info,
