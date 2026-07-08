@@ -15,8 +15,13 @@ from praisonai_tools import jira_tools
 
 
 def main():
-    if not os.getenv("JIRA_API_TOKEN"):
-        print("Set JIRA_API_TOKEN, JIRA_EMAIL (or JIRA_USERNAME), and JIRA_URL")
+    jira_url = os.getenv("JIRA_URL")
+    jira_token = os.getenv("JIRA_API_TOKEN")
+    jira_email = os.getenv("JIRA_EMAIL")
+    jira_username = os.getenv("JIRA_USERNAME")
+
+    if not jira_url or not jira_token or not (jira_email or jira_username):
+        print("Set JIRA_URL, JIRA_API_TOKEN, and JIRA_EMAIL (or JIRA_USERNAME)")
         return
 
     agent = Agent(

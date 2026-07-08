@@ -4,11 +4,20 @@ import logging
 import os
 import re
 import time
+from datetime import datetime, timezone
 from typing import Optional
 
 from praisonai_tools.tools.decorator import tool
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_datetime(ts_str: str) -> datetime:
+    """Parse a timestamp string into a timezone-aware datetime for safe comparison."""
+    dt = datetime.fromisoformat(str(ts_str).replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
 
 
 def _get_jira_connection(
@@ -58,6 +67,31 @@ def _validate_project_key(project_key: str) -> bool:
     return True
 
 
+def _validate_issue_key(issue_key: str) -> bool:
+    """Validate JIRA issue key to prevent path traversal or API abuse."""
+    if not re.match(r"^[A-Za-z0-9_-]+$", issue_key):
+        raise ValueError(
+            f"Invalid issue key format: {issue_key}. "
+            "Must contain only alphanumeric characters, underscores, and hyphens."
+        )
+    return True
+
+
+def _validate_timestamp(timestamp: str) -> str:
+    """Validate and normalize a timestamp to prevent JQL injection.
+
+    Returns a canonical 'YYYY-MM-DD HH:MM' string safe for JQL interpolation.
+    """
+    try:
+        dt = _parse_datetime(timestamp)
+    except (ValueError, TypeError) as exc:
+        raise ValueError(
+            f"Invalid timestamp format: {timestamp}. "
+            "Use ISO-8601, e.g. 2024-01-01T00:00:00Z"
+        ) from exc
+    return dt.strftime("%Y-%m-%d %H:%M")
+
+
 @tool
 def jira_watch_issue(
     issue_key: str,
@@ -69,6 +103,8 @@ def jira_watch_issue(
 ) -> str:
     """Check a specific JIRA issue for changes since a timestamp."""
     try:
+        _validate_issue_key(issue_key)
+        since_dt = _parse_datetime(since_timestamp) if since_timestamp else None
         jira = _get_jira_connection(url, username, token, email)
         issue = jira.issue(issue_key, expand="changelog")
         current_updated = issue.fields.updated
@@ -86,7 +122,7 @@ def jira_watch_issue(
             return result
 
         changes_detected = []
-        if current_updated > since_timestamp:
+        if _parse_datetime(current_updated) > since_dt:
             change_info = {
                 "timestamp": current_updated,
                 "status": current_status,
@@ -98,13 +134,17 @@ def jira_watch_issue(
             recent_changes = []
             if issue.changelog and issue.changelog.histories:
                 for history in issue.changelog.histories[-3:]:
-                    if history.created > since_timestamp:
+                    try:
+                        history_dt = _parse_datetime(history.created)
+                    except (ValueError, TypeError):
+                        continue
+                    if history_dt > since_dt:
                         for item in history.items:
                             recent_changes.append({
                                 "field": item.field,
                                 "from": item.fromString,
                                 "to": item.toString,
-                                "author": history.author.displayName,
+                                "author": history.author.displayName if history.author else "System",
                                 "created": history.created,
                             })
 
@@ -113,9 +153,13 @@ def jira_watch_issue(
 
             comment_changes = []
             for comment in jira.comments(issue_key):
-                if comment.created > since_timestamp:
+                try:
+                    comment_dt = _parse_datetime(comment.created)
+                except (ValueError, TypeError):
+                    continue
+                if comment_dt > since_dt:
                     comment_changes.append({
-                        "author": comment.author.displayName,
+                        "author": comment.author.displayName if comment.author else "Unknown",
                         "body": comment.body[:500],
                         "created": comment.created,
                     })
@@ -158,6 +202,7 @@ def jira_watch_project(
     """Check a JIRA project for new issues and updates since a timestamp."""
     try:
         _validate_project_key(project_key)
+        since_for_jql = _validate_timestamp(since_timestamp) if since_timestamp else None
         jira = _get_jira_connection(url, username, token, email)
 
         project_changes = {
@@ -168,27 +213,27 @@ def jira_watch_project(
 
         if not since_timestamp:
             recent_jql = f"project = {project_key} ORDER BY updated DESC"
-            recent_issues = jira.search_issues(recent_jql, maxResults=20)
+            recent_issues = jira.search_issues(recent_jql, maxResults=10)
             result = f"JIRA project {project_key} recent activity ({len(recent_issues)} issues):\n"
-            for issue in recent_issues[:10]:
+            for issue in recent_issues:
                 result += f"  {issue.key}: {issue.fields.summary[:60]}...\n"
                 result += f"    Status: {issue.fields.status.name}, Updated: {issue.fields.updated}\n"
             return result
 
-        new_jql = f'project = {project_key} AND created >= "{since_timestamp}" ORDER BY created DESC'
+        new_jql = f'project = {project_key} AND created >= "{since_for_jql}" ORDER BY created DESC'
         for issue in jira.search_issues(new_jql, maxResults=50):
             project_changes["new_issues"].append({
                 "key": issue.key,
                 "summary": issue.fields.summary,
                 "status": issue.fields.status.name,
                 "assignee": issue.fields.assignee.displayName if issue.fields.assignee else "Unassigned",
-                "creator": issue.fields.creator.displayName,
+                "creator": issue.fields.creator.displayName if issue.fields.creator else "Unknown",
                 "created": issue.fields.created,
             })
 
         updated_jql = (
-            f'project = {project_key} AND updated >= "{since_timestamp}" '
-            f'AND created < "{since_timestamp}" ORDER BY updated DESC'
+            f'project = {project_key} AND updated >= "{since_for_jql}" '
+            f'AND created < "{since_for_jql}" ORDER BY updated DESC'
         )
         for issue in jira.search_issues(updated_jql, maxResults=50):
             project_changes["updated_issues"].append({
@@ -231,6 +276,7 @@ def jira_get_issue_info(
 ) -> str:
     """Get detailed information about a specific JIRA issue."""
     try:
+        _validate_issue_key(issue_key)
         jira = _get_jira_connection(url, username, token, email)
         issue = jira.issue(issue_key, expand="changelog,comments")
 
@@ -240,18 +286,22 @@ def jira_get_issue_info(
         result += f"Priority: {issue.fields.priority.name if issue.fields.priority else 'None'}\n"
         assignee = issue.fields.assignee.displayName if issue.fields.assignee else "Unassigned"
         result += f"Assignee: {assignee}\n"
-        result += f"Reporter: {issue.fields.reporter.displayName}\n"
+        reporter = issue.fields.reporter.displayName if issue.fields.reporter else "Unknown"
+        result += f"Reporter: {reporter}\n"
         result += f"Created: {issue.fields.created}\n"
         result += f"Updated: {issue.fields.updated}\n"
 
         if issue.fields.description:
-            result += f"Description: {issue.fields.description[:500]}...\n"
+            desc = issue.fields.description
+            suffix = "..." if len(desc) > 500 else ""
+            result += f"Description: {desc[:500]}{suffix}\n"
 
         comments = jira.comments(issue_key)
         if comments:
             result += f"\nRecent Comments ({len(comments[-3:])}):\n"
             for comment in comments[-3:]:
-                result += f"  - {comment.author.displayName} ({comment.created}): {comment.body[:200]}...\n"
+                author = comment.author.displayName if comment.author else "Unknown"
+                result += f"  - {author} ({comment.created}): {comment.body[:200]}...\n"
 
         return result
 
