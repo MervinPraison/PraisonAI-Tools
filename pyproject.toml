@@ -61,6 +61,9 @@ video-motion = [
     "playwright>=1.40",
     "imageio-ffmpeg>=0.5",
 ]
+composio = [
+    "composio>=0.5.0",
+]
 
 [project.urls]
 Homepage = "https://docs.praison.ai"

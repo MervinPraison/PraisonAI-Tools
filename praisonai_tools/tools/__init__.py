@@ -442,7 +442,10 @@ def __getattr__(name):
         "daytona_list_workspaces": "daytona_tool",
         # Composio
         "ComposioTool": "composio_tool",
+        "ComposioTools": "composio_tool",
         "composio_execute": "composio_tool",
+        "composio_tools": "composio_tool",
+        "composio_list_apps": "composio_tool",
         # JSON
         "JSONTool": "json_tool",
         "read_json": "json_tool",
