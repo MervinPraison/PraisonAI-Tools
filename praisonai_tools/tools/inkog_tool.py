@@ -31,9 +31,7 @@ import os
 import json
 import logging
 import subprocess
-import tempfile
-from typing import Any, Dict, List, Optional, Union
-from pathlib import Path
+from typing import Any, Dict, Optional, Union
 
 from praisonai_tools.tools.base import BaseTool
 
@@ -427,7 +425,7 @@ class InkogTool(BaseTool):
             medium = summary.get("medium", 0)
             low = summary.get("low", 0)
             
-            analysis = f"🔍 Security Analysis Results:\n"
+            analysis = "🔍 Security Analysis Results:\n"
             analysis += f"Total Findings: {total_findings}\n\n"
             
             if critical > 0:
@@ -448,13 +446,13 @@ class InkogTool(BaseTool):
                     patterns.add(pattern)
                 
                 if patterns:
-                    analysis += f"\nKey Vulnerability Types Detected:\n"
+                    analysis += "\nKey Vulnerability Types Detected:\n"
                     for pattern in sorted(patterns):
                         analysis += f"• {pattern}\n"
             
             # Risk recommendations
             if critical > 0 or high > 0:
-                analysis += f"\n⚠️ Recommendation: Address critical and high severity findings before deployment."
+                analysis += "\n⚠️ Recommendation: Address critical and high severity findings before deployment."
             
             return analysis
             
