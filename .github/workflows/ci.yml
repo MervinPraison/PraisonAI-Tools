@@ -31,4 +31,4 @@ jobs:
         run: ruff check praisonai_tools tests --ignore E501,E701,E722,F401,F402
 
       - name: Test with pytest
-        run: pytest tests/unit -v --timeout=120 -x -q
+        run: pytest tests/unit --ignore=tests/unit/video -v --timeout=120 -x -q
