@@ -271,7 +271,7 @@ if "error" in result:
 ### 1. Development Workflow
 ```bash
 # Add to your development script
-inkog . --policy balanced --output json > security_report.json
+inkog . -policy balanced -output json > security_report.json
 ```
 
 ### 2. Pre-commit Hooks
@@ -283,7 +283,7 @@ repos:
       - id: inkog-security-scan
         name: Inkog Security Scan
         entry: inkog
-        args: [".", "--policy", "low-noise", "--severity", "critical"]
+        args: [".", "-policy", "low-noise", "-severity", "critical"]
         language: system
         always_run: true
 ```
@@ -307,7 +307,7 @@ jobs:
       - name: Run Security Scan
         env:
           INKOG_API_KEY: ${{ secrets.INKOG_API_KEY }}
-        run: inkog . --output sarif > results.sarif
+        run: inkog . -output sarif > results.sarif
       
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@v2

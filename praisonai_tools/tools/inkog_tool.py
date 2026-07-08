@@ -282,12 +282,12 @@ class InkogTool(BaseTool):
             cmd = ["inkog", "skill-scan"]
             
             if deep:
-                cmd.append("--deep")
+                cmd.append("-deep")
             
-            cmd.extend(["--output", output_format])
+            cmd.extend(["-output", output_format])
             
             if repo:
-                cmd.extend(["--repo", repo])
+                cmd.extend(["-repo", repo])
             else:
                 cmd.append(path)
             
@@ -357,12 +357,12 @@ class InkogTool(BaseTool):
             cmd = ["inkog", "mcp-scan"]
             
             if deep:
-                cmd.append("--deep")
+                cmd.append("-deep")
             
-            cmd.extend(["--output", output_format])
+            cmd.extend(["-output", output_format])
             
             if repo:
-                cmd.extend(["--repo", repo])
+                cmd.extend(["-repo", repo])
             
             cmd.append(server_name)
             
