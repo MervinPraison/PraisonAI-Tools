@@ -111,16 +111,13 @@ jobs:
           p.write_text(p.read_text().replace(f'version = \"{os.environ[\"CURRENT\"]}\"', f'version = \"{os.environ[\"NEW_VERSION\"]}\"', 1))
           "
 
-      - name: Publish to PyPI
+      - name: Build distribution
         if: inputs.dry_run != true
-        env:
-          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN || secrets.PYPI_API_TOKEN }}
         run: |
           uv lock
           uv build
-          uv publish
 
-      - name: Commit, tag, and release
+      - name: Commit, tag, and push
         if: inputs.dry_run != true
         env:
           VERSION: ${{ steps.versions.outputs.new_version }}
@@ -131,5 +128,19 @@ jobs:
           git tag -f "${TAG}"
           git pull --rebase origin main
           git push origin main
-          git push --tags -f
+          git push origin "${TAG}" --force
+
+      - name: Publish to PyPI
+        if: inputs.dry_run != true
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN || secrets.PYPI_API_TOKEN }}
+        run: |
+          uv publish
+
+      - name: Create GitHub release
+        if: inputs.dry_run != true
+        env:
+          VERSION: ${{ steps.versions.outputs.new_version }}
+        run: |
+          TAG="v${VERSION}"
           gh release create "${TAG}" --title "praisonai-tools ${TAG}" --notes "Release ${TAG}" --latest
