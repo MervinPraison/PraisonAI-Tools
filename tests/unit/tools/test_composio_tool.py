@@ -27,6 +27,13 @@ class TestCheckComposioAvailable:
         assert ok is False
         assert "COMPOSIO_API_KEY" in msg
 
+    def test_explicit_api_key_overrides_env(self):
+        with patch("praisonai_tools.tools.composio_tool.util.find_spec", return_value=MagicMock()):
+            with patch.dict(os.environ, {}, clear=True):
+                ok, msg = _check_composio_available(api_key="explicit-key")
+        assert ok is True
+        assert msg is None
+
     def test_available(self):
         with patch("praisonai_tools.tools.composio_tool.util.find_spec", return_value=MagicMock()):
             with patch.dict(os.environ, {"COMPOSIO_API_KEY": "test-key"}, clear=True):
@@ -57,7 +64,7 @@ class TestComposioTools:
                 result = tools.get_tools(apps=["github"])
 
         assert result == [mock_tool]
-        mock_client.tools.get.assert_called_once_with(apps=["github"])
+        mock_client.tools.get.assert_called_once_with(user_id="k", toolkits=["github"])
 
     def test_list_apps(self):
         app = MagicMock(key="github")

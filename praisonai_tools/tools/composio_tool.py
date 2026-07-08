@@ -23,12 +23,17 @@ from praisonai_tools.tools.base import BaseTool
 logger = logging.getLogger(__name__)
 
 
-def _check_composio_available() -> tuple[bool, Optional[str]]:
-    """Return (is_available, error_message)."""
-    if util.find_spec("composio") is None and util.find_spec("composio_openai") is None:
+def _check_composio_available(api_key: Optional[str] = None) -> tuple[bool, Optional[str]]:
+    """Return (is_available, error_message).
+
+    ``api_key`` takes precedence over the ``COMPOSIO_API_KEY`` environment
+    variable so callers who pass a key explicitly are not forced to also set
+    the env var.
+    """
+    if util.find_spec("composio") is None:
         return False, "composio package is not installed. Install with: pip install praisonai-tools[composio]"
 
-    if not os.environ.get("COMPOSIO_API_KEY"):
+    if not api_key and not os.environ.get("COMPOSIO_API_KEY"):
         return False, (
             "COMPOSIO_API_KEY environment variable is not set. "
             "Please set it to use Composio tools."
@@ -46,10 +51,6 @@ class ComposioTools:
 
     def _get_client(self):
         if self._client is None:
-            is_available, error = _check_composio_available()
-            if not is_available:
-                raise ImportError(error)
-
             try:
                 from composio import Composio
 
@@ -68,29 +69,33 @@ class ComposioTools:
         user_id: Optional[str] = None,
     ) -> List[Callable]:
         """Fetch Composio tools as agent-callable Python functions."""
-        is_available, error = _check_composio_available()
+        is_available, error = _check_composio_available(self.api_key)
         if not is_available:
             logger.error(error)
             return []
 
         try:
             client = self._get_client()
-            kwargs: Dict[str, Any] = {}
-            if apps:
-                kwargs["apps"] = apps
-            if actions:
-                kwargs["actions"] = actions
-            if tags:
-                kwargs["tags"] = tags
-            if user_id:
-                kwargs["user_id"] = user_id
 
             if hasattr(client, "tools") and hasattr(client.tools, "get"):
+                # Composio v3 SDK: `apps` -> `toolkits`, `user_id` required.
+                kwargs: Dict[str, Any] = {"user_id": user_id or self.api_key or "default"}
+                if apps:
+                    kwargs["toolkits"] = apps
+                if actions:
+                    kwargs["tools"] = actions
+                if tags:
+                    kwargs["tags"] = tags
                 tools = client.tools.get(**kwargs)
             else:
-                toolset_kwargs = {
-                    k: v for k, v in kwargs.items() if k in {"apps", "actions", "tags"}
-                }
+                # Legacy ComposioToolSet SDK.
+                toolset_kwargs: Dict[str, Any] = {}
+                if apps:
+                    toolset_kwargs["apps"] = apps
+                if actions:
+                    toolset_kwargs["actions"] = actions
+                if tags:
+                    toolset_kwargs["tags"] = tags
                 tools = client.get_tools(**toolset_kwargs)
 
             return list(tools) if tools else []
@@ -101,7 +106,7 @@ class ComposioTools:
 
     def list_apps(self) -> List[str]:
         """List available Composio app slugs."""
-        is_available, error = _check_composio_available()
+        is_available, error = _check_composio_available(self.api_key)
         if not is_available:
             logger.error(error)
             return []
@@ -118,13 +123,16 @@ class ComposioTools:
 
             result = []
             for app in apps or []:
-                slug = (
-                    getattr(app, "key", None)
-                    or getattr(app, "name", None)
-                    or getattr(app, "slug", None)
-                )
-                if slug is None and isinstance(app, dict):
+                if isinstance(app, str):
+                    slug = app
+                elif isinstance(app, dict):
                     slug = app.get("key") or app.get("name") or app.get("slug")
+                else:
+                    slug = (
+                        getattr(app, "key", None)
+                        or getattr(app, "name", None)
+                        or getattr(app, "slug", None)
+                    )
                 if slug:
                     result.append(slug)
             return result
