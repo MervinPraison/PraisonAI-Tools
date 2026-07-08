@@ -64,7 +64,23 @@ class TestComposioTools:
                 result = tools.get_tools(apps=["github"])
 
         assert result == [mock_tool]
-        mock_client.tools.get.assert_called_once_with(user_id="k", toolkits=["github"])
+        mock_client.tools.get.assert_called_once_with(user_id="default", toolkits=["github"])
+
+    def test_get_tools_new_sdk_explicit_user_id(self):
+        mock_tool = MagicMock()
+        mock_client = MagicMock()
+        mock_client.tools.get.return_value = [mock_tool]
+
+        with patch(
+            "praisonai_tools.tools.composio_tool._check_composio_available",
+            return_value=(True, None),
+        ):
+            tools = ComposioTools(api_key="k")
+            with patch.object(tools, "_get_client", return_value=mock_client):
+                result = tools.get_tools(apps=["github"], user_id="user-123")
+
+        assert result == [mock_tool]
+        mock_client.tools.get.assert_called_once_with(user_id="user-123", toolkits=["github"])
 
     def test_list_apps(self):
         app = MagicMock(key="github")

@@ -79,7 +79,9 @@ class ComposioTools:
 
             if hasattr(client, "tools") and hasattr(client.tools, "get"):
                 # Composio v3 SDK: `apps` -> `toolkits`, `user_id` required.
-                kwargs: Dict[str, Any] = {"user_id": user_id or self.api_key or "default"}
+                # The API key is an auth credential, not an entity identifier,
+                # so never use it as a user_id fallback.
+                kwargs: Dict[str, Any] = {"user_id": user_id or "default"}
                 if apps:
                     kwargs["toolkits"] = apps
                 if actions:
