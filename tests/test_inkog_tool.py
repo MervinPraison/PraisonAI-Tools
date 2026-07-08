@@ -1,7 +1,5 @@
 """Tests for Inkog Security Analysis Tool."""
 
-import pytest
-import subprocess
 from unittest.mock import patch, MagicMock
 from praisonai_tools.tools.inkog_tool import InkogTool, _check_inkog_available, scan_agent_code
 
@@ -226,7 +224,7 @@ class TestInkogScanOperations:
         
         with patch.object(tool, 'scan_directory') as mock_scan:
             mock_scan.return_value = {"test": "result"}
-            result = tool.run(action="scan", path="./test")
+            tool.run(action="scan", path="./test")
             mock_scan.assert_called_once_with(
                 path="./test",
                 output_format="json", 
@@ -237,7 +235,7 @@ class TestInkogScanOperations:
         
         with patch.object(tool, 'skill_scan') as mock_skill:
             mock_skill.return_value = {"test": "result"}
-            result = tool.run(action="skill-scan", path="./test")
+            tool.run(action="skill-scan", path="./test")
             mock_skill.assert_called_once_with(
                 path="./test",
                 output_format="json",
@@ -256,7 +254,7 @@ class TestStandaloneFunctions:
         mock_tool.scan_directory.return_value = {"result": "test"}
         mock_tool_class.return_value = mock_tool
         
-        result = scan_agent_code("./test", deep=True)
+        scan_agent_code("./test", deep=True)
         
         mock_tool_class.assert_called_once()
         mock_tool.scan_directory.assert_called_once_with(
