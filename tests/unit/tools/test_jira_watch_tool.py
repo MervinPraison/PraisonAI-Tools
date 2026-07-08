@@ -1,7 +1,12 @@
 """Unit tests for JIRA watch tools."""
 
+import sys
+from unittest.mock import MagicMock, Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch
+
+# Optional dependency — stub so @patch("jira.JIRA") resolves in CI without jira installed.
+sys.modules.setdefault("jira", MagicMock())
 
 from praisonai_tools.tools.jira_watch_tool import (
     jira_watch_issue,
