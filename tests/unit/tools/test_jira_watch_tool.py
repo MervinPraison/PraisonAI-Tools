@@ -52,7 +52,8 @@ class TestJIRAConnection:
         with pytest.raises(ValueError, match="JIRA authentication required"):
             _get_jira_connection(url="https://test.atlassian.net")
 
-    def test_connection_missing_url(self):
+    def test_connection_missing_url(self, monkeypatch):
+        monkeypatch.delenv("JIRA_URL", raising=False)
         with pytest.raises(ValueError, match="JIRA URL is required"):
             _get_jira_connection(email="test@example.com", token="token")
 
@@ -240,6 +241,42 @@ class TestJIRAWatchSinceTimestamp:
         )
         assert "changes detected" in result
         assert "PROJ-123" in result
+
+    @patch("praisonai_tools.tools.jira_watch_tool._get_jira_connection")
+    def test_watch_issue_reports_all_in_window_changes(self, mock_connection):
+        mock_jira = Mock()
+        mock_connection.return_value = mock_jira
+        mock_issue = Mock()
+        mock_issue.fields.updated = "2024-06-15T10:00:00+00:00"
+        mock_issue.fields.status.name = "Done"
+        mock_issue.fields.summary = "Test issue"
+        mock_issue.fields.assignee.displayName = "John Doe"
+        mock_issue.fields.priority.name = "High"
+
+        histories = []
+        for idx in range(5):
+            hist = Mock()
+            hist.created = f"2024-06-1{idx}T10:00:00+00:00"
+            hist.author.displayName = "Editor"
+            item = Mock()
+            item.field = f"field{idx}"
+            item.fromString = "old"
+            item.toString = "new"
+            hist.items = [item]
+            histories.append(hist)
+        mock_issue.changelog.histories = histories
+        mock_jira.issue.return_value = mock_issue
+        mock_jira.comments.return_value = []
+
+        result = jira_watch_issue(
+            issue_key="PROJ-123",
+            url="https://test.atlassian.net",
+            email="test@example.com",
+            token="test_token",
+            since_timestamp="2024-01-01T00:00:00Z",
+        )
+        for idx in range(5):
+            assert f"field{idx}" in result
 
     @patch("praisonai_tools.tools.jira_watch_tool._get_jira_connection")
     def test_watch_project_since_timestamp_no_injection(self, mock_connection):

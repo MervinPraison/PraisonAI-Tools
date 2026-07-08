@@ -133,7 +133,7 @@ def jira_watch_issue(
 
             recent_changes = []
             if issue.changelog and issue.changelog.histories:
-                for history in issue.changelog.histories[-3:]:
+                for history in issue.changelog.histories:
                     try:
                         history_dt = _parse_datetime(history.created)
                     except (ValueError, TypeError):
@@ -174,8 +174,9 @@ def jira_watch_issue(
                 result += f"Assignee: {change['assignee']}\n"
                 result += f"Priority: {change['priority']}\n"
                 if change.get("recent_changes"):
-                    result += "Recent field changes:\n"
-                    for rc in change["recent_changes"]:
+                    field_changes = change["recent_changes"]
+                    result += f"Recent field changes ({len(field_changes)}):\n"
+                    for rc in field_changes[-10:]:
                         result += f"  - {rc['field']}: '{rc['from']}' → '{rc['to']}' by {rc['author']}\n"
                 if change.get("recent_comments"):
                     result += "Recent comments:\n"
