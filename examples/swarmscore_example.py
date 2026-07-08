@@ -39,7 +39,7 @@ def main():
         print("✅ SwarmScore loaded successfully!")
         
         # Display basic score information
-        score_data = result.data
+        score_data = result.output
         if 'score' in score_data:
             print(f"   Trust Score: {score_data['score']}")
         if 'tier' in score_data:
@@ -59,7 +59,7 @@ def main():
             
             if verify_result.success:
                 print("✅ Score verification successful!")
-                print(f"   Verification data: {verify_result.data}")
+                print(f"   Verification data: {verify_result.output}")
             else:
                 print(f"❌ Score verification failed: {verify_result.error}")
     else:
@@ -76,7 +76,7 @@ def main():
     if manifest_result.success:
         print("✅ Discovery manifest loaded!")
         print("   This contains machine-readable data for agent-to-agent discovery")
-        print(f"   Manifest keys: {list(manifest_result.data.keys())}")
+        print(f"   Manifest keys: {list(manifest_result.output.keys())}")
     else:
         print(f"❌ Failed to load manifest: {manifest_result.error}")
     
@@ -110,7 +110,7 @@ def agent_workflow_example():
     score_result = swarmscore.load_swarmscore(agent_id)
     
     if score_result.success:
-        trust_score = score_result.data.get('score', 0)
+        trust_score = score_result.output.get('score', 0)
         print(f"🔍 Agent {agent_id} current trust score: {trust_score}")
         
         # 2. Make decisions based on trust level

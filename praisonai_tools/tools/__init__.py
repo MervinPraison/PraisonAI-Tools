@@ -651,6 +651,11 @@ __all__ = [
     # ArXiv Tool
     "ArxivTool",
     "arxiv_search",
+    # SwarmScore Tool
+    "SwarmScoreTool",
+    "load_swarmscore_by_slug",
+    "verify_swarmscore_freshness",
+    "get_agent_discovery_manifest",
     # Calculator Tool
     "CalculatorTool",
     "calculate",

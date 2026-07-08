@@ -32,7 +32,7 @@ swarmscore = SwarmScoreTool()
 result = swarmscore.load_swarmscore("your-agent-slug")
 
 if result.success:
-    score_data = result.data
+    score_data = result.output
     print(f"Trust Score: {score_data['score']}")
     print(f"Trust Tier: {score_data['tier']}")
     print(f"Success Rate: {score_data['success_rate']}%")
@@ -87,7 +87,7 @@ def execute_with_trust_level(agent_slug, task):
         # Default to restricted mode if score unavailable
         return execute_restricted(task)
     
-    trust_score = result.data.get('score', 0)
+    trust_score = result.output.get('score', 0)
     
     if trust_score >= 80:
         # High trust - full autonomy
@@ -113,13 +113,13 @@ def authenticate_agent(agent_slug):
         return False, "Failed to load trust score"
     
     # Verify freshness
-    verify_payload = load_result.data.get('verify_payload')
+    verify_payload = load_result.output.get('verify_payload')
     if verify_payload:
         verify_result = swarmscore.verify_swarmscore(verify_payload)
         if not verify_result.success:
             return False, "Trust score verification failed"
     
-    trust_score = load_result.data.get('score', 0)
+    trust_score = load_result.output.get('score', 0)
     return trust_score >= 50, f"Trust score: {trust_score}"
 ```
 
@@ -136,13 +136,13 @@ def find_trusted_collaborators(task_requirements):
         return []
     
     trusted_agents = []
-    discovery_data = manifest_result.data
+    discovery_data = manifest_result.output
     
     # Example: Filter agents by trust score and capabilities
     for agent_id in discovery_data.get('agents', []):
         score_result = swarmscore.load_swarmscore(agent_id)
         if score_result.success:
-            score_data = score_result.data
+            score_data = score_result.output
             if score_data.get('score', 0) >= 70:
                 trusted_agents.append({
                     'id': agent_id,
@@ -168,7 +168,7 @@ def check_agent_trust_score(agent_slug: str) -> str:
     result = swarmscore.load_swarmscore(agent_slug)
     
     if result.success:
-        score_data = result.data
+        score_data = result.output
         return f"Agent {agent_slug} has trust score {score_data.get('score', 'unknown')} with {score_data.get('success_rate', 'unknown')}% success rate"
     else:
         return f"Failed to load trust score for {agent_slug}: {result.error}"
@@ -204,7 +204,7 @@ class TrustAwareAgent(Agent):
         """Check and cache current trust level."""
         result = self.swarmscore.load_swarmscore(self.agent_slug)
         if result.success:
-            self._trust_score = result.data.get('score', 0)
+            self._trust_score = result.output.get('score', 0)
         return self._trust_score
     
     def can_execute_action(self, action_type: str) -> bool:
