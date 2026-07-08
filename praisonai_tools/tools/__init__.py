@@ -540,8 +540,6 @@ def __getattr__(name):
         # NEXUS Prediction Market Tool
         "NexusPredictionMarketTool": "nexus_prediction_market_tool",
         "nexus_prediction_market_tool": "nexus_prediction_market_tool",
-        "get_market_data": "nexus_prediction_market_tool",
-        "check_arbitrage_opportunities": "nexus_prediction_market_tool",
     }
 
     if name in tool_map:
@@ -890,6 +888,4 @@ __all__ = [
     # NEXUS Prediction Market Tool
     "NexusPredictionMarketTool",
     "nexus_prediction_market_tool",
-    "get_market_data",
-    "check_arbitrage_opportunities",
 ]

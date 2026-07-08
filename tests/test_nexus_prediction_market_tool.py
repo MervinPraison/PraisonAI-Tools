@@ -2,6 +2,7 @@
 
 import pytest
 import json
+import requests
 from unittest.mock import Mock, patch
 from praisonai_tools.tools.nexus_prediction_market_tool import (
     NexusPredictionMarketTool,
@@ -64,7 +65,7 @@ class TestNexusPredictionMarketTool:
     def test_get_market_data_failure(self, mock_get):
         """Test market data retrieval failure."""
         # Mock failed response
-        mock_get.side_effect = Exception("Network error")
+        mock_get.side_effect = requests.exceptions.ConnectionError("Network error")
         
         tool = NexusPredictionMarketTool()
         result = tool.get_market_data("Fed")
@@ -111,8 +112,9 @@ class TestNexusPredictionMarketTool:
         # Mock payment required response
         mock_response = Mock()
         mock_response.status_code = 402
-        mock_get.side_effect = Exception("Payment Required")
-        mock_get.side_effect.response = mock_response
+        http_error = requests.exceptions.HTTPError("Payment Required")
+        http_error.response = mock_response
+        mock_get.side_effect = http_error
         
         tool = NexusPredictionMarketTool()
         result = tool.check_arbitrage_opportunities(["Fed", "BTC"])
