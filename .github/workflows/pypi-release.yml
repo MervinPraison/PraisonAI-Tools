@@ -123,7 +123,7 @@ jobs:
           VERSION: ${{ steps.versions.outputs.new_version }}
         run: |
           TAG="v${VERSION}"
-          git add pyproject.toml uv.lock
+          git add pyproject.toml
           git commit -m "Release ${TAG}" || exit 0
           git tag -f "${TAG}"
           git pull --rebase origin main
