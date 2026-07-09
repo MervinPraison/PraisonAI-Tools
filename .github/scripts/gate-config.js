@@ -11,7 +11,7 @@ module.exports = {
   ],
   // Tool + tests + docs routinely exceed the UI/SDK 800-line default.
   maxAutoAdditions: 2000,
-  maxAutoFiles: 30,
+  maxAutoFiles: 30, // same as the previous hard-coded default; configurable for future tuning
   requiredCheckPatterns: [/^ci$/i, /python/i, /test/i, /lint/i, /ruff/i],
   ciWorkflowFile: 'ci.yml',
   ciWorkflowName: 'CI',

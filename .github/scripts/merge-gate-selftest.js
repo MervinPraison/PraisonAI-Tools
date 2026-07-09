@@ -171,6 +171,7 @@ assert('ci-only label not exempt mixed changes', mg.sensitivePathReasons(
   [mg.WORKFLOW_ONLY_LABEL]
 ).length === 1);
 assert('secret in patch', mg.secretScanReasons([{ filename: 'x.py', patch: '+key = "ghp_abcdefghijklmnopqrstuvwxyz1234567890"' }]).length === 1);
+assert('pyproject.toml not sensitive', mg.sensitivePathReasons([{ filename: 'pyproject.toml' }]).length === 0);
 
 // Claude run scoping — other PR branches must not block
 assert('other branch claude does not block', !mg.hasBlockingClaudeRunForPr(
@@ -251,7 +252,11 @@ assert('product code with tests ok', mg.missingTestsReason([
 const sizeLimit = config.maxAutoAdditions ?? 800;
 assert('under size limit ok', mg.prSizeReasons([{ additions: sizeLimit }]).length === 0);
 assert('large PR blocked', mg.prSizeReasons([{ additions: sizeLimit + 1 }]).length > 0);
-assert('typical tool PR under Tools limit', mg.prSizeReasons([{ additions: 1510 }]).length === 0);
+assert('typical tool PR under Tools limit', mg.prSizeReasons([{ additions: Math.floor(sizeLimit * 0.75) }]).length === 0);
+
+const filesLimit = config.maxAutoFiles ?? 30;
+assert('under files limit ok', mg.prSizeReasons(Array(filesLimit).fill({ additions: 1 })).length === 0);
+assert('large files PR blocked', mg.prSizeReasons(Array(filesLimit + 1).fill({ additions: 1 })).length > 0);
 
 assert('internal PR link accepted', mg.isInternalPullRequestLink(
   { base: { repo: { full_name: config.repoFullName } } },
