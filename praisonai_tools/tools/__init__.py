@@ -548,6 +548,11 @@ def __getattr__(name):
         # NEXUS Prediction Market Tool
         "NexusPredictionMarketTool": "nexus_prediction_market_tool",
         "nexus_prediction_market_tool": "nexus_prediction_market_tool",
+        # Inkog Security Tool
+        "InkogTool": "inkog_tool",
+        "scan_agent_code": "inkog_tool",
+        "scan_skill_package": "inkog_tool",
+        "scan_mcp_server": "inkog_tool",
     }
 
     if name in tool_map:
@@ -901,4 +906,9 @@ __all__ = [
     # NEXUS Prediction Market Tool
     "NexusPredictionMarketTool",
     "nexus_prediction_market_tool",
+    # Inkog Security Tool
+    "InkogTool",
+    "scan_agent_code",
+    "scan_skill_package",
+    "scan_mcp_server",
 ]
