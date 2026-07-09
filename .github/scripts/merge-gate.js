@@ -89,7 +89,11 @@ function isConflictRebaseTriggerComment(c) {
 
 function isConflictRebaseCompletionComment(c) {
   const login = (c.user?.login || '').toLowerCase();
-  if (!login.includes('praisonai-triage') && !login.includes('github-actions')) return false;
+  const allowed =
+    login.includes('praisonai-triage') ||
+    login.includes('github-actions') ||
+    AUTO_ACTORS.some((a) => a.toLowerCase() === login);
+  if (!allowed) return false;
   const body = (c.body || '').toLowerCase();
   return (
     body.includes('rebase complete') ||
@@ -116,7 +120,7 @@ function conflictRebaseQuiescent(comments, headPushedAt) {
   return finalClaudeCompletedOnSha(comments, headPushedAt);
 }
 
-function hasRecentConflictComment(comments, headPushedAt = null) {
+function hasRecentConflictComment(comments, headPushedAt = null, mergeStateStatus = null) {
   const cutoff = Date.now() - CONFLICT_COOLDOWN_MS;
   const hasRecentTrigger = comments.some((c) => {
     if (!isConflictRebaseTriggerComment(c)) return false;
@@ -126,6 +130,24 @@ function hasRecentConflictComment(comments, headPushedAt = null) {
 
   if (headPushedAt && conflictRebaseQuiescent(comments, headPushedAt)) {
     return false;
+  }
+
+  // GitHub mergeable (CLEAN/UNSTABLE) and HEAD pushed after the conflict trigger → resolved
+  const status = String(mergeStateStatus || '').toUpperCase();
+  if (headPushedAt && ALLOWED_MERGE_STATES.has(status)) {
+    // conflictTriggers is guaranteed non-empty here (hasRecentTrigger is true above);
+    // the null seed keeps reduce() safe if that invariant ever changes.
+    const conflictTriggers = comments.filter(isConflictRebaseTriggerComment);
+    const latestConflict = conflictTriggers.reduce(
+      (a, b) => (a && new Date(a.created_at) > new Date(b.created_at) ? a : b),
+      null
+    );
+    if (
+      latestConflict &&
+      new Date(headPushedAt).getTime() > new Date(latestConflict.created_at).getTime()
+    ) {
+      return false;
+    }
   }
   return true;
 }
@@ -672,7 +694,7 @@ async function evaluatePipelineQuiescent(github, owner, repo, prNumber, core, op
     reasons.push('fork PR');
   }
 
-  if (hasRecentConflictComment(ctx.comments, ctx.headPushedAt)) {
+  if (hasRecentConflictComment(ctx.comments, ctx.headPushedAt, status)) {
     reasons.push('recent merge-conflict @claude');
   }
   if (!skipRecentClaudeCooldown && hasRecentClaudeTrigger(ctx.comments, 35)) {
