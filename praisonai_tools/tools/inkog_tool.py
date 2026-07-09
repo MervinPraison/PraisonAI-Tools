@@ -404,19 +404,23 @@ class InkogTool(BaseTool):
             logger.error(error_msg)
             return {"error": error_msg}
     
-    def analyze_findings(self, scan_results: Dict[str, Any]) -> str:
+    def analyze_findings(self, scan_results: Union[Dict[str, Any], str]) -> str:
         """Analyze scan results and provide a summary.
         
         Args:
-            scan_results: Results from a JSON format scan
+            scan_results: Results from a JSON format scan. Non-dict inputs
+                (e.g. text/HTML output) are returned as-is.
             
         Returns:
             Human-readable analysis summary
         """
-        if "error" in scan_results:
-            return f"Scan failed: {scan_results['error']}"
-        
         try:
+            if not isinstance(scan_results, dict):
+                return str(scan_results)
+            
+            if "error" in scan_results:
+                return f"Scan failed: {scan_results['error']}"
+            
             summary = scan_results.get("summary", {})
             total_findings = summary.get("total_findings", 0)
             

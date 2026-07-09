@@ -80,6 +80,15 @@ class TestInkogTool:
         assert "MEDIUM: 1 findings" in analysis
         assert "Token Bombing" in analysis
         assert "Immediate attention required" in analysis
+    
+    def test_analyze_findings_string_input(self):
+        """String (text/HTML) scan output is returned as-is, even when it
+        contains the word 'error' (regression: no TypeError)."""
+        tool = InkogTool()
+        
+        text_output = "Finding: potential error in tool loop termination."
+        analysis = tool.analyze_findings(text_output)
+        assert analysis == text_output
 
 
 class TestInkogAvailability:
