@@ -251,7 +251,10 @@ jobs:
             });
 
       - name: Stash merge gate helpers
-        run: cp .github/scripts/merge-gate.js /tmp/merge-gate.js
+        run: |
+          cp .github/scripts/merge-gate.js /tmp/merge-gate.js
+          mkdir -p /tmp/gh-actions
+          cp -R .github/actions/claude-code-action /tmp/gh-actions/
 
       - name: Fetch PR branch
         env:
@@ -259,6 +262,10 @@ jobs:
         run: |
           git fetch origin "pull/${PR_NUMBER}/head:pr-${PR_NUMBER}"
           git checkout "pr-${PR_NUMBER}"
+          # PR branches may predate pipeline actions — restore from main checkout
+          mkdir -p .github/actions
+          rm -rf .github/actions/claude-code-action
+          cp -R /tmp/gh-actions/claude-code-action .github/actions/
 
       - name: Claude merge gate assessment (read-only)
         id: assess

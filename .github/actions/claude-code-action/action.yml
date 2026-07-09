@@ -1,0 +1,290 @@
+name: "Claude Code Action"
+description: "Run Claude Code in GitHub Actions workflows"
+
+inputs:
+  anthropic_api_key:
+    description: "Anthropic API key"
+    required: false
+  claude_code_oauth_token:
+    description: "Claude Code OAuth Token for Claude Pro"
+    required: false
+  github_token:
+    description: "GitHub token for Claude to operate with"
+    required: false
+    default: ${{ github.token }}
+  trigger_phrase:
+    description: "The trigger phrase to look for in comments, issue/PR bodies, and issue titles"
+    required: false
+    default: "@claude"
+  assignee_trigger:
+    description: "The assignee username that triggers the action (e.g. @claude). Only used for issue assignment"
+    required: false
+  max_turns:
+    description: "Maximum number of conversation turns Claude can take"
+    required: false
+  timeout_minutes:
+    description: "Timeout in minutes for execution"
+    required: false
+    default: "30"
+  model:
+    description: "Model to use (provider-specific format required for Bedrock/Vertex)"
+    required: false
+  use_bedrock:
+    description: "Use Amazon Bedrock with OIDC authentication instead of direct Anthropic API"
+    required: false
+    default: "false"
+  use_vertex:
+    description: "Use Google Vertex AI with OIDC authentication instead of direct Anthropic API"
+    required: false
+    default: "false"
+  allowed_tools:
+    description: "Additional tools for Claude to use (the base GitHub tools will always be included)"
+    required: false
+    default: ""
+  disallowed_tools:
+    description: "Tools that Claude should never use"
+    required: false
+    default: ""
+  custom_instructions:
+    description: "Additional custom instructions to include in the prompt for Claude"
+    required: false
+    default: ""
+  mcp_config:
+    description: "Additional MCP configuration (JSON string) that merges with the built-in GitHub MCP servers"
+    required: false
+    default: ""
+  claude_env:
+    description: "Custom environment variables to pass to Claude Code execution (YAML format)"
+    required: false
+    default: ""
+  direct_prompt:
+    description: "Direct prompt for Claude to execute automatically without needing a trigger (for automated workflows)"
+    required: false
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Claude Code
+      shell: bash
+      run: npm install -g @anthropic-ai/claude-code
+
+    - name: Install GitHub MCP Server
+      shell: bash
+      run: |
+        claude mcp add-json github '{
+          "command": "docker",
+          "args": [
+            "run",
+            "-i",
+            "--rm",
+            "-e",
+            "GITHUB_PERSONAL_ACCESS_TOKEN",
+            "ghcr.io/github/github-mcp-server:sha-ff3036d"
+          ],
+          "env": {
+            "GITHUB_PERSONAL_ACCESS_TOKEN": "${{ inputs.github_token }}"
+          }
+        }'
+
+    - name: Extract GitHub Context and Create Prompt
+      shell: bash
+      id: prepare_context
+      env:
+        # Pass user-controlled inputs via environment variables to prevent script injection (GHSL-2025-093)
+        EVENT_COMMENT_BODY: ${{ github.event.comment.body }}
+        EVENT_ISSUE_TITLE: ${{ github.event.issue.title }}
+        EVENT_ISSUE_BODY: ${{ github.event.issue.body }}
+        EVENT_ISSUE_NUMBER: ${{ github.event.issue.number }}
+        EVENT_PR_TITLE: ${{ github.event.pull_request.title }}
+        EVENT_PR_NUMBER: ${{ github.event.pull_request.number }}
+        EVENT_REVIEW_BODY: ${{ github.event.review.body }}
+        EVENT_ASSIGNEE_LOGIN: ${{ github.event.assignee.login }}
+        INPUT_TRIGGER_PHRASE: ${{ inputs.trigger_phrase }}
+        INPUT_ASSIGNEE_TRIGGER: ${{ inputs.assignee_trigger }}
+        INPUT_DIRECT_PROMPT: ${{ inputs.direct_prompt }}
+        EVENT_ACTION: ${{ github.event.action }}
+        EVENT_NAME: ${{ github.event_name }}
+        REPO_NAME: ${{ github.repository }}
+      run: |
+        echo "🔍 Extracting GitHub context from event: $EVENT_NAME"
+        
+        # Function to check for trigger phrase
+        check_trigger() {
+          local text="$1"
+          local trigger="$INPUT_TRIGGER_PHRASE"
+          if [[ "$text" == *"$trigger"* ]]; then
+            return 0
+          fi
+          return 1
+        }
+        
+        # Extract context based on event type
+        TRIGGER_FOUND="false"
+        USER_REQUEST=""
+        CONTEXT_INFO=""
+        
+        case "$EVENT_NAME" in
+          "issue_comment")
+            COMMENT_BODY="$EVENT_COMMENT_BODY"
+            ISSUE_TITLE="$EVENT_ISSUE_TITLE"
+            ISSUE_NUMBER="$EVENT_ISSUE_NUMBER"
+            
+            if check_trigger "$COMMENT_BODY"; then
+              TRIGGER_FOUND="true"
+              USER_REQUEST="$COMMENT_BODY"
+              CONTEXT_INFO="Issue Comment on #$ISSUE_NUMBER: $ISSUE_TITLE"
+            fi
+            ;;
+            
+          "pull_request_review_comment")
+            COMMENT_BODY="$EVENT_COMMENT_BODY"
+            PR_TITLE="$EVENT_PR_TITLE"
+            PR_NUMBER="$EVENT_PR_NUMBER"
+            
+            if check_trigger "$COMMENT_BODY"; then
+              TRIGGER_FOUND="true"
+              USER_REQUEST="$COMMENT_BODY"
+              CONTEXT_INFO="PR Comment on #$PR_NUMBER: $PR_TITLE"
+            fi
+            ;;
+            
+          "pull_request_review")
+            REVIEW_BODY="$EVENT_REVIEW_BODY"
+            PR_TITLE="$EVENT_PR_TITLE"
+            PR_NUMBER="$EVENT_PR_NUMBER"
+            
+            if check_trigger "$REVIEW_BODY"; then
+              TRIGGER_FOUND="true"
+              USER_REQUEST="$REVIEW_BODY"
+              CONTEXT_INFO="PR Review on #$PR_NUMBER: $PR_TITLE"
+            fi
+            ;;
+            
+          "issues")
+            ISSUE_BODY="$EVENT_ISSUE_BODY"
+            ISSUE_TITLE="$EVENT_ISSUE_TITLE"
+            ISSUE_NUMBER="$EVENT_ISSUE_NUMBER"
+            
+            if check_trigger "$ISSUE_TITLE" || check_trigger "$ISSUE_BODY"; then
+              TRIGGER_FOUND="true"
+              USER_REQUEST="$ISSUE_BODY"
+              CONTEXT_INFO="Issue #$ISSUE_NUMBER: $ISSUE_TITLE"
+            elif [[ "$EVENT_ACTION" == "assigned" && -n "$INPUT_ASSIGNEE_TRIGGER" ]]; then
+              ASSIGNEE="$EVENT_ASSIGNEE_LOGIN"
+              if [[ "$ASSIGNEE" == "$INPUT_ASSIGNEE_TRIGGER" ]]; then
+                TRIGGER_FOUND="true"
+                USER_REQUEST="$ISSUE_BODY"
+                CONTEXT_INFO="Issue #$ISSUE_NUMBER assigned to $ASSIGNEE: $ISSUE_TITLE"
+              fi
+            fi
+            ;;
+        esac
+        
+        # Check for direct prompt override
+        if [[ -n "$INPUT_DIRECT_PROMPT" ]]; then
+          TRIGGER_FOUND="true"
+          USER_REQUEST="$INPUT_DIRECT_PROMPT"
+          CONTEXT_INFO="Automated GitHub workflow"
+        fi
+        
+        if [[ "$TRIGGER_FOUND" != "true" ]]; then
+          echo "❌ No trigger phrase found or direct prompt provided. Exiting gracefully."
+          echo "SKIP_EXECUTION=true" >> $GITHUB_ENV
+          exit 0
+        fi
+        
+        echo "✅ Trigger found! Context: $CONTEXT_INFO"
+        
+        # Create comprehensive prompt
+        mkdir -p /tmp/claude-action
+        cat > /tmp/claude-action/github-context-prompt.txt << EOF
+        You are Claude Code, an AI assistant helping with GitHub workflows and code.
+        
+        Repository: $REPO_NAME
+        Context: $CONTEXT_INFO
+        Event: $EVENT_NAME
+        
+        User Request:
+        $USER_REQUEST
+        
+        Please analyze the request and provide helpful assistance.
+
+        CRITICAL INSTRUCTION: If your task involves modifying codebase files to add a feature or fix a bug:
+
+        STEP 0 — SETUP GIT IDENTITY:
+        git config user.name "MervinPraison"
+        git config user.email "454862+MervinPraison@users.noreply.github.com"
+
+        STEP 1 — READ GUIDELINES:
+        MANDATORY: Before writing any code, you MUST carefully read "src/praisonai-agents/AGENTS.md" to understand this repository's extremely specific Architecture, Protocol-First design rules, and Agent-Centric Philosophy.
+
+        STEP 2 — ARCHITECTURE VALIDATION & ROUTING (MANDATORY before writing code):
+        Before implementing anything, answer these questions:
+        - CORE vs WRAPPER vs TOOLS ROUTING:
+          1. Core SDK (praisonaiagents/): Only core protocols, base classes, decorators. No heavy implementations.
+          2. Wrapper (praisonai/): CLI, heavy implementations, optional dependencies.
+          3. Tools (PraisonAI-Tools): Specific integrations, external tools (e.g. SurrealDB, Slack), and community extensions MUST go to the `MervinPraison/PraisonAI-Tools` repository. If the feature is a tool, clone `https://github.com/MervinPraison/PraisonAI-Tools`, implement it there, and create the PR using `gh pr create -R MervinPraison/PraisonAI-Tools`.
+        - Does it duplicate existing functionality? Check if Agent already supports this via existing params (reflection, planning, tools, hooks, memory).
+        - Does it inherit from Agent properly? New agent types MUST inherit Agent, not wrap it with composition.
+        - Does it add new dependencies? Only optional deps allowed, must be lazy-imported.
+        - Will agent.py grow larger? If the change adds >50 lines to agent.py, find a way to extract instead.
+        - Is there a name collision with existing exports in __init__.py?
+        If ANY of these conceptual checks fail (excluding routing), add a comment to the issue explaining why and close it. Do NOT create a PR.
+
+        STEP 3 — IMPLEMENT:
+        - Create a new git branch appropriately named (e.g. \`feature/issue-<number>\`)
+        - Follow protocol-driven design: protocols in core SDK, heavy implementations in wrapper
+        - Keep changes small and backward-compatible
+
+        STEP 4 — TEST:
+        - Run: cd src/praisonai-agents && PYTHONPATH=. python -m pytest tests/ -x -q --timeout=30
+        - Ensure no regressions
+
+        STEP 5 — CREATE PR:
+        - Commit with descriptive message, push the branch
+        - Use the GitHub CLI (\`gh pr create --title "..." --body "Fixes #<number>"\`) to open a Pull Request
+        CRITICAL: You MUST create the PR automatically using \`gh pr create\`. Do NOT just provide a link.
+
+        Respond naturally and helpfully to the user's request using the available tools.
+        EOF
+        
+        echo "PROMPT_FILE=/tmp/claude-action/github-context-prompt.txt" >> $GITHUB_ENV
+        echo "SKIP_EXECUTION=false" >> $GITHUB_ENV
+
+    - name: Run Claude Code
+      if: env.SKIP_EXECUTION != 'true'
+      shell: bash
+      run: |
+        echo "🚀 Running Claude Code with GitHub context..."
+        
+        # Build command arguments
+        CMD_ARGS=("-p" "--verbose" "--output-format" "stream-json")
+        
+        # Add max turns if specified
+        if [[ -n "${{ inputs.max_turns }}" ]]; then
+          CMD_ARGS+=("--max-turns" "${{ inputs.max_turns }}")
+        fi
+        
+        # Add allowed tools (include GitHub tools by default)
+        TOOLS="mcp__github__get_issue,mcp__github__get_issue_comments,mcp__github__update_issue,mcp__github__search_issues,mcp__github__list_issues,mcp__github__create_comment,Read,Write,Edit,Bash"
+        if [[ -n "${{ inputs.allowed_tools }}" ]]; then
+          TOOLS="$TOOLS,${{ inputs.allowed_tools }}"
+        fi
+        CMD_ARGS+=("--allowedTools" "$TOOLS")
+        
+        # Add disallowed tools
+        if [[ -n "${{ inputs.disallowed_tools }}" ]]; then
+          CMD_ARGS+=("--disallowedTools" "${{ inputs.disallowed_tools }}")
+        fi
+        
+        echo "📝 Executing Claude Code with prompt from file..."
+        
+        # Execute Claude Code with timeout, using stdin for the prompt
+        TIMEOUT_SECONDS=$((${{ inputs.timeout_minutes }} * 60))
+        timeout $TIMEOUT_SECONDS claude "${CMD_ARGS[@]}" < "${{ env.PROMPT_FILE }}"
+        
+        echo "✅ Claude Code execution completed"
+      env:
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
+        CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude_code_oauth_token }}
+        GITHUB_TOKEN: ${{ inputs.github_token }} 
