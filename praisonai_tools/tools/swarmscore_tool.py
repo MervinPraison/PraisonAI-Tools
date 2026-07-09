@@ -157,7 +157,7 @@ class SwarmScoreTool(BaseTool):
                 error=f"Failed to get discovery manifest: {str(e)}"
             )
 
-    def run(self, action: str, **kwargs) -> ToolResult:
+    def run(self, action: str = "load", **kwargs) -> ToolResult:
         """Execute SwarmScore action.
         
         Args:

@@ -218,6 +218,13 @@ class TestSwarmScoreTool:
             assert result.success is True
             mock_discover.assert_called_once()
     
+    def test_run_default_action(self):
+        """Bare run() defaults to 'load' and degrades gracefully without a slug."""
+        result = self.tool.run()
+
+        assert result.success is False
+        assert "Missing required parameter 'slug'" in result.error
+
     def test_run_invalid_action(self):
         """Test run method with invalid action."""
         result = self.tool.run("invalid_action")
