@@ -12,7 +12,7 @@ More information: https://swarmsync.ai/docs/protocol-specs/swarmscore
 import json
 import logging
 from typing import Dict, Any
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote
 
 try:
     import requests
@@ -52,7 +52,7 @@ class SwarmScoreTool(BaseTool):
             ToolResult containing SwarmScore data including passport, certificate, and verification payload
         """
         try:
-            url = f"{self.api_base_url}/load-by-slug/{slug}"
+            url = f"{self.api_base_url}/load-by-slug/{quote(slug, safe='')}"
             response = requests.get(url, timeout=30)
             response.raise_for_status()
             

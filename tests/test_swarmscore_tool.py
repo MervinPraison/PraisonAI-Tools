@@ -51,6 +51,20 @@ class TestSwarmScoreTool:
         mock_requests.get.assert_called_once()
     
     @patch('praisonai_tools.tools.swarmscore_tool.requests')
+    def test_load_swarmscore_slug_url_encoded(self, mock_requests):
+        """Slugs with special characters must be URL-encoded to avoid malformed paths."""
+        mock_response = Mock()
+        mock_response.json.return_value = self.sample_score_data
+        mock_response.raise_for_status.return_value = None
+        mock_requests.get.return_value = mock_response
+
+        result = self.tool.load_swarmscore("acme/agent one")
+
+        assert result.success is True
+        called_url = mock_requests.get.call_args[0][0]
+        assert called_url.endswith("/load-by-slug/acme%2Fagent%20one")
+
+    @patch('praisonai_tools.tools.swarmscore_tool.requests')
     def test_load_swarmscore_network_error(self, mock_requests):
         """Test SwarmScore loading with network error."""
         # Setup mock to raise exception
