@@ -247,8 +247,11 @@ assert('product code with tests ok', mg.missingTestsReason([
   { filename: 'tests/test_x.py', additions: 10 },
 ]) === null);
 
-// PR size
-assert('large PR blocked', mg.prSizeReasons([{ additions: 900 }]).length > 0);
+// PR size (threshold from gate-config; Tools allows larger tool+tests+docs PRs)
+const sizeLimit = config.maxAutoAdditions ?? 800;
+assert('under size limit ok', mg.prSizeReasons([{ additions: sizeLimit }]).length === 0);
+assert('large PR blocked', mg.prSizeReasons([{ additions: sizeLimit + 1 }]).length > 0);
+assert('typical tool PR under Tools limit', mg.prSizeReasons([{ additions: 1510 }]).length === 0);
 
 assert('internal PR link accepted', mg.isInternalPullRequestLink(
   { base: { repo: { full_name: config.repoFullName } } },

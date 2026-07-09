@@ -5,10 +5,13 @@
 module.exports = {
   repoFullName: 'MervinPraison/PraisonAI-Tools',
   productPathPrefixes: ['praisonai_tools/', 'tests/'],
+  // Workflows stay gated; pyproject.toml is normal for optional tool deps.
   sensitivePathPatterns: [
     /^\.github\/workflows\//,
-    /^pyproject\.toml$/,
   ],
+  // Tool + tests + docs routinely exceed the UI/SDK 800-line default.
+  maxAutoAdditions: 2000,
+  maxAutoFiles: 30,
   requiredCheckPatterns: [/^ci$/i, /python/i, /test/i, /lint/i, /ruff/i],
   ciWorkflowFile: 'ci.yml',
   ciWorkflowName: 'CI',
