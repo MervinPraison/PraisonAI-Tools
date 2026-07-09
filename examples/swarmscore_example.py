@@ -49,12 +49,12 @@ def main():
         if 'success_rate' in score_data:
             print(f"   Success Rate: {score_data['success_rate']}%")
         
-        print(f"\n🔍 Full SwarmScore data:")
+        print("\n🔍 Full SwarmScore data:")
         print(json.dumps(score_data, indent=2))
         
         # Verify score freshness
         if 'verify_payload' in score_data:
-            print(f"\n🔐 Verifying score freshness...")
+            print("\n🔐 Verifying score freshness...")
             verify_result = swarmscore.verify_swarmscore(score_data['verify_payload'])
             
             if verify_result.success:
@@ -70,7 +70,7 @@ def main():
         print("   • Network connectivity issues")
     
     # Get discovery manifest
-    print(f"\n🌐 Loading agent discovery manifest...")
+    print("\n🌐 Loading agent discovery manifest...")
     manifest_result = swarmscore.get_discovery_manifest()
     
     if manifest_result.success:
@@ -81,7 +81,7 @@ def main():
         print(f"❌ Failed to load manifest: {manifest_result.error}")
     
     # Demonstrate standalone function usage
-    print(f"\n🛠️  Using standalone functions:")
+    print("\n🛠️  Using standalone functions:")
     try:
         # This will likely fail with the example slug, but shows the API
         score_data = load_swarmscore_by_slug(agent_slug)
@@ -89,17 +89,17 @@ def main():
     except Exception as e:
         print(f"❌ Standalone function failed (expected): {e}")
     
-    print(f"\n📚 Next Steps:")
+    print("\n📚 Next Steps:")
     print("   1. Register your agent at https://swarmsync.ai")
     print("   2. Get your agent slug from the SwarmSync dashboard")
     print("   3. Replace 'example-agent-123' with your actual slug")
     print("   4. Integrate SwarmScore checks into your agent workflows")
-    print(f"\n   📖 Documentation: https://swarmsync.ai/docs/protocol-specs/swarmscore")
+    print("\n   📖 Documentation: https://swarmsync.ai/docs/protocol-specs/swarmscore")
 
 
 def agent_workflow_example():
     """Example of how to integrate SwarmScore into an agent workflow."""
-    print(f"\n🤖 Agent Workflow Integration Example")
+    print("\n🤖 Agent Workflow Integration Example")
     print("=" * 45)
     
     # Simulated agent execution flow
