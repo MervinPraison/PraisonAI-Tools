@@ -39,10 +39,10 @@ class FirecrawlTool(BaseTool):
                 raise ValueError("FIRECRAWL_API_KEY is required")
             try:
                 from firecrawl import Firecrawl
-            except ImportError:
+            except ImportError as e:
                 raise ImportError(
                     "firecrawl-py>=4 not installed. Install with: pip install 'firecrawl-py>=4'"
-                )
+                ) from e
             self._client = Firecrawl(api_key=self.api_key)
         return self._client
     
@@ -83,10 +83,12 @@ class FirecrawlTool(BaseTool):
             # v2 returns a Document object; metadata is a typed DocumentMetadata.
             # Coerce to a plain dict to keep this tool's return shape stable.
             metadata = getattr(result, "metadata", None)
-            if metadata is not None and hasattr(metadata, "model_dump"):
-                metadata = metadata.model_dump(exclude_none=True)
-            elif metadata is None:
+            if metadata is None:
                 metadata = {}
+            elif hasattr(metadata, "model_dump"):
+                metadata = metadata.model_dump(exclude_none=True)
+            elif not isinstance(metadata, dict):
+                metadata = dict(metadata)
 
             markdown = getattr(result, "markdown", None) or ""
 
