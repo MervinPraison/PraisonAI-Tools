@@ -252,8 +252,9 @@ jobs:
 
       - name: Stash merge gate helpers
         run: |
-          cp .github/scripts/merge-gate.js /tmp/merge-gate.js
-          mkdir -p /tmp/gh-actions
+          # Keep scripts together so require('./gate-config.js') works from /tmp
+          mkdir -p /tmp/merge-gate-scripts /tmp/gh-actions
+          cp .github/scripts/merge-gate.js .github/scripts/gate-config.js /tmp/merge-gate-scripts/
           cp -R .github/actions/claude-code-action /tmp/gh-actions/
 
       - name: Fetch PR branch
@@ -322,7 +323,7 @@ jobs:
         with:
           github-token: ${{ steps.app-token.outputs.token }}
           script: |
-            const mergeGate = require('/tmp/merge-gate.js');
+            const mergeGate = require('/tmp/merge-gate-scripts/merge-gate.js');
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const prNumber = ${{ matrix.pr_number }};
@@ -361,7 +362,7 @@ jobs:
         with:
           github-token: ${{ steps.app-token.outputs.token }}
           script: |
-            const mergeGate = require('/tmp/merge-gate.js');
+            const mergeGate = require('/tmp/merge-gate-scripts/merge-gate.js');
             const comments = await mergeGate.listAllComments(
               github, context.repo.owner, context.repo.repo, ${{ matrix.pr_number }}
             );
