@@ -3,6 +3,7 @@
 import json
 import pytest
 import requests as real_requests
+from urllib.parse import urlparse
 from unittest.mock import Mock, patch
 from praisonai_tools.tools.swarmscore_tool import (
     SwarmScoreTool,
@@ -135,6 +136,29 @@ class TestSwarmScoreTool:
         assert result.output == manifest_data
         mock_requests.get.assert_called_once()
     
+    @patch('praisonai_tools.tools.swarmscore_tool.requests')
+    def test_get_discovery_manifest_url_derivation(self, mock_requests):
+        """Discovery manifest URL must resolve to the domain root regardless of version prefix."""
+        mock_response = Mock()
+        mock_response.json.return_value = {"agents": []}
+        mock_response.raise_for_status.return_value = None
+        mock_requests.get.return_value = mock_response
+
+        for base_url in [
+            "https://api.swarmsync.ai/v1/swarmscore/",
+            "https://api.swarmsync.ai/v2/swarmscore/",
+            "https://staging.swarmsync.ai/api/swarmscore/",
+            "https://api.swarmsync.ai/swarmscore",
+        ]:
+            mock_requests.get.reset_mock()
+            tool = SwarmScoreTool(api_base_url=base_url)
+            result = tool.get_discovery_manifest()
+
+            assert result.success is True
+            called_url = mock_requests.get.call_args[0][0]
+            expected_root = f"{urlparse(base_url).scheme}://{urlparse(base_url).netloc}"
+            assert called_url == f"{expected_root}/.well-known/agent-card.json"
+
     @patch('praisonai_tools.tools.swarmscore_tool.requests')
     def test_get_discovery_manifest_error(self, mock_requests):
         """Test discovery manifest retrieval with error."""

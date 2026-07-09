@@ -12,6 +12,7 @@ More information: https://swarmsync.ai/docs/protocol-specs/swarmscore
 import json
 import logging
 from typing import Dict, Any
+from urllib.parse import urlparse
 
 try:
     import requests
@@ -127,7 +128,8 @@ class SwarmScoreTool(BaseTool):
             ToolResult containing discovery manifest data
         """
         try:
-            base = self.api_base_url.split("/v1/")[0].rstrip('/')
+            parsed = urlparse(self.api_base_url)
+            base = f"{parsed.scheme}://{parsed.netloc}"
             url = f"{base}/.well-known/agent-card.json"
             response = requests.get(url, timeout=30)
             response.raise_for_status()
