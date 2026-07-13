@@ -38,6 +38,11 @@ from importlib.metadata import version, PackageNotFoundError
 from praisonai_tools.tools.base import BaseTool, ToolResult, ToolValidationError, validate_tool
 from praisonai_tools.tools.decorator import tool, FunctionTool, is_tool, get_tool_schema
 
+# ``__all__`` is derived from the tools package's automatically-discovered
+# manifest so the two levels cannot drift apart. Only source files are parsed
+# (via AST) to build it - no tool module is eagerly imported here.
+from praisonai_tools.tools import __all__ as _tools_all
+
 try:
     __version__ = version("praisonai-tools")
 except PackageNotFoundError:
@@ -53,11 +58,6 @@ def __getattr__(name):
     except AttributeError:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
-
-# ``__all__`` is derived from the tools package's automatically-discovered
-# manifest so the two levels cannot drift apart. Only source files are parsed
-# (via AST) to build it - no tool module is eagerly imported here.
-from praisonai_tools.tools import __all__ as _tools_all
 
 __all__ = list(_tools_all)
 
