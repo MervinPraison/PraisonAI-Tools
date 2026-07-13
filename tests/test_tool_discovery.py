@@ -44,6 +44,27 @@ def test_no_discovery_collisions():
     assert collisions == {}, f"Colliding tool symbols across modules: {collisions}"
 
 
+def test_every_shipped_module_parses():
+    """Every shipped tool module must parse.
+
+    Discovery deliberately swallows a per-module ``SyntaxError`` (logging a
+    warning) so one broken module cannot break the whole package import. The
+    downside is that a broken module silently drops out of the manifest and its
+    tools resolve as ``AttributeError`` rather than surfacing the real parse
+    error. This test closes that gap loudly at CI time: it parses each module
+    directly (not via the swallowing discovery helper) so a genuinely broken
+    shipped module fails here with the pointing ``SyntaxError``.
+    """
+    for module in _tool_modules():
+        path = os.path.join(TOOLS_DIR, module + ".py")
+        with open(path, "r", encoding="utf-8") as fh:
+            source = fh.read()
+        try:
+            ast.parse(source)
+        except SyntaxError as exc:  # pragma: no cover - fails only if a module breaks
+            pytest.fail(f"tools/{module}.py has a syntax error: {exc}")
+
+
 def test_manifest_covers_every_shipped_symbol():
     manifest, _ = build_manifest(TOOLS_DIR)
     for module in _tool_modules():
