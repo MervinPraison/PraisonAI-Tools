@@ -531,6 +531,27 @@ agent = Agent(
 )
 ```
 
+### How `praisonai-tools` registers its own tools
+
+The bundled tools in this package are **discovered automatically**. Every
+module under `praisonai_tools/tools/` is scanned (at import time, without
+executing the module) and its public top-level classes and functions become
+importable directly:
+
+```python
+from praisonai_tools.tools import WeatherTool, get_weather   # discovered
+from praisonai_tools import WeatherTool                       # same symbol
+```
+
+Adding a new tool therefore means **adding one file** to
+`praisonai_tools/tools/` — there is no import map or `__all__` to edit, and
+imports stay lazy (a tool module and its optional dependencies are only loaded
+the first time one of its symbols is accessed).
+
+External packages that want their tools discovered by `praisonaiagents` should
+use the `[project.entry-points."praisonaiagents.tools"]` group shown above,
+which the core `praisonaiagents` registry resolves.
+
 ---
 
 ## 9. Video Editing Tools

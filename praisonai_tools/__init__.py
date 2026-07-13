@@ -43,6 +43,10 @@ from praisonai_tools.catalogue import (
     get_tool_names,
 )
 
+# Imported at top (not below ``__getattr__``) to satisfy ruff E402. This only
+# reads the auto-discovered manifest - no tool module is eagerly imported.
+from praisonai_tools.tools import __all__ as _tools_all
+
 try:
     __version__ = version("praisonai-tools")
 except PackageNotFoundError:
@@ -58,105 +62,20 @@ def __getattr__(name):
     except AttributeError:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
-__all__ = [
-    # Base classes for custom tools
-    "BaseTool",
-    "ToolResult", 
-    "ToolValidationError",
-    "validate_tool",
-    # Decorator for function-based tools
-    "tool",
-    "FunctionTool",
-    "is_tool",
-    "get_tool_schema",
-    # Tool discovery / catalogue
+# Catalogue/discovery helpers exported eagerly above (not tool symbols, so they
+# are not part of the auto-discovered manifest).
+_CATALOGUE_EXPORTS = [
     "ToolCatalogueEntry",
     "list_tools",
     "get_tool_names",
-    # Email Tool
-    "EmailTool",
-    "send_email",
-    "read_emails",
-    "search_emails",
-    # Slack Tool
-    "SlackTool",
-    "send_slack_message",
-    "get_slack_channels",
-    "get_slack_history",
-    # Discord Tool
-    "DiscordTool",
-    "send_discord_webhook",
-    "send_discord_message",
-    # GitHub Tool
-    "GitHubTool",
-    "search_github_repos",
-    "get_github_repo",
-    "create_github_issue",
-    # Image Tool
-    "ImageTool",
-    "generate_image",
-    # Weather Tool
-    "WeatherTool",
-    "get_weather",
-    "get_forecast",
-    "get_air_quality",
-    # YouTube Tool
-    "YouTubeTool",
-    "search_youtube",
-    "get_youtube_video",
-    "get_youtube_transcript",
-    # TTS Tool
-    "TTSTool",
-    "text_to_speech",
-    "list_tts_voices",
-    # Telegram Tool
-    "TelegramTool",
-    "send_telegram_message",
-    # Notion Tool
-    "NotionTool",
-    "search_notion",
-    "create_notion_page",
-    # PostgreSQL Tool
-    "PostgresTool",
-    "query_postgres",
-    "list_postgres_tables",
-    # Reddit Tool
-    "RedditTool",
-    "search_reddit",
-    "get_reddit_hot",
-    # Docker Tool
-    "DockerTool",
-    "list_docker_containers",
-    "run_docker_container",
-    # Signal Tool
-    "SignalTool",
-    "send_signal_message",
-    "check_signal_connection",
-    # LINE Tool
-    "LineTool",
-    "send_line_message",
-    "broadcast_line_message",
-    # iMessage Tool
-    "iMessageTool",
-    "send_imessage",
-    "check_imessage_availability",
-    # WhatsApp Tool
-    "WhatsAppTool",
-    "send_whatsapp_message",
-    # Marketplace Tools
-    "PinchworkTool",
-    "pinchwork_delegate",
-    "AgentIDTool", 
-    "verify_agent_identity",
-    "JoyTrustTool",
-    "check_trust_score",
-    "AgentFolioTool",
-    "check_behavioral_trust",
-    "verify_task_delegation_safety",
-    # Composio
-    "ComposioTool",
-    "ComposioTools",
-    "composio_execute",
-    "composio_tools",
-    "composio_list_apps",
 ]
+
+# The remainder of ``__all__`` is derived from the tools package's
+# automatically-discovered manifest so the two levels cannot drift apart. Only
+# source files are parsed (via AST) to build it - no tool module is eagerly
+# imported here.
+__all__ = sorted(set(_tools_all) | set(_CATALOGUE_EXPORTS))
+
+
+def __dir__():
+    return sorted(set(globals()) | set(__all__))
