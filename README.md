@@ -548,6 +548,16 @@ Adding a new tool therefore means **adding one file** to
 imports stay lazy (a tool module and its optional dependencies are only loaded
 the first time one of its symbols is accessed).
 
+By default the discovered public surface is the module's top-level classes and
+functions. If a module exposes tools through module-level aliases
+(e.g. `read_yaml = _yaml_tools.read_yaml`), declare a standard `__all__` in that
+module and the listed names are exported verbatim. Modules and names starting
+with `_` are treated as private and never exported.
+
+The scan result is memoised in a small on-disk cache next to the package, so
+import stays fast; the cache is rebuilt automatically whenever a tool file is
+added, removed, or edited.
+
 External packages that want their tools discovered by `praisonaiagents` should
 use the `[project.entry-points."praisonaiagents.tools"]` group shown above,
 which the core `praisonaiagents` registry resolves.
