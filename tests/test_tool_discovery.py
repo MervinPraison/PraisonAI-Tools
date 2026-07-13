@@ -13,26 +13,30 @@ import pytest
 
 import praisonai_tools
 from praisonai_tools import tools as tools_pkg
-from praisonai_tools.tools._discovery import build_manifest, _SKIP_MODULES
+from praisonai_tools.tools._discovery import (
+    build_manifest,
+    _iter_public_symbols,
+    _SKIP_MODULES,
+)
 
 TOOLS_DIR = os.path.dirname(tools_pkg.__file__)
 
 
 def _public_symbols(path):
     with open(path, "r", encoding="utf-8") as fh:
-        tree = ast.parse(fh.read())
-    return [
-        node.name
-        for node in tree.body
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
-        and not node.name.startswith("_")
-    ]
+        source = fh.read()
+    return _iter_public_symbols(source, os.path.basename(path)[:-3])
 
 
 def _tool_modules():
     for filename in sorted(os.listdir(TOOLS_DIR)):
-        if filename.endswith(".py") and filename[:-3] not in _SKIP_MODULES:
-            yield filename[:-3]
+        module_name = filename[:-3]
+        if (
+            filename.endswith(".py")
+            and module_name not in _SKIP_MODULES
+            and not module_name.startswith("_")
+        ):
+            yield module_name
 
 
 def test_no_discovery_collisions():
@@ -65,9 +69,22 @@ def test_all_matches_manifest():
 @pytest.mark.parametrize("name", [
     "EmailTool", "SlackTool", "GitHubTool", "WeatherTool", "YouTubeTool",
     "send_email", "get_weather", "search_youtube",
+    # Symbol from a module that declares an explicit __all__ (author intent).
+    "NexusPredictionMarketTool",
+    # External symbol living outside tools/ (exercises the absolute-path
+    # import branch in __getattr__ and the _EXTERNAL_SYMBOLS mapping).
+    "N8nWorkflowTool",
 ])
 def test_known_symbols_resolve_both_surfaces(name):
     assert getattr(tools_pkg, name) is getattr(praisonai_tools, name)
+
+
+def test_explicit_all_is_respected():
+    """A module declaring __all__ contributes exactly those public names."""
+    manifest, _ = build_manifest(TOOLS_DIR)
+    # nexus_prediction_market_tool.py declares __all__ with these two names.
+    assert manifest.get("NexusPredictionMarketTool") == "nexus_prediction_market_tool"
+    assert manifest.get("nexus_prediction_market_tool") == "nexus_prediction_market_tool"
 
 
 def test_lazy_import_not_eager(monkeypatch):
@@ -87,7 +104,9 @@ def test_lazy_import_not_eager(monkeypatch):
 
 def test_drop_in_new_tool(tmp_path, monkeypatch):
     """A new module dropped into tools/ is importable with no other edits."""
-    echo_path = os.path.join(TOOLS_DIR, "_echo_discovery_probe.py")
+    if not os.access(TOOLS_DIR, os.W_OK):
+        pytest.skip("TOOLS_DIR is not writable (read-only install)")
+    echo_path = os.path.join(TOOLS_DIR, "echo_discovery_probe.py")
     source = (
         "from praisonai_tools.tools.decorator import tool\n\n\n"
         "@tool\n"
@@ -105,3 +124,39 @@ def test_drop_in_new_tool(tmp_path, monkeypatch):
     finally:
         os.remove(echo_path)
         importlib.reload(tools_pkg)
+
+
+def test_manifest_cache_roundtrip(tmp_path):
+    """The disk cache is written, reused, and invalidated on directory change."""
+    from praisonai_tools.tools import _discovery
+
+    pkg = tmp_path / "toolsdir"
+    pkg.mkdir()
+    (pkg / "sample_tool.py").write_text("class SampleTool:\n    pass\n")
+
+    manifest, _ = _discovery.build_manifest(str(pkg))
+    assert manifest.get("SampleTool") == "sample_tool"
+    cache_file = pkg / _discovery._CACHE_FILENAME
+    assert cache_file.exists(), "cache should be written after first scan"
+
+    # Second call must serve from cache (fingerprint unchanged) and match.
+    manifest2, _ = _discovery.build_manifest(str(pkg))
+    assert manifest2 == manifest
+
+    # Adding a module changes the fingerprint -> cache is rebuilt automatically.
+    (pkg / "second_tool.py").write_text("def second_tool():\n    return 1\n")
+    manifest3, _ = _discovery.build_manifest(str(pkg))
+    assert "second_tool" in manifest3
+
+
+def test_manifest_cache_corrupt_falls_back(tmp_path):
+    """A corrupt cache file must not break discovery."""
+    from praisonai_tools.tools import _discovery
+
+    pkg = tmp_path / "toolsdir"
+    pkg.mkdir()
+    (pkg / "sample_tool.py").write_text("class SampleTool:\n    pass\n")
+    (pkg / _discovery._CACHE_FILENAME).write_text("{ not valid json")
+
+    manifest, _ = _discovery.build_manifest(str(pkg))
+    assert manifest.get("SampleTool") == "sample_tool"
