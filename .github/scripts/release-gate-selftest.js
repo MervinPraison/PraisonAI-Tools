@@ -29,4 +29,53 @@ try {
 
 assert('PACKAGE_PATHS includes pyproject', rg.PACKAGE_PATHS.includes('pyproject.toml'));
 
-process.exit(failed ? 1 : 0);
+(async () => {
+  const noonUtc = new Date('2026-07-08T12:00:00Z');
+  const mockGithub = {
+    rest: {
+      actions: {
+        listWorkflowRuns: async () => ({
+          data: {
+            workflow_runs: [
+              {
+                conclusion: 'success',
+                created_at: '2026-07-08T09:00:00Z',
+                status: 'completed',
+              },
+            ],
+          },
+        }),
+      },
+    },
+  };
+
+  assert('PATCH_RELEASE_INTERVAL_DAYS is 3', rg.PATCH_RELEASE_INTERVAL_DAYS === 3);
+  assert(
+    'hasSuccessfulReleaseWithinDays blocks recent release',
+    await rg.hasSuccessfulReleaseWithinDays(mockGithub, 'o', 'r', noonUtc)
+  );
+
+  const oldReleaseGithub = {
+    rest: {
+      actions: {
+        listWorkflowRuns: async () => ({
+          data: {
+            workflow_runs: [
+              {
+                conclusion: 'success',
+                created_at: '2026-07-04T09:00:00Z',
+                status: 'completed',
+              },
+            ],
+          },
+        }),
+      },
+    },
+  };
+  assert(
+    'hasSuccessfulReleaseWithinDays allows after 3 days',
+    !(await rg.hasSuccessfulReleaseWithinDays(oldReleaseGithub, 'o', 'r', noonUtc))
+  );
+
+  process.exit(failed ? 1 : 0);
+})();

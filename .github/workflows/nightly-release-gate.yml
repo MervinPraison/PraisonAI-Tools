@@ -2,11 +2,12 @@ name: Nightly Release Gate
 
 # Preflight before PyPI Release (patch bump).
 # Primary: CI success on main (workflow_run).
-# Backstop: nightly cron at 00:00 UTC.
+# Backstop: cron every 3 days at 00:00 UTC.
+# Dedupe: max one successful patch release every 3 days (see release-gate.js).
 
 on:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 0 */3 * *'
   workflow_dispatch:
     inputs:
       dry_run:
