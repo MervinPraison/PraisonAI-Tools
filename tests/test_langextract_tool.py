@@ -1,15 +1,15 @@
 """Tests for LangExtract Tool."""
 
-import tempfile
 import os
+import tempfile
 from unittest.mock import Mock, patch
 
 from praisonai_tools.tools.langextract_tool import (
     LangExtractTool,
+    _create_annotated_document,
+    _get_langextract,
     langextract_extract,
     langextract_render_file,
-    _get_langextract,
-    _create_annotated_document
 )
 
 
@@ -96,19 +96,19 @@ class TestLangExtractTool:
             mock_lx.io.save_annotated_documents = Mock()
             mock_lx.visualize = Mock(return_value="<html>mock visualization</html>")
             
-            with patch('webbrowser.open') as mock_open:
-                with tempfile.TemporaryDirectory() as temp_dir:
-                    output_path = os.path.join(temp_dir, "test.html")
-                    
-                    result = self.tool.extract(
-                        text="test text",
-                        auto_open=True,
-                        output_path=output_path
-                    )
-                    
-                    assert result["success"] is True
-                    assert "auto_opened" in result
-                    mock_open.assert_called_once()
+            with patch('webbrowser.open') as mock_open, \
+                    tempfile.TemporaryDirectory() as temp_dir:
+                output_path = os.path.join(temp_dir, "test.html")
+
+                result = self.tool.extract(
+                    text="test text",
+                    auto_open=True,
+                    output_path=output_path
+                )
+
+                assert result["success"] is True
+                assert "auto_opened" in result
+                mock_open.assert_called_once()
     
     def test_render_file_missing_path(self):
         """Test render_file with missing file_path."""
@@ -166,10 +166,10 @@ class TestHelperFunctions:
     
     def test_get_langextract_not_installed(self):
         """Test _get_langextract when module not installed."""
-        with patch.dict('sys.modules', {'langextract': None}):
-            with patch('builtins.__import__', side_effect=ImportError):
-                result = _get_langextract()
-                assert result is None
+        with patch.dict('sys.modules', {'langextract': None}), \
+                patch('builtins.__import__', side_effect=ImportError):
+            result = _get_langextract()
+            assert result is None
     
     @patch('praisonai_tools.tools.langextract_tool._get_langextract')
     def test_create_annotated_document(self, mock_get_lx):
