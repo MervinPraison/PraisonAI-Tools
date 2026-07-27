@@ -164,8 +164,8 @@ class TestMotionGraphicsTeam:
                 custom_param="test"
             )
             
-            # Check that custom parameters are passed through alongside
-            # the hierarchical process kwargs forwarded by the preset
+            # Hierarchical teams forward process + manager_llm alongside
+            # any user-supplied kwargs, so assert individual entries.
             assert team.kwargs["custom_param"] == "test"
             assert team.kwargs["process"] == "hierarchical"
             assert team.kwargs["manager_llm"] == "gpt-4"
@@ -212,11 +212,11 @@ class TestMotionGraphicsTeam:
     @patch('praisonai_tools.video.motion_graphics.team.search_web', MockSearch())
     @patch('praisonai_tools.video.motion_graphics.team.create_motion_graphics_agent')
     def test_coordinator_is_leader(self, mock_create_agent):
-        """Test that coordinator is the semantic leader (agents[0]).
+        """Test that coordinator is the semantic leader (first agent).
 
         In hierarchical process mode the manager LLM orchestrates workers,
-        so the coordinator is exposed as the first agent rather than via a
-        static ``team.leader`` reference.
+        so the coordinator is the first agent rather than a static
+        ``team.leader`` reference.
         """
         mock_animator = MockAgent(name="animator")
         mock_create_agent.return_value = mock_animator
