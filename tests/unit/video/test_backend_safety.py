@@ -13,6 +13,7 @@ except ImportError:
 
 
 @pytest.mark.skipif(not BACKEND_AVAILABLE, reason="Motion graphics backend not available")
+@pytest.mark.requires_video_deps
 class TestBackendSafety:
     """Test workspace safety features."""
     
