@@ -35,6 +35,11 @@ def motion_graphics_team(
     - Researcher: Optional web search for content research  
     - CodeExplorer: Optional git repository exploration
     - Animator: HTML/GSAP composition authoring and rendering
+
+    The team runs with ``process="hierarchical"``: the ``manager_llm``
+    orchestrates the worker agents at runtime rather than exposing a static
+    ``leader`` reference. The coordinator is the semantic leader and is always
+    the first agent in ``team.agents``.
     
     Args:
         research: Include research specialist
