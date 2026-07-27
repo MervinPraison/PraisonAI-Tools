@@ -86,3 +86,9 @@ packages = ["praisonai_tools"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.ruff.lint]
+# Pin the rule set to the historical default (Pyflakes + a subset of
+# pycodestyle) so an unpinned ruff upgrade does not spuriously fail CI by
+# enabling thousands of new default rules across the pre-existing codebase.
+select = ["E4", "E7", "E9", "F"]
