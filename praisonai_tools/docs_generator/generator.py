@@ -158,6 +158,10 @@ def sanitize_type_for_mdx(type_str: Optional[str]) -> Optional[str]:
         # Keep readable single-level containers, collapse anything nested.
         if _has_nested_brackets(inner):
             return base
+        # ``Union[..., Any]`` is redundant (a union with ``Any`` collapses to
+        # ``Any``), so drop the noisy argument list and keep just ``Union``.
+        if base == "Union" and "Any" in re.split(r"\s*,\s*", inner):
+            return base
         return result
 
     # Unknown/other generic - collapse to base name to stay safe.
