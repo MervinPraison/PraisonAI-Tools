@@ -144,13 +144,17 @@ class TestLangExtractTool:
             temp_file_path = temp_file.name
         
         try:
-            result = self.tool.render_file(
-                file_path=temp_file_path,
-                extractions=["important terms"]
-            )
-            
-            assert result["success"] is True
-            assert result["text_length"] > 0
+            with tempfile.TemporaryDirectory() as temp_dir:
+                output_path = os.path.join(temp_dir, "render.html")
+                
+                result = self.tool.render_file(
+                    file_path=temp_file_path,
+                    extractions=["important terms"],
+                    output_path=output_path
+                )
+                
+                assert result["success"] is True
+                assert result["text_length"] > 0
             
         finally:
             os.unlink(temp_file_path)
@@ -265,16 +269,20 @@ class TestIntegration:
         
         key_terms = ["John Doe", "OpenAI Corporation", "January 1, 2024", "Net 30 days"]
         
-        result = langextract_extract(
-            text=contract_text,
-            extractions=key_terms,
-            document_id="contract-001",
-            auto_open=False
-        )
-        
-        assert result["success"] is True
-        assert result["document_id"] == "contract-001"
-        assert result["extractions_count"] == len(key_terms)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_path = os.path.join(temp_dir, "contract-001.html")
+            
+            result = langextract_extract(
+                text=contract_text,
+                extractions=key_terms,
+                document_id="contract-001",
+                output_path=output_path,
+                auto_open=False
+            )
+            
+            assert result["success"] is True
+            assert result["document_id"] == "contract-001"
+            assert result["extractions_count"] == len(key_terms)
     
     @patch('praisonai_tools.tools.langextract_tool._get_langextract')
     @patch('praisonai_tools.tools.langextract_tool._create_annotated_document')
@@ -294,13 +302,17 @@ class TestIntegration:
         analysis_text = "The quarterly report shows revenue of $1.2M and profit of $300K."
         findings = ["$1.2M", "$300K", "quarterly report"]
         
-        result = langextract_extract(
-            text=analysis_text,
-            extractions=findings,
-            document_id="financial-analysis",
-            auto_open=False,
-        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_path = os.path.join(temp_dir, "financial-analysis.html")
+            
+            result = langextract_extract(
+                text=analysis_text,
+                extractions=findings,
+                document_id="financial-analysis",
+                output_path=output_path,
+                auto_open=False,
+            )
 
-        assert result["success"] is True
-        assert result["document_id"] == "financial-analysis"
-        assert result["extractions_count"] == len(findings)
+            assert result["success"] is True
+            assert result["document_id"] == "financial-analysis"
+            assert result["extractions_count"] == len(findings)
