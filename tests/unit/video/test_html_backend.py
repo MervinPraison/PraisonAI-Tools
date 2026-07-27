@@ -13,6 +13,7 @@ from praisonai_tools.video.motion_graphics.protocols import RenderOpts
 class TestHtmlRenderBackend:
     """Test HTML render backend."""
     
+    @pytest.mark.requires_video_deps
     def test_import_error_handling(self):
         """Test that import errors are handled properly."""
         with patch('praisonai_tools.video.motion_graphics.backend_html.async_playwright', None):

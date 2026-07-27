@@ -96,6 +96,7 @@ class TestRenderTools:
 class TestResolveBackend:
     """Test backend resolution."""
     
+    @pytest.mark.requires_video_deps
     def test_resolve_string_backend(self):
         """Test resolving string backend specification."""
         backend = _resolve_backend("html")
@@ -119,6 +120,7 @@ class TestResolveBackend:
 class TestCreateMotionGraphicsAgent:
     """Test motion graphics agent factory."""
     
+    @pytest.mark.requires_video_deps
     @patch('praisonai_tools.video.motion_graphics.agent.Agent', MockAgent)
     @patch('praisonai_tools.video.motion_graphics.agent.FileTools', MockFileTools)
     def test_create_agent_defaults(self):
@@ -137,6 +139,7 @@ class TestCreateMotionGraphicsAgent:
                     "lint_composition", "render_composition"} <= tool_names
             assert "motion graphics specialist" in agent.instructions.lower()
     
+    @pytest.mark.requires_video_deps
     @patch('praisonai_tools.video.motion_graphics.agent.Agent', MockAgent)
     @patch('praisonai_tools.video.motion_graphics.agent.FileTools', MockFileTools)
     def test_create_agent_custom_params(self):
@@ -159,6 +162,7 @@ class TestCreateMotionGraphicsAgent:
         with pytest.raises(ImportError, match="praisonaiagents not available"):
             create_motion_graphics_agent()
     
+    @pytest.mark.requires_video_deps
     @patch('praisonai_tools.video.motion_graphics.agent.Agent', MockAgent)
     @patch('praisonai_tools.video.motion_graphics.agent.FileTools', MockFileTools)
     def test_create_agent_auto_workspace(self):
@@ -183,6 +187,7 @@ class TestCreateMotionGraphicsAgent:
             
             assert agent._motion_graphics_backend is mock_backend
     
+    @pytest.mark.requires_video_deps
     @patch('praisonai_tools.video.motion_graphics.agent.Agent', MockAgent)
     @patch('praisonai_tools.video.motion_graphics.agent.FileTools', MockFileTools)
     def test_create_agent_workspace_creation(self):
@@ -195,6 +200,7 @@ class TestCreateMotionGraphicsAgent:
             assert workspace_path.exists()
             assert agent._motion_graphics_workspace == workspace_path
     
+    @pytest.mark.requires_video_deps
     @patch('praisonai_tools.video.motion_graphics.agent.Agent', MockAgent)
     @patch('praisonai_tools.video.motion_graphics.agent.FileTools', MockFileTools) 
     def test_create_agent_skill_included(self):
@@ -207,6 +213,7 @@ class TestCreateMotionGraphicsAgent:
             assert "timeline" in agent.instructions
             assert "window.__timelines" in agent.instructions
     
+    @pytest.mark.requires_video_deps
     @patch('praisonai_tools.video.motion_graphics.agent.Agent', MockAgent)
     @patch('praisonai_tools.video.motion_graphics.agent.FileTools', MockFileTools)
     def test_create_agent_output_validation(self):
@@ -219,6 +226,7 @@ class TestCreateMotionGraphicsAgent:
             assert "Never fabricate file paths" in agent.instructions
             assert "3 failed attempts" in agent.instructions
     
+    @pytest.mark.requires_video_deps
     @patch('praisonai_tools.video.motion_graphics.agent.Agent', MockAgent)
     @patch('praisonai_tools.video.motion_graphics.agent.FileTools', MockFileTools)
     def test_agent_tools_configuration(self):

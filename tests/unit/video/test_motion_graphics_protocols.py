@@ -112,6 +112,7 @@ class TestRenderResult:
 class TestRenderBackendProtocol:
     """Test RenderBackendProtocol protocol."""
     
+    @pytest.mark.requires_video_deps
     def test_protocol_runtime_checkable(self):
         """Test that protocol is runtime checkable."""
         from praisonai_tools.video.motion_graphics.backend_html import HtmlRenderBackend
