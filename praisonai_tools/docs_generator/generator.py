@@ -111,45 +111,177 @@ class LayoutType(Enum):
 # UTILS
 # =============================================================================
 
+# Generic containers that stay readable when they only wrap simple, single-level
+# type arguments (e.g. ``Optional[str]`` or ``Dict[str, Any]``). When their
+# arguments are themselves parameterised (nested brackets) the whole annotation is
+# collapsed to the bare container name so the MDX table stays parse-safe.
+_SIMPLE_CONTAINERS = ("Optional", "Union", "Dict", "List", "Tuple", "Set")
+
+
+def _has_nested_brackets(inner: str) -> bool:
+    """Return True if the bracketed argument string contains another bracket."""
+    return "[" in inner
+
+
 def sanitize_type_for_mdx(type_str: Optional[str]) -> Optional[str]:
-    """Sanitize complex type annotations for MDX compatibility."""
+    """Sanitize complex type annotations for MDX compatibility.
+
+    Rules (see tests/test_mdx_escaping.py and scripts/tests/test_mdx_escaping.py):
+    - Simple types pass through unchanged (``str`` -> ``str``).
+    - Forward references have their quotes removed (``'Agent'`` -> ``Agent``).
+    - ``Callable``/``Coroutine`` and other complex generics collapse to the bare
+      container name (``Callable[[X], Y]`` -> ``Callable``).
+    - Simple single-level containers are preserved
+      (``Optional[str]`` -> ``Optional[str]``, ``Dict[str, Any]`` -> ``Dict[str, Any]``).
+    - Containers wrapping nested generics collapse to the container name so no
+      ``[[`` or deeply nested brackets leak into the MDX output.
+    """
     if not type_str:
         return type_str
-    
+
     result = type_str.strip()
+    # Remove quotes from forward references like 'Agent' -> Agent.
     result = re.sub(r"'([A-Z][a-zA-Z0-9_]*)'", r"\1", result)
-    
-    while "[[" in result or " Union[" in result or " Optional[" in result:
-        new_result = re.sub(r"\[\[(.*?)\]\]", r"[\1]", result)
-        if new_result == result:
-            break
-        result = new_result
-        
-    if "[" in result:
-        return result.split("[")[0]
-        
-    return result
+
+    if "[" not in result:
+        return result
+
+    base = result.split("[", 1)[0]
+    inner = result[len(base) + 1:-1] if result.endswith("]") else result[len(base) + 1:]
+
+    # Callable/Coroutine always collapse - their argument lists are noisy and
+    # frequently contain the ``[[`` pattern that breaks MDX/Mintlify parsing.
+    if base in ("Callable", "Coroutine", "Literal", "Awaitable", "Generator", "AsyncGenerator"):
+        return base
+
+    if base in _SIMPLE_CONTAINERS:
+        # Keep readable single-level containers, collapse anything nested.
+        if _has_nested_brackets(inner):
+            return base
+        return result
+
+    # Unknown/other generic - collapse to base name to stay safe.
+    return base
+
+
+# Known Mintlify/JSX component tags that must NOT be escaped so that authored
+# components in docstrings keep working. Shared with validate_mdx().
+VALID_MDX_TAGS = {
+    'div', 'span', 'p', 'a', 'br', 'hr', 'img', 'ul', 'ol', 'li',
+    'table', 'tr', 'td', 'th', 'thead', 'tbody', 'code', 'pre',
+    'strong', 'em', 'b', 'i', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'Card', 'CardGroup', 'Note', 'Warning', 'Info', 'Tip', 'Check',
+    'Danger', 'Accordion', 'AccordionGroup', 'Tab', 'Tabs', 'Step',
+    'Steps', 'Frame', 'Icon', 'Badge', 'Tooltip', 'CodeGroup',
+    'Expandable', 'ParamField', 'ResponseField', 'Columns', 'Column',
+    'RequestExample', 'ResponseExample', 'Banner', 'Update', 'View',
+    'Tree', 'Tile', 'Tiles', 'Panel', 'Color',
+}
+
+
+def _is_valid_mdx_tag(tag_body: str) -> bool:
+    """Check whether the inside of a ``<...>`` is a known Mintlify/HTML tag.
+
+    Accepts opening (``Badge``, ``Card title="x"``) and closing (``/Badge``)
+    forms. Only the leading tag name is checked against VALID_MDX_TAGS.
+    """
+    body = tag_body.strip()
+    if body.startswith('/'):
+        body = body[1:].strip()
+    name_match = re.match(r'[A-Za-z][A-Za-z0-9]*', body)
+    if not name_match:
+        return False
+    name = name_match.group(0)
+    if name in VALID_MDX_TAGS:
+        return True
+    return name.lower() in {t.lower() for t in VALID_MDX_TAGS if t.islower()}
+
+
+# Section headers in docstrings whose indented body is source-code that should
+# be rendered inside a fenced block.
+_CODE_SECTION_HEADER = re.compile(r"^(Usage|Example|Examples|Code)\s*:\s*$")
+
+
+def _wrap_indented_code_examples(text: str) -> str:
+    """Wrap indented example blocks under ``Usage:``/``Example:`` in fences.
+
+    Any run of indented lines immediately following a code-section header is
+    dedented and surrounded by ```` ```python ```` fences so it survives MDX
+    escaping and renders as a code block.
+    """
+    if "```" in text and _CODE_SECTION_HEADER.search(text) is None:
+        return text
+
+    lines = text.split("\n")
+    out: List[str] = []
+    i = 0
+    n = len(lines)
+    while i < n:
+        line = lines[i]
+        out.append(line)
+        if _CODE_SECTION_HEADER.match(line.strip()):
+            # Collect the following indented (or blank) block.
+            block: List[str] = []
+            j = i + 1
+            has_code = False
+            while j < n and (lines[j].startswith((" ", "\t")) or lines[j].strip() == ""):
+                block.append(lines[j])
+                if lines[j].strip():
+                    has_code = True
+                j += 1
+            if has_code:
+                # Trim trailing blank lines from the captured block.
+                while block and block[-1].strip() == "":
+                    block.pop()
+                dedented = [re.sub(r"^(?: {4}|\t)", "", b) for b in block]
+                out.append("```python")
+                out.extend(dedented)
+                out.append("```")
+                i = j
+                continue
+        i += 1
+    return "\n".join(out)
 
 
 def escape_mdx(text: str) -> str:
-    """Escape text for MDX compatibility."""
+    """Escape text for MDX compatibility.
+
+    Escapes bare ``<word>`` / ``{word}`` sequences that would otherwise be
+    interpreted as JSX by Mintlify, while preserving:
+    - fenced and inline code blocks,
+    - known Mintlify component tags (see VALID_MDX_TAGS).
+    """
     if not text:
         return text
-        
+
+    # Wrap indented code examples that follow a section header such as
+    # ``Usage:``/``Example:`` in fenced code blocks so they are preserved and
+    # rendered as code rather than escaped inline.
+    text = _wrap_indented_code_examples(text)
+
     code_blocks = []
+
     def save_code_block(match):
         code_blocks.append(match.group(0))
         return f"__CODE_BLOCK_{len(code_blocks)-1}__"
-    
+
     text = re.sub(r"```.*?```", save_code_block, text, flags=re.DOTALL)
     text = re.sub(r"`.*?`", save_code_block, text)
-    
+
     text = text.replace('{', '&#123;').replace('}', '&#125;')
-    text = text.replace('<', '&lt;').replace('>', '&gt;')
-    
+
+    # Escape angle brackets but keep valid Mintlify/HTML tags intact.
+    def escape_angle(match):
+        inner = match.group(1)
+        if _is_valid_mdx_tag(inner):
+            return match.group(0)
+        return '&lt;' + inner + '&gt;'
+
+    text = re.sub(r"<([^<>]*)>", escape_angle, text)
+
     for i, block in enumerate(code_blocks):
         text = text.replace(f"__CODE_BLOCK_{i}__", block)
-        
+
     return text
 
 
@@ -160,18 +292,6 @@ def validate_mdx(content: str) -> List[str]:
     in_code_block = False
     in_frontmatter = False
     frontmatter_count = 0
-    
-    VALID_MDX_TAGS = {
-        'div', 'span', 'p', 'a', 'br', 'hr', 'img', 'ul', 'ol', 'li', 
-        'table', 'tr', 'td', 'th', 'thead', 'tbody', 'code', 'pre',
-        'strong', 'em', 'b', 'i', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-        'Card', 'CardGroup', 'Note', 'Warning', 'Info', 'Tip', 'Check',
-        'Danger', 'Accordion', 'AccordionGroup', 'Tab', 'Tabs', 'Step',
-        'Steps', 'Frame', 'Icon', 'Badge', 'Tooltip', 'CodeGroup',
-        'Expandable', 'ParamField', 'ResponseField', 'Columns', 'Column',
-        'RequestExample', 'ResponseExample', 'Banner', 'Update', 'View',
-        'Tree', 'Tile', 'Tiles', 'Panel', 'Color'
-    }
 
     for i, line in enumerate(lines, 1):
         stripped = line.strip()
@@ -206,14 +326,54 @@ def validate_mdx(content: str) -> List[str]:
     return errors
 
 
+def validate_docs_json_structure(config: Dict[str, Any]) -> List[str]:
+    """Validate a docs.json config has the navigation structure we update.
+
+    Ensures an ``SDK`` tab containing a ``Reference`` group exists before we
+    attempt to inject generated pages, so a malformed/unexpected config is
+    reported instead of silently corrupted.
+
+    Returns a list of error strings (empty when the structure is valid).
+    """
+    errors: List[str] = []
+
+    navigation = config.get("navigation")
+    if not isinstance(navigation, dict):
+        errors.append("Missing or invalid 'navigation' object")
+        return errors
+
+    tabs = navigation.get("tabs")
+    if not isinstance(tabs, list):
+        errors.append("Missing or invalid 'navigation.tabs' list")
+        return errors
+
+    sdk_tab = next((t for t in tabs if isinstance(t, dict) and t.get("tab") == "SDK"), None)
+    if sdk_tab is None:
+        errors.append("Missing 'SDK' tab in navigation.tabs")
+        return errors
+
+    groups = sdk_tab.get("groups")
+    if not isinstance(groups, list):
+        errors.append("Missing or invalid 'groups' list in SDK tab")
+        return errors
+
+    ref_group = next((g for g in groups if isinstance(g, dict) and g.get("group") == "Reference"), None)
+    if ref_group is None:
+        errors.append("Missing 'Reference' group in SDK tab")
+
+    return errors
+
+
 def escape_for_table(text: str, is_type: bool = False) -> str:
     """Escape text for use in markdown tables."""
     if not text:
         return text
     
-    if is_type:
+    # Sanitize when explicitly a type, or when the text clearly looks like a
+    # complex type annotation (nested ``[[`` breaks MDX tables regardless).
+    if is_type or "[[" in text:
         text = sanitize_type_for_mdx(text) or text
-        
+
     text = text.replace('|', '\\|')
     # Use HTML entities for angle brackets to avoid tag confusion
     text = text.replace('<', '&lt;').replace('>', '&gt;')
@@ -1694,6 +1854,9 @@ ICON_MAP = {
     "context": "brain",
     "cache": "database",
     "db": "database",
+    "hooks": "link",
+    "mcp": "plug",
+    "policy": "gavel",
     "base": "database",
     "events": "bell",
     "output": "file-export",
