@@ -51,6 +51,12 @@ def motion_graphics_team(
         
     Returns:
         AgentTeam configured for motion graphics creation
+
+    Note:
+        The team uses ``process="hierarchical"`` where the ``manager_llm``
+        orchestrates the worker agents at runtime. The coordinator is the
+        semantic leader and is always the first agent (``team.agents[0]``);
+        there is no static ``team.leader`` reference in this mode.
     """
     if AgentTeam is None:
         raise ImportError(
