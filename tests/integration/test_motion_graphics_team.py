@@ -164,8 +164,11 @@ class TestMotionGraphicsTeam:
                 custom_param="test"
             )
             
-            # Check that custom parameters are passed through
-            assert team.kwargs == {"custom_param": "test"}
+            # Check that custom parameters are passed through alongside
+            # the hierarchical process kwargs forwarded by the preset
+            assert team.kwargs["custom_param"] == "test"
+            assert team.kwargs["process"] == "hierarchical"
+            assert team.kwargs["manager_llm"] == "gpt-4"
             
             # Check that workspace is set
             assert team._motion_graphics_workspace == Path(tmpdir)
@@ -209,15 +212,20 @@ class TestMotionGraphicsTeam:
     @patch('praisonai_tools.video.motion_graphics.team.search_web', MockSearch())
     @patch('praisonai_tools.video.motion_graphics.team.create_motion_graphics_agent')
     def test_coordinator_is_leader(self, mock_create_agent):
-        """Test that coordinator is set as team leader."""
+        """Test that coordinator is the semantic leader (agents[0]).
+
+        In hierarchical process mode the manager LLM orchestrates workers,
+        so the coordinator is exposed as the first agent rather than via a
+        static ``team.leader`` reference.
+        """
         mock_animator = MockAgent(name="animator")
         mock_create_agent.return_value = mock_animator
         
         with tempfile.TemporaryDirectory() as tmpdir:
             team = motion_graphics_team(workspace=tmpdir)
             
-            assert team.leader is not None
-            assert team.leader.name == "coordinator"
+            coordinator = team.agents[0]
+            assert coordinator.name == "coordinator"
     
     @patch('praisonai_tools.video.motion_graphics.team.AgentTeam', MockAgentTeam)
     @patch('praisonai_tools.video.motion_graphics.team.Agent', MockAgent)
@@ -278,7 +286,7 @@ class TestMotionGraphicsTeam:
         with tempfile.TemporaryDirectory() as tmpdir:
             team = motion_graphics_team(workspace=tmpdir)
             
-            coordinator = team.leader
+            coordinator = team.agents[0]
             instructions = coordinator.instructions.lower()
             
             assert "coordinator" in instructions
