@@ -312,6 +312,7 @@ def escape_mdx(text: str) -> str:
     tag_marker = f"\x00MT{token}"
 
     code_blocks = []
+
     def save_code_block(match):
         code_blocks.append(match.group(0))
         return f"{code_marker}{len(code_blocks) - 1}\x00"
@@ -391,6 +392,47 @@ def validate_mdx(content: str) -> List[str]:
     return errors
 
 
+def validate_docs_json_structure(config: Dict[str, Any]) -> List[str]:
+    """Validate a docs.json config has the navigation structure we update.
+
+    Ensures an ``SDK`` tab containing a ``Reference`` group exists before we
+    attempt to inject generated pages, so a malformed/unexpected config is
+    reported instead of silently corrupted.
+
+    Returns a list of error strings (empty when the structure is valid).
+    """
+    errors: List[str] = []
+
+    if not isinstance(config, dict):
+        return ["docs.json root must be an object"]
+
+    navigation = config.get("navigation")
+    if not isinstance(navigation, dict):
+        errors.append("Missing or invalid 'navigation' object")
+        return errors
+
+    tabs = navigation.get("tabs")
+    if not isinstance(tabs, list):
+        errors.append("Missing or invalid 'navigation.tabs' list")
+        return errors
+
+    sdk_tab = next((t for t in tabs if isinstance(t, dict) and t.get("tab") == "SDK"), None)
+    if sdk_tab is None:
+        errors.append("Missing 'SDK' tab in navigation.tabs")
+        return errors
+
+    groups = sdk_tab.get("groups")
+    if not isinstance(groups, list):
+        errors.append("Missing or invalid 'groups' list in SDK tab")
+        return errors
+
+    ref_group = next((g for g in groups if isinstance(g, dict) and g.get("group") == "Reference"), None)
+    if ref_group is None:
+        errors.append("Missing 'Reference' group in SDK tab")
+
+    return errors
+
+
 def escape_for_table(text: str, is_type: bool = False) -> str:
     """Escape text for use in markdown tables."""
     if not text:
@@ -407,48 +449,6 @@ def escape_for_table(text: str, is_type: bool = False) -> str:
     text = text.replace('<', '&lt;').replace('>', '&gt;')
     
     return text
-
-
-def validate_docs_json_structure(config: Dict[str, Any]) -> List[str]:
-    """Validate the structure of a docs.json navigation config.
-
-    Ensures the expected ``navigation.tabs`` -> ``SDK`` tab -> ``Reference``
-    group hierarchy exists before it is modified.
-
-    Args:
-        config: Parsed docs.json content.
-
-    Returns:
-        A list of error strings; empty if the structure is valid.
-    """
-    errors: List[str] = []
-
-    if not isinstance(config, dict):
-        return ["docs.json root must be an object"]
-
-    navigation = config.get("navigation")
-    if not isinstance(navigation, dict):
-        return ["Missing or invalid 'navigation' object"]
-
-    tabs = navigation.get("tabs")
-    if not isinstance(tabs, list):
-        return ["Missing or invalid 'navigation.tabs' array"]
-
-    sdk_tab = next((t for t in tabs if isinstance(t, dict) and t.get("tab") == "SDK"), None)
-    if sdk_tab is None:
-        errors.append("Missing 'SDK' tab in navigation.tabs")
-        return errors
-
-    groups = sdk_tab.get("groups")
-    if not isinstance(groups, list):
-        errors.append("Missing or invalid 'groups' in SDK tab")
-        return errors
-
-    ref_group = next((g for g in groups if isinstance(g, dict) and g.get("group") == "Reference"), None)
-    if ref_group is None:
-        errors.append("Missing 'Reference' group in SDK tab")
-
-    return errors
 
 
 def sanitize_description(text: str, max_length: int = 150) -> str:
@@ -1927,6 +1927,9 @@ ICON_MAP = {
     "context": "brain",
     "cache": "database",
     "db": "database",
+    "hooks": "link",
+    "mcp": "plug",
+    "policy": "gavel",
     "base": "database",
     "events": "bell",
     "output": "file-export",
