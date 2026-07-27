@@ -276,8 +276,17 @@ class TestIntegration:
         assert result["document_id"] == "contract-001"
         assert result["extractions_count"] == len(key_terms)
     
-    def test_agent_usage_pattern(self):
+    @patch('praisonai_tools.tools.langextract_tool._get_langextract')
+    @patch('praisonai_tools.tools.langextract_tool._create_annotated_document')
+    def test_agent_usage_pattern(self, mock_create_doc, mock_get_lx):
         """Test typical agent usage pattern."""
+        # Mock langextract so the test runs without the optional dependency
+        mock_lx = Mock()
+        mock_get_lx.return_value = mock_lx
+        mock_create_doc.return_value = Mock()
+        mock_lx.io.save_annotated_documents = Mock()
+        mock_lx.visualize = Mock(return_value="<html>mock visualization</html>")
+        
         # This would be how an agent uses the tool
         from praisonai_tools import langextract_extract
         
