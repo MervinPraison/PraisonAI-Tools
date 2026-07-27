@@ -703,6 +703,19 @@ pip install praisonai-tools[dev]
 pytest tests/ -v
 ```
 
+The `dev` extra installs the video/motion-graphics render deps
+(`playwright`, `imageio-ffmpeg`) so the full suite runs. To exercise the
+HTML render backend you also need the Chromium browser:
+
+```bash
+pip install -e ".[dev]"
+playwright install chromium
+pytest tests/ -v
+```
+
+If you use a minimal install without those deps, the video tests under
+`tests/unit/video/` are skipped automatically rather than failing.
+
 ---
 
 ## License
