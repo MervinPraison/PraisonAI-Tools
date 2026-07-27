@@ -194,7 +194,7 @@ def example_team_preset():
         
         print("✓ Motion graphics team created successfully!")
         print(f"  Agents: {[agent.name for agent in team.agents]}")
-        print(f"  Leader: {team.leader.name}")
+        print(f"  Coordinator: {team.agents[0].name}")
         print(f"  Workspace: {team._motion_graphics_workspace}")
         
     except ImportError as e:
