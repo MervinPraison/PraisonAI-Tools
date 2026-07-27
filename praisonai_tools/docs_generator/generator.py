@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import ast
 import re
 import json
+import uuid
 
 
 # =============================================================================
@@ -191,6 +192,10 @@ VALID_MDX_TAGS = {
     'Tree', 'Tile', 'Tiles', 'Panel', 'Color',
 }
 
+# Lower-cased view of VALID_MDX_TAGS, shared by escape_mdx and validate_mdx so
+# both apply an identical case-insensitive allowlist.
+_VALID_MDX_TAGS_LOWER = {t.lower() for t in VALID_MDX_TAGS}
+
 # Docstring section headers whose indented body is source code and should be
 # wrapped in a fenced code block so MDX/Mintlify renders it verbatim.
 _CODE_SECTION_HEADERS = ("usage", "example", "examples")
@@ -202,16 +207,31 @@ def _wrap_docstring_code_examples(text: str) -> str:
     Detects a header line like ``Usage:`` followed by an indented block and
     converts that block into a ```python fenced code block so it survives MDX
     escaping untouched.
-    """
-    if "```" in text:
-        return text
 
+    Existing fenced blocks are passed through verbatim, but any indented
+    Usage/Example sections that appear *outside* of a fence (including ones
+    that follow an unrelated fenced block earlier in the docstring) are still
+    wrapped.
+    """
     lines = text.split('\n')
     out: List[str] = []
     i = 0
     n = len(lines)
+    in_fence = False
     while i < n:
         line = lines[i]
+
+        # Pass through content inside an existing fenced code block untouched.
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+            out.append(line)
+            i += 1
+            continue
+        if in_fence:
+            out.append(line)
+            i += 1
+            continue
+
         header = line.strip().rstrip(':').lower()
         is_header = (
             line.strip().endswith(':')
@@ -263,10 +283,17 @@ def escape_mdx(text: str) -> str:
 
     text = _wrap_docstring_code_examples(text)
 
+    # Use a per-call random sentinel so literal documentation text such as
+    # ``__CODE_BLOCK_0__`` or ``__MDX_TAG_0__`` cannot be mistaken for one of
+    # our internal placeholders during the restore phase below.
+    token = uuid.uuid4().hex
+    code_marker = f"\x00CB{token}"
+    tag_marker = f"\x00MT{token}"
+
     code_blocks = []
     def save_code_block(match):
         code_blocks.append(match.group(0))
-        return f"__CODE_BLOCK_{len(code_blocks)-1}__"
+        return f"{code_marker}{len(code_blocks) - 1}\x00"
 
     text = re.sub(r"```.*?```", save_code_block, text, flags=re.DOTALL)
     text = re.sub(r"`.*?`", save_code_block, text)
@@ -275,15 +302,14 @@ def escape_mdx(text: str) -> str:
 
     # Protect valid Mintlify/HTML component tags so they survive the blanket
     # angle-bracket escaping below.
-    _valid_lower = {t.lower() for t in VALID_MDX_TAGS}
     preserved_tags = []
 
     def preserve_valid_tag(match):
         full = match.group(0)
         tag = match.group(1)
-        if tag in VALID_MDX_TAGS or tag.lower() in _valid_lower:
+        if tag in VALID_MDX_TAGS or tag.lower() in _VALID_MDX_TAGS_LOWER:
             preserved_tags.append(full)
-            return f"__MDX_TAG_{len(preserved_tags) - 1}__"
+            return f"{tag_marker}{len(preserved_tags) - 1}\x00"
         return full
 
     # Match opening tags <Tag ...>, closing tags </Tag>, and self-contained <tag>.
@@ -293,10 +319,10 @@ def escape_mdx(text: str) -> str:
     text = text.replace('<', '&lt;').replace('>', '&gt;')
 
     for i, tag in enumerate(preserved_tags):
-        text = text.replace(f"__MDX_TAG_{i}__", tag)
+        text = text.replace(f"{tag_marker}{i}\x00", tag)
 
     for i, block in enumerate(code_blocks):
-        text = text.replace(f"__CODE_BLOCK_{i}__", block)
+        text = text.replace(f"{code_marker}{i}\x00", block)
 
     return text
 
@@ -332,7 +358,9 @@ def validate_mdx(content: str) -> List[str]:
         angle_matches = re.findall(r'(?<!`)(<[a-zA-Z_][a-zA-Z0-9_]*>)(?!`)', line)
         for match in angle_matches:
             tag = match[1:-1]
-            if tag not in VALID_MDX_TAGS and tag.lower() not in {t.lower() for t in VALID_MDX_TAGS if t.islower()}:
+            # Mirror escape_mdx's case-insensitive allowlist so that tags it
+            # preserves are not flagged here (and vice-versa).
+            if tag not in VALID_MDX_TAGS and tag.lower() not in _VALID_MDX_TAGS_LOWER:
                 errors.append(f"Line {i}: Unescaped JSX-like tag: {match}")
         
         curly_matches = re.findall(r'(?<!`)(?<!=)\{([a-zA-Z_][a-zA-Z0-9_]*)\}(?!`)', line)
