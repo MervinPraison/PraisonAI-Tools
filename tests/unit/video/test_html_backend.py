@@ -19,10 +19,13 @@ class TestHtmlRenderBackend:
         with patch('praisonai_tools.video.motion_graphics.backend_html.async_playwright', None):
             with pytest.raises(ImportError, match="Playwright not installed"):
                 HtmlRenderBackend()
-        
-        with patch('praisonai_tools.video.motion_graphics.backend_html.imageio_ffmpeg', None):
-            with pytest.raises(ImportError, match="imageio-ffmpeg not installed"):
-                HtmlRenderBackend()
+
+        # Ensure the playwright guard passes so the imageio-ffmpeg guard is the
+        # one under test, regardless of whether the optional deps are installed.
+        with patch('praisonai_tools.video.motion_graphics.backend_html.async_playwright', Mock()):
+            with patch('praisonai_tools.video.motion_graphics.backend_html.imageio_ffmpeg', None):
+                with pytest.raises(ImportError, match="imageio-ffmpeg not installed"):
+                    HtmlRenderBackend()
     
     def test_init_success(self):
         """Test successful initialization."""
