@@ -1,10 +1,11 @@
 """Unit tests for HTML render backend."""
 
-import pytest
-import tempfile
 import asyncio
+import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch, AsyncMock
+from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
 
 from praisonai_tools.video.motion_graphics.backend_html import HtmlRenderBackend
 from praisonai_tools.video.motion_graphics.protocols import RenderOpts
@@ -16,23 +17,29 @@ class TestHtmlRenderBackend:
     @pytest.mark.requires_video_deps
     def test_import_error_handling(self):
         """Test that import errors are handled properly."""
-        with patch('praisonai_tools.video.motion_graphics.backend_html.async_playwright', None):
-            with pytest.raises(ImportError, match="Playwright not installed"):
-                HtmlRenderBackend()
+        with (
+            patch('praisonai_tools.video.motion_graphics.backend_html.async_playwright', None),
+            pytest.raises(ImportError, match="Playwright not installed"),
+        ):
+            HtmlRenderBackend()
 
         # Ensure the playwright guard passes so the imageio-ffmpeg guard is the
         # one under test, regardless of whether the optional deps are installed.
-        with patch('praisonai_tools.video.motion_graphics.backend_html.async_playwright', Mock()):
-            with patch('praisonai_tools.video.motion_graphics.backend_html.imageio_ffmpeg', None):
-                with pytest.raises(ImportError, match="imageio-ffmpeg not installed"):
-                    HtmlRenderBackend()
+        with (
+            patch('praisonai_tools.video.motion_graphics.backend_html.async_playwright', Mock()),
+            patch('praisonai_tools.video.motion_graphics.backend_html.imageio_ffmpeg', None),
+            pytest.raises(ImportError, match="imageio-ffmpeg not installed"),
+        ):
+            HtmlRenderBackend()
     
     def test_init_success(self):
         """Test successful initialization."""
-        with patch('praisonai_tools.video.motion_graphics.backend_html.async_playwright', Mock()):
-            with patch('praisonai_tools.video.motion_graphics.backend_html.imageio_ffmpeg', Mock()):
-                backend = HtmlRenderBackend()
-                assert backend is not None
+        with (
+            patch('praisonai_tools.video.motion_graphics.backend_html.async_playwright', Mock()),
+            patch('praisonai_tools.video.motion_graphics.backend_html.imageio_ffmpeg', Mock()),
+        ):
+            backend = HtmlRenderBackend()
+            assert backend is not None
 
 
 class TestLinting:
@@ -40,9 +47,11 @@ class TestLinting:
     
     def setup_method(self):
         """Set up test fixtures."""
-        with patch('praisonai_tools.video.motion_graphics.backend_html.async_playwright', Mock()):
-            with patch('praisonai_tools.video.motion_graphics.backend_html.imageio_ffmpeg', Mock()):
-                self.backend = HtmlRenderBackend()
+        with (
+            patch('praisonai_tools.video.motion_graphics.backend_html.async_playwright', Mock()),
+            patch('praisonai_tools.video.motion_graphics.backend_html.imageio_ffmpeg', Mock()),
+        ):
+            self.backend = HtmlRenderBackend()
     
     @pytest.mark.asyncio
     async def test_lint_missing_index_html(self):
@@ -202,9 +211,11 @@ class TestRendering:
     
     def setup_method(self):
         """Set up test fixtures."""
-        with patch('praisonai_tools.video.motion_graphics.backend_html.async_playwright', Mock()):
-            with patch('praisonai_tools.video.motion_graphics.backend_html.imageio_ffmpeg', Mock()):
-                self.backend = HtmlRenderBackend()
+        with (
+            patch('praisonai_tools.video.motion_graphics.backend_html.async_playwright', Mock()),
+            patch('praisonai_tools.video.motion_graphics.backend_html.imageio_ffmpeg', Mock()),
+        ):
+            self.backend = HtmlRenderBackend()
     
     @pytest.mark.asyncio
     async def test_render_missing_index_html(self):
@@ -325,8 +336,10 @@ class TestRendering:
         mock_process.returncode = 0
         mock_subprocess.return_value = mock_process
         
-        with patch.object(self.backend, '_get_ffmpeg_path', return_value='ffmpeg'):
-            with tempfile.TemporaryDirectory() as tmpdir:
+        with (
+            patch.object(self.backend, '_get_ffmpeg_path', return_value='ffmpeg'),
+            tempfile.TemporaryDirectory() as tmpdir,
+        ):
                 # Create fake frame files
                 frame_dir = Path(tmpdir)
                 frame_paths = []
@@ -361,8 +374,10 @@ class TestRendering:
         mock_process.returncode = 1
         mock_subprocess.return_value = mock_process
         
-        with patch.object(self.backend, '_get_ffmpeg_path', return_value='ffmpeg'):
-            with tempfile.TemporaryDirectory() as tmpdir:
+        with (
+            patch.object(self.backend, '_get_ffmpeg_path', return_value='ffmpeg'),
+            tempfile.TemporaryDirectory() as tmpdir,
+        ):
                 frame_path = Path(tmpdir) / "frame_000000.png"
                 frame_path.write_bytes(b"fake")
                 
@@ -382,8 +397,10 @@ class TestRendering:
         mock_process.kill = Mock()
         mock_subprocess.return_value = mock_process
         
-        with patch.object(self.backend, '_get_ffmpeg_path', return_value='ffmpeg'):
-            with tempfile.TemporaryDirectory() as tmpdir:
+        with (
+            patch.object(self.backend, '_get_ffmpeg_path', return_value='ffmpeg'),
+            tempfile.TemporaryDirectory() as tmpdir,
+        ):
                 frame_path = Path(tmpdir) / "frame_000000.png"
                 frame_path.write_bytes(b"fake")
                 

@@ -3,10 +3,10 @@
 import pytest
 from pathlib import Path
 from praisonai_tools.video.motion_graphics.protocols import (
+    LintResult,
+    RenderBackendProtocol,
     RenderOpts,
-    LintResult, 
     RenderResult,
-    RenderBackendProtocol
 )
 
 

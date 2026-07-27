@@ -6,11 +6,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 from praisonai_tools.video.motion_graphics.agent import (
-    create_motion_graphics_agent,
     RenderTools,
-    _resolve_backend
+    _resolve_backend,
+    create_motion_graphics_agent,
 )
-from praisonai_tools.video.motion_graphics.protocols import RenderResult, LintResult
+from praisonai_tools.video.motion_graphics.protocols import LintResult, RenderResult
 
 
 class MockAgent:
