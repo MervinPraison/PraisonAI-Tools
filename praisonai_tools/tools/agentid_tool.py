@@ -136,7 +136,9 @@ def verify_agent_identity(agent_url: str) -> Dict[str, Any]:
         agent_url: URL of the agent to verify.
 
     Returns:
-        Dictionary with verification result (verified, trust_score,
-        certificate, error).
+        Dictionary with verification result. Always includes ``verified``,
+        ``trust_score``, ``certificate``, ``agent_url`` and ``error``.
+        Successful verifications also include a ``timestamp`` field; failures
+        populate ``error`` with a human-readable message.
     """
     return AgentIDTool().verify(agent_url=agent_url)
