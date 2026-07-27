@@ -50,13 +50,13 @@ ICON_MAP = _generator.ICON_MAP
 get_icon_for_module = _generator.get_icon_for_module
 
 __all__ = [
-    "sanitize_type_for_mdx",
-    "escape_mdx",
-    "escape_for_table",
-    "validate_mdx",
-    "validate_docs_json_structure",
-    "sanitize_description",
-    "VALID_MDX_TAGS",
     "ICON_MAP",
+    "VALID_MDX_TAGS",
+    "escape_for_table",
+    "escape_mdx",
     "get_icon_for_module",
+    "sanitize_description",
+    "sanitize_type_for_mdx",
+    "validate_docs_json_structure",
+    "validate_mdx",
 ]

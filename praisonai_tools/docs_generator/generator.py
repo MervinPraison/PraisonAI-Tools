@@ -196,6 +196,17 @@ def _is_valid_mdx_tag(tag_body: str) -> bool:
     if not name_match:
         return False
     name = name_match.group(0)
+
+    # Reject prose that merely starts with a tag-like word (e.g. ``b then c``
+    # from ``a < b then c > d``): a real tag is either just the name, a
+    # self-close, or the name followed by ``key=value`` style attributes.
+    remainder = body[name_match.end():].strip().rstrip('/').strip()
+    if remainder and not re.fullmatch(
+        r'([A-Za-z_][\w-]*=("[^"]*"|\'[^\']*\'|\{[^}]*\}|[^\s"\'<>]+)\s*)+',
+        remainder,
+    ):
+        return False
+
     if name in VALID_MDX_TAGS:
         return True
     return name.lower() in {t.lower() for t in VALID_MDX_TAGS if t.islower()}
@@ -203,7 +214,7 @@ def _is_valid_mdx_tag(tag_body: str) -> bool:
 
 # Section headers in docstrings whose indented body is source-code that should
 # be rendered inside a fenced block.
-_CODE_SECTION_HEADER = re.compile(r"^(Usage|Example|Examples|Code)\s*:\s*$")
+_CODE_SECTION_HEADER = re.compile(r"^(Usage|Example|Examples|Code)\s*:\s*$", re.MULTILINE)
 
 
 def _wrap_indented_code_examples(text: str) -> str:
@@ -211,29 +222,45 @@ def _wrap_indented_code_examples(text: str) -> str:
 
     Any run of indented lines immediately following a code-section header is
     dedented and surrounded by ```` ```python ```` fences so it survives MDX
-    escaping and renders as a code block.
+    escaping and renders as a code block. Content that is already inside a
+    fenced code block is left untouched, so headers appearing *after* an
+    existing fence are still wrapped and existing fences are never nested.
     """
-    if "```" in text and _CODE_SECTION_HEADER.search(text) is None:
+    if "```" not in text and _CODE_SECTION_HEADER.search(text) is None:
         return text
 
     lines = text.split("\n")
     out: List[str] = []
     i = 0
     n = len(lines)
+    in_fence = False
     while i < n:
         line = lines[i]
+
+        # Track existing fenced blocks so we never touch or nest them.
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+            out.append(line)
+            i += 1
+            continue
+
         out.append(line)
-        if _CODE_SECTION_HEADER.match(line.strip()):
-            # Collect the following indented (or blank) block.
+        if not in_fence and _CODE_SECTION_HEADER.match(line.strip()):
+            # Collect the following indented (or blank) block, stopping if it
+            # already contains a fence (avoid nesting delimiters).
             block: List[str] = []
             j = i + 1
             has_code = False
+            has_existing_fence = False
             while j < n and (lines[j].startswith((" ", "\t")) or lines[j].strip() == ""):
+                if lines[j].lstrip().startswith("```"):
+                    has_existing_fence = True
+                    break
                 block.append(lines[j])
                 if lines[j].strip():
                     has_code = True
                 j += 1
-            if has_code:
+            if has_code and not has_existing_fence:
                 # Trim trailing blank lines from the captured block.
                 while block and block[-1].strip() == "":
                     block.pop()
@@ -272,16 +299,34 @@ def escape_mdx(text: str) -> str:
     text = re.sub(r"```.*?```", save_code_block, text, flags=re.DOTALL)
     text = re.sub(r"`.*?`", save_code_block, text)
 
-    text = text.replace('{', '&#123;').replace('}', '&#125;')
+    # Preserve known Mintlify/HTML component tags verbatim *before* escaping
+    # braces, so JSX expression props such as ``<Badge color={active}>`` keep
+    # their brace expressions instead of being turned into HTML entities.
+    preserved_tags: List[str] = []
 
-    # Escape angle brackets but keep valid Mintlify/HTML tags intact.
-    def escape_angle(match):
+    def save_valid_tag(match):
         inner = match.group(1)
         if _is_valid_mdx_tag(inner):
-            return match.group(0)
-        return '&lt;' + inner + '&gt;'
+            preserved_tags.append(match.group(0))
+            return f"__MDX_TAG_{len(preserved_tags) - 1}__"
+        return match.group(0)
+
+    text = re.sub(r"<([^<>]*)>", save_valid_tag, text)
+
+    text = text.replace('{', '&#123;').replace('}', '&#125;')
+
+    # Escape any remaining ``<tag>`` sequences that are not valid components.
+    def escape_angle(match):
+        return '&lt;' + match.group(1) + '&gt;'
 
     text = re.sub(r"<([^<>]*)>", escape_angle, text)
+
+    # Escape leftover standalone angle brackets (e.g. comparison operators like
+    # ``x < 0`` or ``value >= 1``) that would otherwise start a stray JSX tag.
+    text = text.replace('<', '&lt;').replace('>', '&gt;')
+
+    for i, tag in enumerate(preserved_tags):
+        text = text.replace(f"__MDX_TAG_{i}__", tag)
 
     for i, block in enumerate(code_blocks):
         text = text.replace(f"__CODE_BLOCK_{i}__", block)
