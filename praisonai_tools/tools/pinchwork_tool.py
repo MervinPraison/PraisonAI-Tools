@@ -97,5 +97,14 @@ class PinchworkTool(BaseTool):
 
 
 def pinchwork_delegate(task: str, skills_required: Optional[List[str]] = None, budget: float = 0.0) -> str:
-    """Delegate a task to the Pinchwork agent marketplace."""
+    """Delegate a task to the Pinchwork agent marketplace.
+
+    Args:
+        task: Description of the task to delegate.
+        skills_required: List of required skills for the agent (optional).
+        budget: Maximum budget for the task (default: 0.0).
+
+    Returns:
+        Result from the marketplace agent that completed the task.
+    """
     return PinchworkTool().delegate(task=task, skills_required=skills_required, budget=budget)

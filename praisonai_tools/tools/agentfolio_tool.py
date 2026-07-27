@@ -261,7 +261,17 @@ def check_behavioral_trust(
     min_trust_score: float = 50.0,
     organization_filter: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Check an agent's behavioral trust score across organizations using SATP protocol."""
+    """Check an agent's behavioral trust score across organizations using SATP protocol.
+
+    Args:
+        agent_name: Name/identifier of the agent to check.
+        task_class: Type of task for scoped trust (e.g., "code_review").
+        min_trust_score: Minimum trust score threshold (0-100, default: 50.0).
+        organization_filter: Optional filter for specific organization history.
+
+    Returns:
+        Dictionary with behavioral trust data.
+    """
     return AgentFolioTool().check_behavioral_trust(
         agent_name=agent_name,
         task_class=task_class,
@@ -276,7 +286,17 @@ def verify_task_delegation_safety(
     task_description: str,
     required_trust_level: float = 70.0
 ) -> Dict[str, Any]:
-    """Comprehensive safety check before delegating tasks using all trust layers."""
+    """Comprehensive safety check before delegating tasks using all trust layers.
+
+    Args:
+        agent_name: Name/identifier of the agent to check.
+        task_class: Type of task for scoped trust (e.g., "code_review").
+        task_description: Natural-language description of the task to delegate.
+        required_trust_level: Minimum trust level required (0-100, default: 70.0).
+
+    Returns:
+        Dictionary with safety assessment and recommendations.
+    """
     return AgentFolioTool().verify_delegation_safety(
         agent_name=agent_name,
         task_class=task_class,

@@ -130,5 +130,13 @@ class AgentIDTool(BaseTool):
 
 
 def verify_agent_identity(agent_url: str) -> Dict[str, Any]:
-    """Verify an external agent's identity using AgentID certificates."""
+    """Verify an external agent's identity using AgentID certificates.
+
+    Args:
+        agent_url: URL of the agent to verify.
+
+    Returns:
+        Dictionary with verification result (verified, trust_score,
+        certificate, error).
+    """
     return AgentIDTool().verify(agent_url=agent_url)
