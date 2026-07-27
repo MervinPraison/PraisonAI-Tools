@@ -179,11 +179,18 @@ def sanitize_type_for_mdx(type_str: Optional[str]) -> Optional[str]:
     return result
 
 
-# Known Mintlify / HTML component tags that must NOT be escaped by escape_mdx.
-VALID_MDX_TAGS = {
+# Plain HTML tags. HTML is case-insensitive, so ``<div>`` and ``<DIV>`` are the
+# same element and both must be preserved (never escaped) by escape_mdx.
+_HTML_TAGS = {
     'div', 'span', 'p', 'a', 'br', 'hr', 'img', 'ul', 'ol', 'li',
     'table', 'tr', 'td', 'th', 'thead', 'tbody', 'code', 'pre',
     'strong', 'em', 'b', 'i', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+}
+
+# Mintlify JSX components. Unlike HTML, JSX component names are CASE-SENSITIVE:
+# ``<Badge>`` is a valid component but ``<badge>`` is not and must be escaped as
+# prose. These are therefore matched exactly (no case folding).
+_MDX_COMPONENTS = {
     'Card', 'CardGroup', 'Note', 'Warning', 'Info', 'Tip', 'Check',
     'Danger', 'Accordion', 'AccordionGroup', 'Tab', 'Tabs', 'Step',
     'Steps', 'Frame', 'Icon', 'Badge', 'Tooltip', 'CodeGroup',
@@ -192,9 +199,23 @@ VALID_MDX_TAGS = {
     'Tree', 'Tile', 'Tiles', 'Panel', 'Color',
 }
 
-# Lower-cased view of VALID_MDX_TAGS, shared by escape_mdx and validate_mdx so
-# both apply an identical case-insensitive allowlist.
-_VALID_MDX_TAGS_LOWER = {t.lower() for t in VALID_MDX_TAGS}
+# Combined allowlist of tags that must NOT be escaped by escape_mdx.
+VALID_MDX_TAGS = _HTML_TAGS | _MDX_COMPONENTS
+
+# Lower-cased view of the HTML tags only, so ``<DIV>``/``<Div>`` resolve
+# case-insensitively while JSX components stay case-sensitive.
+_HTML_TAGS_LOWER = {t.lower() for t in _HTML_TAGS}
+
+
+def _is_valid_mdx_tag(tag: str) -> bool:
+    """Return True if ``tag`` is a tag that must be preserved (not escaped).
+
+    HTML tags are matched case-insensitively (HTML is case-insensitive) while
+    Mintlify JSX components must match exactly, so a mis-cased component such as
+    ``badge`` is treated as prose and escaped rather than emitted as a broken
+    component.
+    """
+    return tag in _MDX_COMPONENTS or tag.lower() in _HTML_TAGS_LOWER
 
 # Docstring section headers whose indented body is source code and should be
 # wrapped in a fenced code block so MDX/Mintlify renders it verbatim.
@@ -307,7 +328,7 @@ def escape_mdx(text: str) -> str:
     def preserve_valid_tag(match):
         full = match.group(0)
         tag = match.group(1)
-        if tag in VALID_MDX_TAGS or tag.lower() in _VALID_MDX_TAGS_LOWER:
+        if _is_valid_mdx_tag(tag):
             preserved_tags.append(full)
             return f"{tag_marker}{len(preserved_tags) - 1}\x00"
         return full
@@ -358,9 +379,9 @@ def validate_mdx(content: str) -> List[str]:
         angle_matches = re.findall(r'(?<!`)(<[a-zA-Z_][a-zA-Z0-9_]*>)(?!`)', line)
         for match in angle_matches:
             tag = match[1:-1]
-            # Mirror escape_mdx's case-insensitive allowlist so that tags it
-            # preserves are not flagged here (and vice-versa).
-            if tag not in VALID_MDX_TAGS and tag.lower() not in _VALID_MDX_TAGS_LOWER:
+            # Mirror escape_mdx's allowlist exactly so the two stay in lockstep:
+            # HTML tags are case-insensitive, JSX components are case-sensitive.
+            if not _is_valid_mdx_tag(tag):
                 errors.append(f"Line {i}: Unescaped JSX-like tag: {match}")
         
         curly_matches = re.findall(r'(?<!`)(?<!=)\{([a-zA-Z_][a-zA-Z0-9_]*)\}(?!`)', line)
