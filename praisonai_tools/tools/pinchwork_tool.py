@@ -97,5 +97,18 @@ class PinchworkTool(BaseTool):
 
 
 def pinchwork_delegate(task: str, skills_required: Optional[List[str]] = None, budget: float = 0.0) -> str:
-    """Delegate a task to the Pinchwork agent marketplace."""
+    """Delegate a task to the Pinchwork agent marketplace.
+
+    Args:
+        task: Description of the task to delegate.
+        skills_required: List of required skills for the agent (optional).
+        budget: Maximum budget for the task (default: 0.0).
+
+    Returns:
+        On success, the result string from the marketplace agent that
+        completed the task. On failure, an ``"Error: ..."`` message string
+        describing the problem (missing task input, the ``httpx`` dependency
+        being unavailable, a connection or HTTP status error, or an
+        unexpected exception).
+    """
     return PinchworkTool().delegate(task=task, skills_required=skills_required, budget=budget)
