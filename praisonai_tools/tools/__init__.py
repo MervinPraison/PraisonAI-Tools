@@ -19,10 +19,12 @@ Ready-to-use tools:
 from praisonai_tools.tools.base import BaseTool, ToolResult, ToolValidationError, validate_tool
 from praisonai_tools.tools.decorator import tool, FunctionTool, is_tool, get_tool_schema
 
-# Lazy imports for tools to avoid loading dependencies until needed
-def __getattr__(name):
-    """Lazy load tool classes."""
-    tool_map = {
+# Mapping of every public tool name (classes and functions) to the module that
+# defines it. This is the single source of truth for lazy loading AND for the
+# catalogue/discovery contract (see ``praisonai_tools.catalogue``). Keeping it a
+# module-level constant lets other modules enumerate the shipped tools without
+# importing any optional dependency.
+_TOOL_MAP = {
         # Email
         "EmailTool": "email_tool",
         "send_email": "email_tool",
@@ -559,10 +561,14 @@ def __getattr__(name):
         "scan_agent_code": "inkog_tool",
         "scan_skill_package": "inkog_tool",
         "scan_mcp_server": "inkog_tool",
-    }
+}
 
-    if name in tool_map:
-        module_name = tool_map[name]
+
+# Lazy imports for tools to avoid loading dependencies until needed
+def __getattr__(name):
+    """Lazy load tool classes."""
+    if name in _TOOL_MAP:
+        module_name = _TOOL_MAP[name]
         from importlib import import_module
         
         # Handle absolute module paths (e.g., praisonai_tools.n8n.n8n_workflow)

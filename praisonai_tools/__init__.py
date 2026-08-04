@@ -37,6 +37,11 @@ from importlib.metadata import version, PackageNotFoundError
 
 from praisonai_tools.tools.base import BaseTool, ToolResult, ToolValidationError, validate_tool
 from praisonai_tools.tools.decorator import tool, FunctionTool, is_tool, get_tool_schema
+from praisonai_tools.catalogue import (
+    ToolCatalogueEntry,
+    list_tools,
+    get_tool_names,
+)
 
 try:
     __version__ = version("praisonai-tools")
@@ -64,6 +69,10 @@ __all__ = [
     "FunctionTool",
     "is_tool",
     "get_tool_schema",
+    # Tool discovery / catalogue
+    "ToolCatalogueEntry",
+    "list_tools",
+    "get_tool_names",
     # Email Tool
     "EmailTool",
     "send_email",

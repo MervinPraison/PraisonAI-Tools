@@ -11,6 +11,7 @@ def main():
         print("PraisonAI Developer Tools CLI")
         print("\nUsage: praisonai-tools [tool] [args]")
         print("\nAvailable tools:")
+        print("  list             List the available tool catalogue")
         print("  docs-generate    Generate SDK reference documentation")
         print("  video            AI-powered video editing tools")
         print("  fcp              Final Cut Pro automation tools")
@@ -19,7 +20,23 @@ def main():
     tool = sys.argv[1]
     tool_args = sys.argv[2:]
     
-    if tool == "docs-generate":
+    if tool == "list":
+        parser = argparse.ArgumentParser(prog="praisonai-tools list")
+        parser.add_argument("--extras", action="store_true",
+                            help="Only show tools that require optional-dependency extras")
+        args = parser.parse_args(tool_args)
+        from .catalogue import list_tools
+        entries = list_tools()
+        if args.extras:
+            entries = [e for e in entries if e.extras]
+        width = max((len(e.name) for e in entries), default=0)
+        for entry in entries:
+            extras = f"  [extras: {', '.join(entry.extras)}]" if entry.extras else ""
+            print(f"{entry.name.ljust(width)}  {entry.summary}{extras}")
+        print(f"\n{len(entries)} tools")
+        return 0
+
+    elif tool == "docs-generate":
         # Handle docs-generate with its own parser for better help
         parser = argparse.ArgumentParser(prog="praisonai-tools docs-generate")
         parser.add_argument("--package", choices=["praisonaiagents", "praisonai", "typescript", "all"], 
