@@ -50,7 +50,7 @@ class TrustConfig:
     
     enabled: bool = False
     provider: str = "joy"
-    min_score: float = 1.5  # Joy network avg is 1.1, use 'standard' threshold
+    min_score: float = 3.0  # Default handoff threshold (matches trust_verified_handoff)
     auto_verify_handoffs: bool = True
     timeout_seconds: float = 10.0
     cache_duration: int = 300  # 5 minutes
@@ -62,7 +62,7 @@ class TrustConfig:
         return cls(
             enabled=os.getenv('PRAISONAI_TRUST_PROVIDER', '').lower() == 'joy',
             provider=os.getenv('PRAISONAI_TRUST_PROVIDER', 'joy'),
-            min_score=float(os.getenv('PRAISONAI_TRUST_MIN_SCORE', '1.5')),
+            min_score=float(os.getenv('PRAISONAI_TRUST_MIN_SCORE', '3.0')),
             auto_verify_handoffs=os.getenv('PRAISONAI_TRUST_AUTO_VERIFY', 'true').lower() == 'true',
             timeout_seconds=float(os.getenv('PRAISONAI_TRUST_TIMEOUT', '10.0')),
             cache_duration=int(os.getenv('PRAISONAI_TRUST_CACHE_DURATION', '300')),
