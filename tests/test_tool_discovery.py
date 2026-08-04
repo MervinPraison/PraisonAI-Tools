@@ -83,8 +83,10 @@ def test_all_matches_manifest():
     }
     expected = base | set(manifest)
     assert set(tools_pkg.__all__) == expected
-    # Top-level package mirrors the tools package surface.
-    assert set(praisonai_tools.__all__) == set(tools_pkg.__all__)
+    # The top-level package mirrors the tools package surface and additionally
+    # exposes the catalogue/discovery helpers (which are not tool symbols).
+    catalogue_exports = {"ToolCatalogueEntry", "list_tools", "get_tool_names"}
+    assert set(praisonai_tools.__all__) == set(tools_pkg.__all__) | catalogue_exports
 
 
 @pytest.mark.parametrize("name", [
