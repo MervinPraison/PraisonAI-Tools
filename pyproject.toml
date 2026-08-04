@@ -27,6 +27,14 @@ dependencies = [
 [project.scripts]
 praisonai-tools = "praisonai_tools.cli:main"
 
+# Discovery contract for third-party tool packages. They register agent-callable
+# tools under the ``praisonai.tools`` entry-point group so that
+# ``pip install some-praisonai-tool`` makes them discoverable via
+# ``praisonai_tools.list_tools()`` without editing core, e.g.:
+#
+#   [project.entry-points."praisonai.tools"]
+#   my_tool = "my_pkg:MyTool"
+
 [project.optional-dependencies]
 
 dev = [
