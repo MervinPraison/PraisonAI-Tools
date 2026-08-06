@@ -26,10 +26,19 @@ installed.
 
 from __future__ import annotations
 
+import ast
+import os
 from dataclasses import dataclass, field
-from typing import Tuple
+from functools import lru_cache
+from typing import Dict, Optional, Tuple
 
 ENTRY_POINT_GROUP = "praisonai.tools"
+
+# Directory that holds the first-party ``*_tool.py`` files. The catalogue is
+# derived by scanning this directory, so dropping a new ``*_tool.py`` that
+# defines a ``*Tool`` class makes the tool discoverable with no edits to any
+# hand-maintained list.
+_TOOLS_DIR = os.path.join(os.path.dirname(__file__), "tools")
 
 # Map from the module (as recorded in ``_TOOL_MAP``) to the optional-dependency
 # extras required to use tools defined in it. Modules absent from this mapping
@@ -70,8 +79,9 @@ class ToolCatalogueEntry:
 def _summary_for(name: str) -> str:
     """Derive a concise one-line summary for a tool class name.
 
-    We avoid importing the tool (which could pull heavy/optional deps) and
-    instead produce a stable, human-friendly summary from the name itself.
+    Fallback used only when a tool class does not declare a literal
+    ``description``. We avoid importing the tool (which could pull heavy/optional
+    deps) and instead produce a stable, human-friendly summary from the name.
     """
     if name.endswith("Tool"):
         base = name[:-4]
@@ -80,30 +90,113 @@ def _summary_for(name: str) -> str:
     return f"{base} integration tool".strip()
 
 
+def _first_line(text: str) -> str:
+    """Return the first non-empty line of ``text`` (a tool ``description``)."""
+    for line in text.splitlines():
+        line = line.strip()
+        if line:
+            return line
+    return ""
+
+
+def _scan_module(path: str) -> "list[tuple[str, str]]":
+    """AST-scan a ``*_tool.py`` file for ``*Tool`` classes and descriptions.
+
+    Returns a list of ``(class_name, summary)`` tuples. The file is parsed, not
+    imported, so this stays cheap and never triggers optional dependencies.
+    Classes without a literal ``description`` fall back to a name-synthesised
+    summary.
+    """
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            tree = ast.parse(fh.read(), filename=path)
+    except (OSError, SyntaxError):  # pragma: no cover - defensive
+        return []
+
+    found = []
+    for node in tree.body:
+        if not isinstance(node, ast.ClassDef) or not node.name.endswith("Tool"):
+            continue
+        description: Optional[str] = None
+        for stmt in node.body:
+            if not isinstance(stmt, ast.Assign):
+                continue
+            targets = [
+                t.id for t in stmt.targets if isinstance(t, ast.Name)
+            ]
+            if "description" in targets and isinstance(stmt.value, ast.Constant):
+                if isinstance(stmt.value.value, str):
+                    description = stmt.value.value
+        summary = _first_line(description) if description else _summary_for(node.name)
+        found.append((node.name, summary or _summary_for(node.name)))
+    return found
+
+
+@lru_cache(maxsize=1)
+def _scan_source_tree() -> "Dict[str, Tuple[str, str]]":
+    """Derive the first-party tool catalogue from the source tree.
+
+    Scans every ``praisonai_tools/tools/*_tool.py`` file for ``*Tool`` classes
+    and returns ``{class_name: (module, summary)}``. Because the mapping is
+    derived from the files that actually exist, phantom names (advertised tools
+    with no file) are impossible by construction, and adding a tool is a single
+    new-file change.
+    """
+    derived: "Dict[str, Tuple[str, str]]" = {}
+    try:
+        filenames = sorted(os.listdir(_TOOLS_DIR))
+    except OSError:  # pragma: no cover - defensive
+        return derived
+
+    for filename in filenames:
+        if not filename.endswith("_tool.py"):
+            continue
+        module = filename[:-3]  # strip ".py"; relative module name within tools
+        path = os.path.join(_TOOLS_DIR, filename)
+        for class_name, summary in _scan_module(path):
+            derived.setdefault(class_name, (module, summary))
+    return derived
+
+
 def _first_party_entries() -> "list[ToolCatalogueEntry]":
     """Build catalogue entries for every first-party tool class.
 
-    The source of truth is ``praisonai_tools.tools._TOOL_MAP`` which maps every
-    public name (both classes and helper functions) to its defining module. We
-    expose only the tool *classes* (names ending in ``Tool``) in the catalogue,
-    since those are what ``agents.yaml`` and the SDK reference.
-    """
-    from praisonai_tools.tools import _TOOL_MAP
+    The catalogue is source-derived: it is built by scanning the actual
+    ``*_tool.py`` files on disk (see ``_scan_source_tree``) rather than a
+    hand-maintained dictionary, so it can never advertise a tool whose file does
+    not exist. Summaries come from each tool's own ``description``.
 
-    entries = []
-    for name, module in sorted(_TOOL_MAP.items()):
-        if not name.endswith("Tool"):
-            continue
-        extras = _MODULE_EXTRAS.get(module, ())
-        entries.append(
-            ToolCatalogueEntry(
-                name=name,
-                module=module,
-                extras=extras,
-                summary=_summary_for(name),
-            )
+    A few tools live in nested packages (e.g. the n8n workflow tool under
+    ``praisonai_tools.n8n``) rather than flat ``*_tool.py`` files; those are
+    still surfaced via ``_TOOL_MAP`` so their public names remain stable.
+    """
+    entries: "Dict[str, ToolCatalogueEntry]" = {}
+
+    for name, (module, summary) in _scan_source_tree().items():
+        entries[name] = ToolCatalogueEntry(
+            name=name,
+            module=module,
+            extras=_MODULE_EXTRAS.get(module, ()),
+            summary=summary,
         )
-    return entries
+
+    # Include tool classes defined outside the flat ``*_tool.py`` layout (e.g.
+    # nested subpackages) that the scan cannot reach, keeping their names stable.
+    try:
+        from praisonai_tools.tools import _TOOL_MAP
+    except Exception:  # pragma: no cover - defensive
+        _TOOL_MAP = {}
+    for name, module in _TOOL_MAP.items():
+        if not name.endswith("Tool") or name in entries:
+            continue
+        entries[name] = ToolCatalogueEntry(
+            name=name,
+            module=module,
+            extras=_MODULE_EXTRAS.get(module, ()),
+            summary=_summary_for(name),
+        )
+
+    return list(entries.values())
 
 
 def _entry_point_entries() -> "list[ToolCatalogueEntry]":
