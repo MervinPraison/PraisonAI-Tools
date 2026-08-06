@@ -119,14 +119,22 @@ def _scan_module(path: str) -> "list[tuple[str, str]]":
             continue
         description: Optional[str] = None
         for stmt in node.body:
-            if not isinstance(stmt, ast.Assign):
+            # Accept both plain ``description = "..."`` and annotated
+            # ``description: str = "..."`` class attributes.
+            if isinstance(stmt, ast.Assign):
+                targets = [t.id for t in stmt.targets if isinstance(t, ast.Name)]
+                value = stmt.value
+            elif isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
+                targets = [stmt.target.id]
+                value = stmt.value
+            else:
                 continue
-            targets = [
-                t.id for t in stmt.targets if isinstance(t, ast.Name)
-            ]
-            if "description" in targets and isinstance(stmt.value, ast.Constant):
-                if isinstance(stmt.value.value, str):
-                    description = stmt.value.value
+            if (
+                "description" in targets
+                and isinstance(value, ast.Constant)
+                and isinstance(value.value, str)
+            ):
+                description = value.value
         summary = _first_line(description) if description else _summary_for(node.name)
         found.append((node.name, summary or _summary_for(node.name)))
     return found
@@ -181,13 +189,19 @@ def _first_party_entries() -> "list[ToolCatalogueEntry]":
         )
 
     # Include tool classes defined outside the flat ``*_tool.py`` layout (e.g.
-    # nested subpackages) that the scan cannot reach, keeping their names stable.
+    # nested subpackages such as ``praisonai_tools.n8n``) that the scan cannot
+    # reach, keeping their names stable. Only *nested* (absolute-module) tools
+    # are merged here: flat ``*_tool.py`` classes are already source-derived by
+    # the scan above, so restoring them from ``_TOOL_MAP`` would reintroduce the
+    # hand-maintained bookkeeping this catalogue exists to eliminate.
     try:
         from praisonai_tools.tools import _TOOL_MAP
     except Exception:  # pragma: no cover - defensive
         _TOOL_MAP = {}
     for name, module in _TOOL_MAP.items():
         if not name.endswith("Tool") or name in entries:
+            continue
+        if not module.startswith("praisonai_tools."):
             continue
         entries[name] = ToolCatalogueEntry(
             name=name,

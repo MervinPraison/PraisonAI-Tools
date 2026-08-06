@@ -30,9 +30,17 @@ def _is_missing_optional_dependency(exc: BaseException, tool_module: str) -> boo
     if not isinstance(exc, ModuleNotFoundError):
         return False
     missing = getattr(exc, "name", "") or ""
-    # The tool's own relative module lives under praisonai_tools.tools.
-    own = f"praisonai_tools.tools.{tool_module}"
-    return missing not in (own, tool_module, "praisonai_tools")
+    # ``tool_module`` may be relative (flat ``*_tool.py`` under
+    # ``praisonai_tools.tools``) or already absolute (nested subpackages such as
+    # ``praisonai_tools.n8n.n8n_workflow``). Resolve to the tool's own dotted
+    # module either way so a *missing first-party* module is treated as a
+    # phantom, not an optional dependency.
+    own = (
+        tool_module
+        if tool_module.startswith("praisonai_tools.")
+        else f"praisonai_tools.tools.{tool_module}"
+    )
+    return missing != own and not own.startswith(f"{missing}.")
 
 
 def test_every_catalogue_name_resolves_or_needs_optional_dep():
@@ -81,5 +89,21 @@ def test_summaries_come_from_real_description():
     # not the name-synthesised fallback ("Calculator integration tool").
     calc = entries.get("CalculatorTool")
     assert calc is not None
-    assert calc.summary
+    assert calc.summary == "Perform mathematical calculations."
     assert "integration tool" not in calc.summary
+
+
+def test_annotated_description_summaries_are_extracted():
+    """Tools declaring ``description: str = "..."`` must surface the real text.
+
+    ``CapsuleTool`` and ``NexusPredictionMarketTool`` use annotated assignments;
+    their catalogue summaries must come from the literal, not the name-based
+    fallback.
+    """
+    entries = {e.name: e for e in list_tools()}
+    for name in ("CapsuleTool", "NexusPredictionMarketTool"):
+        entry = entries.get(name)
+        if entry is None:
+            continue
+        assert entry.summary
+        assert "integration tool" not in entry.summary
