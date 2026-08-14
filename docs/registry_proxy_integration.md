@@ -31,6 +31,10 @@ pip install "praisonai-tools[registry-proxy]"
 ```bash
 export TOOL_PROXY_URL="https://your-registry.example.com"   # or a self-hosted instance
 export TOOL_PROXY_TOKEN="your-proxy-token"
+# Optional: override the auth header for registries that expect a custom header.
+# Default is "Authorization" (sent as "Bearer <token>"); any other name (e.g.
+# "X-Treg-Token") sends the raw token in that header.
+export TOOL_PROXY_AUTH_HEADER="Authorization"
 ```
 
 ```python

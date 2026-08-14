@@ -51,6 +51,7 @@ class RegistryProxyTool(BaseTool):
         timeout: float = 60.0,
         max_cost_per_call: Optional[float] = None,
         max_session_spend: Optional[float] = None,
+        auth_header: Optional[str] = None,
     ):
         url_from_env = proxy_url is None
         self.proxy_url = (proxy_url or os.getenv("TOOL_PROXY_URL") or "").rstrip("/")
@@ -64,6 +65,10 @@ class RegistryProxyTool(BaseTool):
             self.token = os.getenv("TOOL_PROXY_TOKEN")
         else:
             self.token = None
+        # Auth header is configurable for wire-compatibility with different
+        # registry deployments. Default ``Authorization`` sends ``Bearer {token}``;
+        # a custom header name (e.g. ``X-Treg-Token``) sends the raw token instead.
+        self.auth_header = auth_header or os.getenv("TOOL_PROXY_AUTH_HEADER") or "Authorization"
         self.timeout = timeout
         self.max_cost_per_call = max_cost_per_call
         self.max_session_spend = max_session_spend
@@ -99,7 +104,10 @@ class RegistryProxyTool(BaseTool):
     def _headers(self) -> Dict[str, str]:
         headers = {"Content-Type": "application/json"}
         if self.token:
-            headers["Authorization"] = f"Bearer {self.token}"
+            if self.auth_header.lower() == "authorization":
+                headers[self.auth_header] = f"Bearer {self.token}"
+            else:
+                headers[self.auth_header] = self.token
         return headers
 
     def _require_config(self) -> Optional[Dict[str, Any]]:
@@ -178,6 +186,20 @@ class RegistryProxyTool(BaseTool):
             logger.error("registry describe error: %s", exc)
             return {"error": str(exc)}
 
+    @staticmethod
+    def _extract_price(data: Any) -> Any:
+        """Read a price from a response, tolerating field-name variation.
+
+        Tries ``price_per_call`` then ``price`` then ``cost`` so the budget check
+        and spend recording share the same tolerance against the live schema.
+        """
+        if not isinstance(data, dict):
+            return None
+        for key in ("price_per_call", "price", "cost"):
+            if key in data:
+                return data[key]
+        return None
+
     def _check_budget(self, tool_id: str):
         """Deny + report if a configured spend guard would be exceeded.
 
@@ -190,7 +212,10 @@ class RegistryProxyTool(BaseTool):
         described = self.describe(tool_id)
         if isinstance(described, dict) and "error" in described:
             return described, None
-        price = described.get("price_per_call") if isinstance(described, dict) else None
+        # Accept the same price field names tolerated by spend recording so the
+        # budget check does not fail closed on a field-name mismatch against the
+        # live registry schema (``price_per_call`` -> ``price`` -> ``cost``).
+        price = self._extract_price(described)
         try:
             price = float(price)
         except (TypeError, ValueError):
@@ -198,8 +223,8 @@ class RegistryProxyTool(BaseTool):
             # validated, so we cannot guarantee the budget - deny the call.
             return {
                 "error": (
-                    "Denied: price_per_call is missing or invalid, cannot enforce "
-                    "the configured spend guard."
+                    "Denied: price (price_per_call/price/cost) is missing or "
+                    "invalid, cannot enforce the configured spend guard."
                 )
             }, None
         if self.max_cost_per_call is not None and price > self.max_cost_per_call:
@@ -256,9 +281,7 @@ class RegistryProxyTool(BaseTool):
         # Record cumulative spend. Prefer the charge reported by the proxy; fall
         # back to the price quoted at budget-check time so the session budget
         # still accrues when the response omits cost fields.
-        charged = None
-        if isinstance(result, dict):
-            charged = result.get("price_per_call", result.get("cost"))
+        charged = self._extract_price(result)
         try:
             self._session_spend += float(charged)
         except (TypeError, ValueError):
@@ -272,6 +295,7 @@ def registry_search(
     query: str,
     proxy_url: Optional[str] = None,
     token: Optional[str] = None,
+    auth_header: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Search the connected tool registry by capability.
 
@@ -282,11 +306,15 @@ def registry_search(
         query: Capability to search for.
         proxy_url: Registry base URL (defaults to TOOL_PROXY_URL env var).
         token: Proxy token (defaults to TOOL_PROXY_TOKEN env var).
+        auth_header: Auth header name (defaults to TOOL_PROXY_AUTH_HEADER env var,
+            then ``Authorization``).
 
     Returns:
         Dict with catalogue matches, or ``{"error": ...}`` on failure.
     """
-    return RegistryProxyTool(proxy_url=proxy_url, token=token).search(query)
+    return RegistryProxyTool(
+        proxy_url=proxy_url, token=token, auth_header=auth_header
+    ).search(query)
 
 
 @tool
@@ -294,6 +322,7 @@ def registry_describe(
     tool_id: str,
     proxy_url: Optional[str] = None,
     token: Optional[str] = None,
+    auth_header: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Describe one registry catalogue entry.
 
@@ -304,11 +333,15 @@ def registry_describe(
         tool_id: Catalogue entry identifier (from ``registry_search``).
         proxy_url: Registry base URL (defaults to TOOL_PROXY_URL env var).
         token: Proxy token (defaults to TOOL_PROXY_TOKEN env var).
+        auth_header: Auth header name (defaults to TOOL_PROXY_AUTH_HEADER env var,
+            then ``Authorization``).
 
     Returns:
         Dict describing the entry, or ``{"error": ...}`` on failure.
     """
-    return RegistryProxyTool(proxy_url=proxy_url, token=token).describe(tool_id)
+    return RegistryProxyTool(
+        proxy_url=proxy_url, token=token, auth_header=auth_header
+    ).describe(tool_id)
 
 
 @tool
@@ -319,6 +352,7 @@ def registry_call(
     token: Optional[str] = None,
     max_cost_per_call: Optional[float] = None,
     max_session_spend: Optional[float] = None,
+    auth_header: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Invoke a registry endpoint through the proxy.
 
@@ -333,6 +367,9 @@ def registry_call(
         token: Proxy token (defaults to TOOL_PROXY_TOKEN env var).
         max_cost_per_call: Deny the call if its price exceeds this value.
         max_session_spend: Deny the call if it would push cumulative spend past this value.
+        auth_header: Auth header name (defaults to TOOL_PROXY_AUTH_HEADER env var,
+            then ``Authorization``). ``Authorization`` sends ``Bearer {token}``;
+            any other name (e.g. ``X-Treg-Token``) sends the raw token.
 
     Returns:
         Dict with the endpoint response, or ``{"error": ...}`` on failure/denial.
@@ -342,4 +379,5 @@ def registry_call(
         token=token,
         max_cost_per_call=max_cost_per_call,
         max_session_spend=max_session_spend,
+        auth_header=auth_header,
     ).call(tool_id, params)
