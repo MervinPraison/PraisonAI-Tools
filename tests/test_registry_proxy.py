@@ -84,6 +84,36 @@ class TestConfiguration:
             assert tool._headers()["Authorization"] == "Bearer secret-token"
 
 
+class TestAuthHeader:
+    def test_auth_header_configurable(self):
+        """Default sends Bearer; a custom header name sends the raw token."""
+        from praisonai_tools.registry_proxy import RegistryProxyTool
+
+        default = RegistryProxyTool(proxy_url="https://r.example.com", token="tok")
+        assert default._headers()["Authorization"] == "Bearer tok"
+        assert "X-Treg-Token" not in default._headers()
+
+        custom = RegistryProxyTool(
+            proxy_url="https://r.example.com", token="tok", auth_header="X-Treg-Token"
+        )
+        headers = custom._headers()
+        assert headers["X-Treg-Token"] == "tok"
+        assert "Authorization" not in headers
+
+    def test_auth_header_from_env(self):
+        from praisonai_tools.registry_proxy import RegistryProxyTool
+
+        with patch.dict(os.environ, {
+            "TOOL_PROXY_URL": "https://trusted.example.com",
+            "TOOL_PROXY_TOKEN": "secret-token",
+            "TOOL_PROXY_AUTH_HEADER": "X-Treg-Token",
+        }):
+            tool = RegistryProxyTool()
+            headers = tool._headers()
+            assert headers["X-Treg-Token"] == "secret-token"
+            assert "Authorization" not in headers
+
+
 class TestSearch:
     def test_search_success(self, mock_httpx):
         from praisonai_tools.registry_proxy import RegistryProxyTool
@@ -277,6 +307,27 @@ class TestSpendGuards:
         assert result["data"] == "ok"
         assert tool._session_spend == pytest.approx(0.05)
 
+    @pytest.mark.parametrize("field", ["price_per_call", "price", "cost"])
+    def test_budget_check_accepts_price_and_cost_fields(self, mock_httpx, field):
+        """Budget check tolerates price_per_call/price/cost, matching recording."""
+        from praisonai_tools.registry_proxy import RegistryProxyTool
+
+        describe_resp = Mock()
+        describe_resp.json.return_value = {"id": "seo.backlinks", field: 0.05}
+        describe_resp.raise_for_status.return_value = None
+        call_resp = Mock()
+        call_resp.json.return_value = {"data": "ok", field: 0.05}
+        call_resp.raise_for_status.return_value = None
+        client = Mock()
+        client.get.return_value = describe_resp
+        client.post.return_value = call_resp
+        mock_httpx.Client.return_value.__enter__.return_value = client
+
+        tool = RegistryProxyTool(proxy_url="https://r.example.com", max_session_spend=1.0)
+        result = tool.call("seo.backlinks", {})
+        assert result["data"] == "ok"
+        assert tool._session_spend == pytest.approx(0.05)
+
     def test_missing_price_fails_closed(self, mock_httpx):
         from praisonai_tools.registry_proxy import RegistryProxyTool
 
@@ -332,7 +383,9 @@ class TestDecoratedFunctions:
         mock_cls.return_value = instance
 
         registry_search("q", proxy_url="https://r", token="t")
-        mock_cls.assert_called_once_with(proxy_url="https://r", token="t")
+        mock_cls.assert_called_once_with(
+            proxy_url="https://r", token="t", auth_header=None
+        )
         instance.search.assert_called_once_with("q")
 
     @patch("praisonai_tools.registry_proxy.registry_proxy.RegistryProxyTool")
@@ -356,6 +409,7 @@ class TestDecoratedFunctions:
             token="t",
             max_cost_per_call=0.1,
             max_session_spend=1.0,
+            auth_header=None,
         )
         instance.call.assert_called_once_with("seo.backlinks", {"domain": "x"})
 
