@@ -56,12 +56,12 @@ def _silence_registry_none_warning() -> None:
 # ``praisonaiagents`` configures root logging on import; do it first so its
 # handlers exist, then attach the filter before any module-level ``@tool``
 # decoration runs.
-import praisonaiagents  # noqa: F401  (import for logging side effects only)
+import praisonaiagents  # noqa: E402,F401  (import for logging side effects only)
 
 _silence_registry_none_warning()
 
 # Import from praisonaiagents - single source of truth
-from praisonaiagents.tools.decorator import (
+from praisonaiagents.tools.decorator import (  # noqa: E402
     tool,
     FunctionTool,
     is_tool,
