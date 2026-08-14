@@ -5,6 +5,16 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 
 
+@pytest.fixture(autouse=True)
+def reset_session_spend():
+    """Isolate cumulative-spend state between tests."""
+    from praisonai_tools.registry_proxy import registry_proxy as mod
+
+    mod._SESSION_SPEND.clear()
+    yield
+    mod._SESSION_SPEND.clear()
+
+
 @pytest.fixture
 def mock_httpx():
     """Mock httpx module with proper exception classes."""
@@ -49,6 +59,29 @@ class TestConfiguration:
         tool = RegistryProxyTool(proxy_url="https://self.host/", token="tok")
         assert tool.proxy_url == "https://self.host"
         assert tool.token == "tok"
+
+    def test_env_token_not_leaked_to_supplied_url(self):
+        """Security: an agent-supplied proxy_url must not receive the env token."""
+        from praisonai_tools.registry_proxy import RegistryProxyTool
+
+        with patch.dict(os.environ, {
+            "TOOL_PROXY_URL": "https://trusted.example.com",
+            "TOOL_PROXY_TOKEN": "secret-token",
+        }):
+            tool = RegistryProxyTool(proxy_url="https://attacker.example.com")
+            assert tool.proxy_url == "https://attacker.example.com"
+            assert tool.token is None
+            assert "Authorization" not in tool._headers()
+
+    def test_env_token_used_for_env_url(self):
+        from praisonai_tools.registry_proxy import RegistryProxyTool
+
+        with patch.dict(os.environ, {
+            "TOOL_PROXY_URL": "https://trusted.example.com",
+            "TOOL_PROXY_TOKEN": "secret-token",
+        }):
+            tool = RegistryProxyTool()
+            assert tool._headers()["Authorization"] == "Bearer secret-token"
 
 
 class TestSearch:
@@ -243,6 +276,50 @@ class TestSpendGuards:
         result = tool.call("seo.backlinks", {})
         assert result["data"] == "ok"
         assert tool._session_spend == pytest.approx(0.05)
+
+    def test_missing_price_fails_closed(self, mock_httpx):
+        from praisonai_tools.registry_proxy import RegistryProxyTool
+
+        describe_resp = Mock()
+        describe_resp.json.return_value = {"id": "seo.backlinks"}
+        describe_resp.raise_for_status.return_value = None
+        client = Mock()
+        client.get.return_value = describe_resp
+        mock_httpx.Client.return_value.__enter__.return_value = client
+
+        tool = RegistryProxyTool(proxy_url="https://r.example.com", max_cost_per_call=0.10)
+        result = tool.call("seo.backlinks", {})
+        assert "cannot enforce" in result["error"]
+        client.post.assert_not_called()
+
+    def test_session_spend_persists_across_registry_call(self, mock_httpx):
+        """max_session_spend must accumulate across separate registry_call calls."""
+        from praisonai_tools.registry_proxy import registry_call
+
+        describe_resp = Mock()
+        describe_resp.json.return_value = {"price_per_call": 0.60}
+        describe_resp.raise_for_status.return_value = None
+        call_resp = Mock()
+        call_resp.json.return_value = {"data": "ok", "price_per_call": 0.60}
+        call_resp.raise_for_status.return_value = None
+        client = Mock()
+        client.get.return_value = describe_resp
+        client.post.return_value = call_resp
+        mock_httpx.Client.return_value.__enter__.return_value = client
+
+        first = registry_call(
+            "seo.backlinks", {},
+            proxy_url="https://r.example.com", token="t",
+            max_session_spend=1.0,
+        )
+        assert first["data"] == "ok"
+
+        second = registry_call(
+            "seo.backlinks", {},
+            proxy_url="https://r.example.com", token="t",
+            max_session_spend=1.0,
+        )
+        assert "max_session_spend" in second["error"]
 
 
 class TestDecoratedFunctions:

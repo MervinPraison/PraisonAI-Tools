@@ -64,7 +64,19 @@ registry_call(
 ```
 
 Per-call price is read from `registry_describe`, so guards work without any
-vendor-specific configuration.
+vendor-specific configuration. Guards **fail closed**: if a budget is set but
+the price cannot be validated, the call is denied. Cumulative `max_session_spend`
+persists across separate `registry_call` invocations within the same process,
+scoped per `(proxy_url, token)` so distinct accounts never share a budget.
+
+## Credential safety
+
+The proxy token is only sent to the endpoint it was configured for. If a caller
+(or a prompt-injected agent) supplies an explicit `proxy_url` without a matching
+`token`, the ambient `TOOL_PROXY_TOKEN` is **not** attached — preventing the
+token from being exfiltrated to an untrusted endpoint. For normal use, leave
+`proxy_url`/`token` unset and configure `TOOL_PROXY_URL`/`TOOL_PROXY_TOKEN` via
+the environment.
 
 ## Error taxonomy
 

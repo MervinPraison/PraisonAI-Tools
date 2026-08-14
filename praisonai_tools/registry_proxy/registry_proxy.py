@@ -29,6 +29,11 @@ logger = logging.getLogger(__name__)
 
 _INSTALL_HINT = "httpx not installed. Install with: pip install 'praisonai-tools[registry-proxy]'"
 
+# Cumulative spend is tracked per (proxy_url, token) so that ``max_session_spend``
+# persists across the short-lived connector instances created by the decorated
+# functions, without mixing budgets across distinct accounts/endpoints.
+_SESSION_SPEND: Dict[tuple, float] = {}
+
 
 class RegistryProxyTool(BaseTool):
     """Connector for a self-hostable tool registry exposing a plain-HTTP proxy."""
@@ -47,13 +52,34 @@ class RegistryProxyTool(BaseTool):
         max_cost_per_call: Optional[float] = None,
         max_session_spend: Optional[float] = None,
     ):
+        url_from_env = proxy_url is None
         self.proxy_url = (proxy_url or os.getenv("TOOL_PROXY_URL") or "").rstrip("/")
-        self.token = token or os.getenv("TOOL_PROXY_TOKEN")
+        # Security: only fall back to the environment token when the URL is also
+        # env-derived (trusted config). An agent-supplied ``proxy_url`` must never
+        # receive the ambient ``TOOL_PROXY_TOKEN`` - otherwise a prompt-injected
+        # agent could exfiltrate the token to an attacker-controlled endpoint.
+        if token is not None:
+            self.token = token
+        elif url_from_env:
+            self.token = os.getenv("TOOL_PROXY_TOKEN")
+        else:
+            self.token = None
         self.timeout = timeout
         self.max_cost_per_call = max_cost_per_call
         self.max_session_spend = max_session_spend
-        self._session_spend = 0.0
         super().__init__()
+
+    @property
+    def _spend_key(self) -> tuple:
+        return (self.proxy_url, self.token)
+
+    @property
+    def _session_spend(self) -> float:
+        return _SESSION_SPEND.get(self._spend_key, 0.0)
+
+    @_session_spend.setter
+    def _session_spend(self, value: float) -> None:
+        _SESSION_SPEND[self._spend_key] = value
 
     def run(self, action: str, **kwargs: Any) -> Dict[str, Any]:
         """Dispatch to search/describe/call.
@@ -152,25 +178,37 @@ class RegistryProxyTool(BaseTool):
             logger.error("registry describe error: %s", exc)
             return {"error": str(exc)}
 
-    def _check_budget(self, tool_id: str) -> Optional[Dict[str, Any]]:
-        """Deny + report if a configured spend guard would be exceeded."""
+    def _check_budget(self, tool_id: str):
+        """Deny + report if a configured spend guard would be exceeded.
+
+        Returns ``(denial, price)``: ``denial`` is a ``{"error": ...}`` dict when
+        the call must be rejected (else ``None``); ``price`` is the validated
+        per-call price when a guard applies (else ``None``).
+        """
         if self.max_cost_per_call is None and self.max_session_spend is None:
-            return None
+            return None, None
         described = self.describe(tool_id)
         if isinstance(described, dict) and "error" in described:
-            return described
+            return described, None
         price = described.get("price_per_call") if isinstance(described, dict) else None
         try:
             price = float(price)
         except (TypeError, ValueError):
-            return None
+            # Fail closed: a spend guard is configured but the price cannot be
+            # validated, so we cannot guarantee the budget - deny the call.
+            return {
+                "error": (
+                    "Denied: price_per_call is missing or invalid, cannot enforce "
+                    "the configured spend guard."
+                )
+            }, None
         if self.max_cost_per_call is not None and price > self.max_cost_per_call:
             return {
                 "error": (
                     f"Denied: price per call {price} exceeds max_cost_per_call "
                     f"{self.max_cost_per_call}."
                 )
-            }
+            }, price
         if (
             self.max_session_spend is not None
             and self._session_spend + price > self.max_session_spend
@@ -181,8 +219,8 @@ class RegistryProxyTool(BaseTool):
                     f"{self._session_spend + price}, exceeding max_session_spend "
                     f"{self.max_session_spend}."
                 )
-            }
-        return None
+            }, price
+        return None, price
 
     def call(self, tool_id: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Invoke an endpoint through the proxy (credential injected server-side)."""
@@ -191,7 +229,7 @@ class RegistryProxyTool(BaseTool):
             return missing
         if not tool_id:
             return {"error": "tool_id is required"}
-        denied = self._check_budget(tool_id)
+        denied, quoted_price = self._check_budget(tool_id)
         if denied:
             return denied
         try:
@@ -215,12 +253,17 @@ class RegistryProxyTool(BaseTool):
             logger.error("registry call error: %s", exc)
             return {"error": str(exc)}
 
+        # Record cumulative spend. Prefer the charge reported by the proxy; fall
+        # back to the price quoted at budget-check time so the session budget
+        # still accrues when the response omits cost fields.
+        charged = None
         if isinstance(result, dict):
             charged = result.get("price_per_call", result.get("cost"))
-            try:
-                self._session_spend += float(charged)
-            except (TypeError, ValueError):
-                pass
+        try:
+            self._session_spend += float(charged)
+        except (TypeError, ValueError):
+            if quoted_price is not None:
+                self._session_spend += quoted_price
         return result
 
 
