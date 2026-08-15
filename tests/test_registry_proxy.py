@@ -224,6 +224,57 @@ class TestDescribe:
             headers={"Content-Type": "application/json"},
         )
 
+    def test_describe_path_missing_placeholder_errors(self, mock_httpx):
+        """A template lacking {tool_id} must return an error, not silently misroute."""
+        from praisonai_tools.registry_proxy import RegistryProxyTool
+
+        client = Mock()
+        mock_httpx.Client.return_value.__enter__.return_value = client
+
+        tool = RegistryProxyTool(
+            proxy_url="https://r.example.com",
+            describe_path="/catalog/static",
+        )
+        result = tool.describe("seo.backlinks")
+
+        assert "must contain '{tool_id}'" in result["error"]
+        client.get.assert_not_called()
+
+    def test_describe_path_malformed_template_errors(self, mock_httpx):
+        """A malformed template must return an error instead of raising."""
+        from praisonai_tools.registry_proxy import RegistryProxyTool
+
+        client = Mock()
+        mock_httpx.Client.return_value.__enter__.return_value = client
+
+        tool = RegistryProxyTool(
+            proxy_url="https://r.example.com",
+            describe_path="/catalog/{tool_id}/{unknown}",
+        )
+        result = tool.describe("seo.backlinks")
+
+        assert "Invalid describe path template" in result["error"]
+        client.get.assert_not_called()
+
+    def test_describe_encodes_tool_id(self, mock_httpx):
+        """A tool_id with path-changing characters is URL-encoded."""
+        from praisonai_tools.registry_proxy import RegistryProxyTool
+
+        response = Mock()
+        response.json.return_value = {"id": "x"}
+        response.raise_for_status.return_value = None
+        client = Mock()
+        client.get.return_value = response
+        mock_httpx.Client.return_value.__enter__.return_value = client
+
+        tool = RegistryProxyTool(proxy_url="https://r.example.com")
+        tool.describe("../admin?x=1")
+
+        client.get.assert_called_once_with(
+            "https://r.example.com/catalog/endpoints/..%2Fadmin%3Fx%3D1",
+            headers={"Content-Type": "application/json"},
+        )
+
 
 class TestCall:
     def test_call_success(self, mock_httpx):
@@ -254,6 +305,63 @@ class TestCall:
 
         tool = RegistryProxyTool(proxy_url="https://r.example.com")
         assert tool.call("")["error"] == "tool_id is required"
+
+    def test_call_normalizes_explicit_method_whitespace(self, mock_httpx):
+        """An explicit method with whitespace/casing is normalized (GET -> query)."""
+        from praisonai_tools.registry_proxy import RegistryProxyTool
+
+        response = Mock()
+        response.json.return_value = {"data": {"ok": True}}
+        response.raise_for_status.return_value = None
+        client = Mock()
+        client.get.return_value = response
+        mock_httpx.Client.return_value.__enter__.return_value = client
+
+        tool = RegistryProxyTool(proxy_url="https://r.example.com")
+        result = tool.call("t.id", {"q": "x"}, method=" get ")
+
+        assert result["data"]["ok"] is True
+        client.get.assert_called_once_with(
+            "https://r.example.com/call/t.id",
+            params={"q": "x"},
+            headers={"Content-Type": "application/json"},
+        )
+        client.request.assert_not_called()
+
+    def test_call_rejects_unsupported_method(self, mock_httpx):
+        """An unsupported/mislabelled method is rejected before any request."""
+        from praisonai_tools.registry_proxy import RegistryProxyTool
+
+        client = Mock()
+        mock_httpx.Client.return_value.__enter__.return_value = client
+
+        tool = RegistryProxyTool(proxy_url="https://r.example.com")
+        result = tool.call("t.id", {}, method="TRACE")
+
+        assert "Unsupported HTTP method 'TRACE'" in result["error"]
+        client.get.assert_not_called()
+        client.request.assert_not_called()
+
+    def test_call_encodes_tool_id_in_url(self, mock_httpx):
+        """A tool_id with path-changing characters is URL-encoded on /call."""
+        from praisonai_tools.registry_proxy import RegistryProxyTool
+
+        response = Mock()
+        response.json.return_value = {"data": "ok"}
+        response.raise_for_status.return_value = None
+        client = Mock()
+        client.request.return_value = response
+        mock_httpx.Client.return_value.__enter__.return_value = client
+
+        tool = RegistryProxyTool(proxy_url="https://r.example.com")
+        tool.call("../admin", {}, method="POST")
+
+        client.request.assert_called_once_with(
+            "POST",
+            "https://r.example.com/call/..%2Fadmin",
+            json={},
+            headers={"Content-Type": "application/json"},
+        )
 
     def test_call_derives_post_method_from_describe(self, mock_httpx):
         from praisonai_tools.registry_proxy import RegistryProxyTool
@@ -461,7 +569,7 @@ class TestSpendGuards:
         tool = RegistryProxyTool(proxy_url="https://r.example.com", max_cost_per_call=0.10)
         result = tool.call("seo.backlinks", {})
         assert "exceeds max_cost_per_call" in result["error"]
-        client.post.assert_not_called()
+        client.request.assert_not_called()
 
     def test_max_session_spend_denies(self, mock_httpx):
         from praisonai_tools.registry_proxy import RegistryProxyTool
@@ -477,7 +585,7 @@ class TestSpendGuards:
         tool._session_spend = 0.50
         result = tool.call("seo.backlinks", {})
         assert "max_session_spend" in result["error"]
-        client.post.assert_not_called()
+        client.request.assert_not_called()
 
     def test_within_budget_allows_and_tracks_spend(self, mock_httpx):
         from praisonai_tools.registry_proxy import RegistryProxyTool
@@ -532,7 +640,7 @@ class TestSpendGuards:
         tool = RegistryProxyTool(proxy_url="https://r.example.com", max_cost_per_call=0.10)
         result = tool.call("seo.backlinks", {})
         assert "cannot enforce" in result["error"]
-        client.post.assert_not_called()
+        client.request.assert_not_called()
 
     def test_session_spend_persists_across_registry_call(self, mock_httpx):
         """max_session_spend must accumulate across separate registry_call calls."""

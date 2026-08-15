@@ -21,6 +21,7 @@ Design notes:
 import os
 import logging
 from typing import Any, Dict, Optional
+from urllib.parse import quote
 
 from praisonai_tools.tools.base import BaseTool
 from praisonai_tools.tools.decorator import tool
@@ -33,6 +34,11 @@ _INSTALL_HINT = "httpx not installed. Install with: pip install 'praisonai-tools
 # persists across the short-lived connector instances created by the decorated
 # functions, without mixing budgets across distinct accounts/endpoints.
 _SESSION_SPEND: Dict[tuple, float] = {}
+
+# The registry enforces the endpoint's declared HTTP method on ``/call/{id}``.
+# Restricting to a known set keeps the wire behaviour predictable and returns a
+# clear tool-result error instead of forwarding a mislabelled/unexpected verb.
+_ALLOWED_METHODS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE"})
 
 
 class RegistryProxyTool(BaseTool):
@@ -183,7 +189,21 @@ class RegistryProxyTool(BaseTool):
             import httpx
         except ImportError:
             return {"error": _INSTALL_HINT}
-        path = self.describe_path.format(tool_id=tool_id)
+        if "{tool_id}" not in self.describe_path:
+            return {
+                "error": (
+                    f"Invalid describe path template '{self.describe_path}': "
+                    "it must contain '{tool_id}'."
+                )
+            }
+        try:
+            path = self.describe_path.format(tool_id=quote(tool_id, safe=""))
+        except (KeyError, IndexError, ValueError) as exc:
+            return {
+                "error": (
+                    f"Invalid describe path template '{self.describe_path}': {exc}"
+                )
+            }
         if not path.startswith("/"):
             path = "/" + path
         try:
@@ -311,12 +331,19 @@ class RegistryProxyTool(BaseTool):
                 if isinstance(described, dict) and "error" in described:
                     return described
             method = self._extract_method(described)
-        method = (method or "POST").upper()
+        method = (method or "POST").strip().upper()
+        if method not in _ALLOWED_METHODS:
+            return {
+                "error": (
+                    f"Unsupported HTTP method '{method}'. Allowed: "
+                    f"{', '.join(sorted(_ALLOWED_METHODS))}."
+                )
+            }
         try:
             import httpx
         except ImportError:
             return {"error": _INSTALL_HINT}
-        url = f"{self.proxy_url}/call/{tool_id}"
+        url = f"{self.proxy_url}/call/{quote(tool_id, safe='')}"
         try:
             with httpx.Client(timeout=self.timeout) as client:
                 if method == "GET":

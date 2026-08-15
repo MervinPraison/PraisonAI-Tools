@@ -82,7 +82,11 @@ The registry enforces each endpoint's declared HTTP method on `/call/{id}`.
 `registry_call` derives the method automatically from `registry_describe`
 (the endpoint doc carries `method`): `GET` endpoints send `params` as the query
 string, `POST`/`PUT` send them as a JSON body. Pass `method="GET"` explicitly to
-skip the describe lookup when you already know the method.
+skip the describe lookup when you already know the method. Only the standard
+`GET`/`POST`/`PUT`/`PATCH`/`DELETE` verbs are accepted; any other value (e.g. a
+mislabelled endpoint doc) is rejected as a tool-result error before any request.
+`tool_id` is URL-encoded before being placed in the describe/call route, so it
+cannot alter the requested path.
 
 ## Passthrough-URL calls
 
