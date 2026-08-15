@@ -21,6 +21,7 @@ Design notes:
 import os
 import logging
 from typing import Any, Dict, Optional
+from urllib.parse import quote
 
 from praisonai_tools.tools.base import BaseTool
 from praisonai_tools.tools.decorator import tool
@@ -33,6 +34,11 @@ _INSTALL_HINT = "httpx not installed. Install with: pip install 'praisonai-tools
 # persists across the short-lived connector instances created by the decorated
 # functions, without mixing budgets across distinct accounts/endpoints.
 _SESSION_SPEND: Dict[tuple, float] = {}
+
+# The registry enforces the endpoint's declared HTTP method on ``/call/{id}``.
+# Restricting to a known set keeps the wire behaviour predictable and returns a
+# clear tool-result error instead of forwarding a mislabelled/unexpected verb.
+_ALLOWED_METHODS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE"})
 
 
 class RegistryProxyTool(BaseTool):
@@ -52,6 +58,7 @@ class RegistryProxyTool(BaseTool):
         max_cost_per_call: Optional[float] = None,
         max_session_spend: Optional[float] = None,
         auth_header: Optional[str] = None,
+        describe_path: Optional[str] = None,
     ):
         url_from_env = proxy_url is None
         self.proxy_url = (proxy_url or os.getenv("TOOL_PROXY_URL") or "").rstrip("/")
@@ -69,6 +76,14 @@ class RegistryProxyTool(BaseTool):
         # registry deployments. Default ``Authorization`` sends ``Bearer {token}``;
         # a custom header name (e.g. ``X-Treg-Token``) sends the raw token instead.
         self.auth_header = auth_header or os.getenv("TOOL_PROXY_AUTH_HEADER") or "Authorization"
+        # The describe path template is configurable for wire-compatibility with
+        # different registry deployments. It must contain ``{tool_id}``; the
+        # default mirrors the live registry route (``/catalog/endpoints/{id}``).
+        self.describe_path = (
+            describe_path
+            or os.getenv("TOOL_PROXY_DESCRIBE_PATH")
+            or "/catalog/endpoints/{tool_id}"
+        )
         self.timeout = timeout
         self.max_cost_per_call = max_cost_per_call
         self.max_session_spend = max_session_spend
@@ -98,7 +113,11 @@ class RegistryProxyTool(BaseTool):
         if action == "describe":
             return self.describe(kwargs.get("tool_id", ""))
         if action == "call":
-            return self.call(kwargs.get("tool_id", ""), kwargs.get("params"))
+            return self.call(
+                kwargs.get("tool_id", ""),
+                kwargs.get("params"),
+                kwargs.get("method"),
+            )
         return {"error": f"Unknown action '{action}'. Use search, describe or call."}
 
     def _headers(self) -> Dict[str, str]:
@@ -170,10 +189,27 @@ class RegistryProxyTool(BaseTool):
             import httpx
         except ImportError:
             return {"error": _INSTALL_HINT}
+        if "{tool_id}" not in self.describe_path:
+            return {
+                "error": (
+                    f"Invalid describe path template '{self.describe_path}': "
+                    "it must contain '{tool_id}'."
+                )
+            }
+        try:
+            path = self.describe_path.format(tool_id=quote(tool_id, safe=""))
+        except (KeyError, IndexError, ValueError) as exc:
+            return {
+                "error": (
+                    f"Invalid describe path template '{self.describe_path}': {exc}"
+                )
+            }
+        if not path.startswith("/"):
+            path = "/" + path
         try:
             with httpx.Client(timeout=self.timeout) as client:
                 response = client.get(
-                    f"{self.proxy_url}/catalog/{tool_id}",
+                    f"{self.proxy_url}{path}",
                     headers=self._headers(),
                 )
                 response.raise_for_status()
@@ -185,6 +221,20 @@ class RegistryProxyTool(BaseTool):
         except Exception as exc:  # noqa: BLE001 - surface as tool-result error
             logger.error("registry describe error: %s", exc)
             return {"error": str(exc)}
+
+    @staticmethod
+    def _extract_method(data: Any) -> Optional[str]:
+        """Read the HTTP method from a describe response, if present.
+
+        The live registry's endpoint doc carries ``method: "GET"`` (or POST/PUT);
+        the registry enforces the declared method on ``/call/{id}``.
+        """
+        if not isinstance(data, dict):
+            return None
+        method = data.get("method")
+        if isinstance(method, str) and method.strip():
+            return method.strip().upper()
+        return None
 
     @staticmethod
     def _extract_price(data: Any) -> Any:
@@ -203,15 +253,18 @@ class RegistryProxyTool(BaseTool):
     def _check_budget(self, tool_id: str):
         """Deny + report if a configured spend guard would be exceeded.
 
-        Returns ``(denial, price)``: ``denial`` is a ``{"error": ...}`` dict when
-        the call must be rejected (else ``None``); ``price`` is the validated
-        per-call price when a guard applies (else ``None``).
+        Returns ``(denial, price, described)``: ``denial`` is a ``{"error": ...}``
+        dict when the call must be rejected (else ``None``); ``price`` is the
+        validated per-call price when a guard applies (else ``None``);
+        ``described`` is the describe response fetched for the guard (else
+        ``None``) so the caller can reuse it (e.g. to derive the HTTP method)
+        without a second network round-trip.
         """
         if self.max_cost_per_call is None and self.max_session_spend is None:
-            return None, None
+            return None, None, None
         described = self.describe(tool_id)
         if isinstance(described, dict) and "error" in described:
-            return described, None
+            return described, None, None
         # Accept the same price field names tolerated by spend recording so the
         # budget check does not fail closed on a field-name mismatch against the
         # live registry schema (``price_per_call`` -> ``price`` -> ``cost``).
@@ -226,14 +279,14 @@ class RegistryProxyTool(BaseTool):
                     "Denied: price (price_per_call/price/cost) is missing or "
                     "invalid, cannot enforce the configured spend guard."
                 )
-            }, None
+            }, None, described
         if self.max_cost_per_call is not None and price > self.max_cost_per_call:
             return {
                 "error": (
                     f"Denied: price per call {price} exceeds max_cost_per_call "
                     f"{self.max_cost_per_call}."
                 )
-            }, price
+            }, price, described
         if (
             self.max_session_spend is not None
             and self._session_spend + price > self.max_session_spend
@@ -244,30 +297,63 @@ class RegistryProxyTool(BaseTool):
                     f"{self._session_spend + price}, exceeding max_session_spend "
                     f"{self.max_session_spend}."
                 )
-            }, price
-        return None, price
+            }, price, described
+        return None, price, described
 
-    def call(self, tool_id: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Invoke an endpoint through the proxy (credential injected server-side)."""
+    def call(
+        self,
+        tool_id: str,
+        params: Optional[Dict[str, Any]] = None,
+        method: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Invoke an endpoint through the proxy (credential injected server-side).
+
+        The registry enforces each endpoint's declared HTTP method on
+        ``/call/{id}``. When ``method`` is not supplied it is derived from
+        ``describe`` (the endpoint doc carries ``method``); GET requests send
+        ``params`` as the query string, POST/PUT (and others) send them as a
+        JSON body.
+        """
         missing = self._require_config()
         if missing:
             return missing
         if not tool_id:
             return {"error": "tool_id is required"}
-        denied, quoted_price = self._check_budget(tool_id)
+        denied, quoted_price, described = self._check_budget(tool_id)
         if denied:
             return denied
+        # Derive the HTTP method from the endpoint doc when not supplied. Reuse
+        # the describe fetched by the spend guard when present to avoid a second
+        # round-trip; otherwise fetch describe only when the method is unknown.
+        if method is None:
+            if described is None:
+                described = self.describe(tool_id)
+                if isinstance(described, dict) and "error" in described:
+                    return described
+            method = self._extract_method(described)
+        method = (method or "POST").strip().upper()
+        if method not in _ALLOWED_METHODS:
+            return {
+                "error": (
+                    f"Unsupported HTTP method '{method}'. Allowed: "
+                    f"{', '.join(sorted(_ALLOWED_METHODS))}."
+                )
+            }
         try:
             import httpx
         except ImportError:
             return {"error": _INSTALL_HINT}
+        url = f"{self.proxy_url}/call/{quote(tool_id, safe='')}"
         try:
             with httpx.Client(timeout=self.timeout) as client:
-                response = client.post(
-                    f"{self.proxy_url}/call/{tool_id}",
-                    json=params or {},
-                    headers=self._headers(),
-                )
+                if method == "GET":
+                    response = client.get(
+                        url, params=params or {}, headers=self._headers()
+                    )
+                else:
+                    response = client.request(
+                        method, url, json=params or {}, headers=self._headers()
+                    )
                 response.raise_for_status()
                 result = response.json()
         except httpx.TimeoutException:
@@ -323,6 +409,7 @@ def registry_describe(
     proxy_url: Optional[str] = None,
     token: Optional[str] = None,
     auth_header: Optional[str] = None,
+    describe_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Describe one registry catalogue entry.
 
@@ -335,12 +422,16 @@ def registry_describe(
         token: Proxy token (defaults to TOOL_PROXY_TOKEN env var).
         auth_header: Auth header name (defaults to TOOL_PROXY_AUTH_HEADER env var,
             then ``Authorization``).
+        describe_path: Path template for the describe route (defaults to
+            TOOL_PROXY_DESCRIBE_PATH env var, then ``/catalog/endpoints/{tool_id}``).
+            Must contain ``{tool_id}``.
 
     Returns:
         Dict describing the entry, or ``{"error": ...}`` on failure.
     """
     return RegistryProxyTool(
-        proxy_url=proxy_url, token=token, auth_header=auth_header
+        proxy_url=proxy_url, token=token, auth_header=auth_header,
+        describe_path=describe_path,
     ).describe(tool_id)
 
 
@@ -353,12 +444,23 @@ def registry_call(
     max_cost_per_call: Optional[float] = None,
     max_session_spend: Optional[float] = None,
     auth_header: Optional[str] = None,
+    method: Optional[str] = None,
+    describe_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Invoke a registry endpoint through the proxy.
 
     Paid call. The registry injects the upstream vendor credential server-side,
     so no vendor keys are ever held by the agent. Optional spend guards deny +
     report the call when a configured budget would be exceeded.
+
+    The registry enforces each endpoint's declared HTTP method. When ``method``
+    is not supplied it is derived from ``registry_describe`` (the endpoint doc
+    carries ``method``); GET params are sent as the query string, POST/PUT as a
+    JSON body.
+
+    Note: passthrough-URL calls require the upstream to be registered on the
+    registry first; loopback/private upstreams are refused by the registry's
+    SSRF guard by design.
 
     Args:
         tool_id: Catalogue entry identifier (from ``registry_search``).
@@ -370,6 +472,10 @@ def registry_call(
         auth_header: Auth header name (defaults to TOOL_PROXY_AUTH_HEADER env var,
             then ``Authorization``). ``Authorization`` sends ``Bearer {token}``;
             any other name (e.g. ``X-Treg-Token``) sends the raw token.
+        method: HTTP method for the endpoint (e.g. ``GET``/``POST``). When
+            omitted it is derived from the endpoint's describe doc.
+        describe_path: Path template for the describe route (defaults to
+            TOOL_PROXY_DESCRIBE_PATH env var, then ``/catalog/endpoints/{tool_id}``).
 
     Returns:
         Dict with the endpoint response, or ``{"error": ...}`` on failure/denial.
@@ -380,4 +486,5 @@ def registry_call(
         max_cost_per_call=max_cost_per_call,
         max_session_spend=max_session_spend,
         auth_header=auth_header,
-    ).call(tool_id, params)
+        describe_path=describe_path,
+    ).call(tool_id, params, method)
