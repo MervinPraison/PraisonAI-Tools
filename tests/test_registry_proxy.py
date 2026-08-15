@@ -158,37 +158,228 @@ class TestDescribe:
 
         assert result["price_per_call"] == 0.01
         client.get.assert_called_once_with(
+            "https://r.example.com/catalog/endpoints/seo.backlinks",
+            headers={"Content-Type": "application/json"},
+        )
+
+    def test_describe_uses_endpoints_path(self, mock_httpx):
+        """The real registry route is /catalog/endpoints/{id}, not /catalog/{id}."""
+        from praisonai_tools.registry_proxy import RegistryProxyTool
+
+        response = Mock()
+        response.json.return_value = {"id": "diffbot.people.enrich", "method": "GET"}
+        response.raise_for_status.return_value = None
+        client = Mock()
+        client.get.return_value = response
+        mock_httpx.Client.return_value.__enter__.return_value = client
+
+        tool = RegistryProxyTool(proxy_url="https://r.example.com", token="t")
+        tool.describe("diffbot.people.enrich")
+
+        client.get.assert_called_once_with(
+            "https://r.example.com/catalog/endpoints/diffbot.people.enrich",
+            headers={"Content-Type": "application/json", "Authorization": "Bearer t"},
+        )
+
+    def test_describe_path_configurable(self, mock_httpx):
+        from praisonai_tools.registry_proxy import RegistryProxyTool
+
+        response = Mock()
+        response.json.return_value = {"id": "seo.backlinks"}
+        response.raise_for_status.return_value = None
+        client = Mock()
+        client.get.return_value = response
+        mock_httpx.Client.return_value.__enter__.return_value = client
+
+        tool = RegistryProxyTool(
+            proxy_url="https://r.example.com",
+            describe_path="/catalog/{tool_id}",
+        )
+        tool.describe("seo.backlinks")
+
+        client.get.assert_called_once_with(
             "https://r.example.com/catalog/seo.backlinks",
+            headers={"Content-Type": "application/json"},
+        )
+
+    def test_describe_path_from_env(self, mock_httpx):
+        from praisonai_tools.registry_proxy import RegistryProxyTool
+
+        response = Mock()
+        response.json.return_value = {"id": "seo.backlinks"}
+        response.raise_for_status.return_value = None
+        client = Mock()
+        client.get.return_value = response
+        mock_httpx.Client.return_value.__enter__.return_value = client
+
+        with patch.dict(os.environ, {
+            "TOOL_PROXY_URL": "https://r.example.com",
+            "TOOL_PROXY_DESCRIBE_PATH": "/v2/endpoints/{tool_id}",
+        }):
+            tool = RegistryProxyTool()
+            tool.describe("seo.backlinks")
+
+        client.get.assert_called_once_with(
+            "https://r.example.com/v2/endpoints/seo.backlinks",
             headers={"Content-Type": "application/json"},
         )
 
 
 class TestCall:
     def test_call_success(self, mock_httpx):
+        """Explicit method=POST skips describe and posts a JSON body."""
         from praisonai_tools.registry_proxy import RegistryProxyTool
 
         response = Mock()
         response.json.return_value = {"data": {"backlinks": 42}}
         response.raise_for_status.return_value = None
         client = Mock()
-        client.post.return_value = response
+        client.request.return_value = response
         mock_httpx.Client.return_value.__enter__.return_value = client
 
         tool = RegistryProxyTool(proxy_url="https://r.example.com", token="t")
-        result = tool.call("seo.backlinks", {"domain": "example.com"})
+        result = tool.call("seo.backlinks", {"domain": "example.com"}, method="POST")
 
         assert result["data"]["backlinks"] == 42
-        client.post.assert_called_once_with(
+        client.request.assert_called_once_with(
+            "POST",
             "https://r.example.com/call/seo.backlinks",
             json={"domain": "example.com"},
             headers={"Content-Type": "application/json", "Authorization": "Bearer t"},
         )
+        client.get.assert_not_called()
 
     def test_call_requires_tool_id(self):
         from praisonai_tools.registry_proxy import RegistryProxyTool
 
         tool = RegistryProxyTool(proxy_url="https://r.example.com")
         assert tool.call("")["error"] == "tool_id is required"
+
+    def test_call_derives_post_method_from_describe(self, mock_httpx):
+        from praisonai_tools.registry_proxy import RegistryProxyTool
+
+        describe_resp = Mock()
+        describe_resp.json.return_value = {"id": "seo.backlinks", "method": "POST"}
+        describe_resp.raise_for_status.return_value = None
+        call_resp = Mock()
+        call_resp.json.return_value = {"data": {"backlinks": 42}}
+        call_resp.raise_for_status.return_value = None
+        client = Mock()
+        client.get.return_value = describe_resp
+        client.request.return_value = call_resp
+        mock_httpx.Client.return_value.__enter__.return_value = client
+
+        tool = RegistryProxyTool(proxy_url="https://r.example.com", token="t")
+        result = tool.call("seo.backlinks", {"domain": "example.com"})
+
+        assert result["data"]["backlinks"] == 42
+        client.request.assert_called_once_with(
+            "POST",
+            "https://r.example.com/call/seo.backlinks",
+            json={"domain": "example.com"},
+            headers={"Content-Type": "application/json", "Authorization": "Bearer t"},
+        )
+
+    def test_call_uses_declared_method(self, mock_httpx):
+        """describe says GET -> GET with query params (no JSON body)."""
+        from praisonai_tools.registry_proxy import RegistryProxyTool
+
+        describe_resp = Mock()
+        describe_resp.json.return_value = {
+            "id": "diffbot.people.enrich", "method": "GET"
+        }
+        describe_resp.raise_for_status.return_value = None
+        call_resp = Mock()
+        call_resp.json.return_value = {"data": {"name": "Jane"}}
+        call_resp.raise_for_status.return_value = None
+        client = Mock()
+        client.get.side_effect = [describe_resp, call_resp]
+        mock_httpx.Client.return_value.__enter__.return_value = client
+
+        tool = RegistryProxyTool(proxy_url="https://r.example.com", token="t")
+        result = tool.call("diffbot.people.enrich", {"query": "type=email"})
+
+        assert result["data"]["name"] == "Jane"
+        client.request.assert_not_called()
+        # First get = describe, second get = the GET call with query params.
+        assert client.get.call_count == 2
+        call_args = client.get.call_args_list[1]
+        assert call_args.args[0] == "https://r.example.com/call/diffbot.people.enrich"
+        assert call_args.kwargs["params"] == {"query": "type=email"}
+
+    def test_call_explicit_get_skips_describe(self, mock_httpx):
+        from praisonai_tools.registry_proxy import RegistryProxyTool
+
+        call_resp = Mock()
+        call_resp.json.return_value = {"data": "ok"}
+        call_resp.raise_for_status.return_value = None
+        client = Mock()
+        client.get.return_value = call_resp
+        mock_httpx.Client.return_value.__enter__.return_value = client
+
+        tool = RegistryProxyTool(proxy_url="https://r.example.com", token="t")
+        result = tool.call("diffbot.people.enrich", {"q": "x"}, method="GET")
+
+        assert result["data"] == "ok"
+        client.get.assert_called_once_with(
+            "https://r.example.com/call/diffbot.people.enrich",
+            params={"q": "x"},
+            headers={"Content-Type": "application/json", "Authorization": "Bearer t"},
+        )
+
+    def test_call_defaults_to_post_when_method_absent(self, mock_httpx):
+        """describe omits method -> default to POST with JSON body."""
+        from praisonai_tools.registry_proxy import RegistryProxyTool
+
+        describe_resp = Mock()
+        describe_resp.json.return_value = {"id": "seo.backlinks"}
+        describe_resp.raise_for_status.return_value = None
+        call_resp = Mock()
+        call_resp.json.return_value = {"data": "ok"}
+        call_resp.raise_for_status.return_value = None
+        client = Mock()
+        client.get.return_value = describe_resp
+        client.request.return_value = call_resp
+        mock_httpx.Client.return_value.__enter__.return_value = client
+
+        tool = RegistryProxyTool(proxy_url="https://r.example.com")
+        result = tool.call("seo.backlinks", {"domain": "x"})
+
+        assert result["data"] == "ok"
+        client.request.assert_called_once_with(
+            "POST",
+            "https://r.example.com/call/seo.backlinks",
+            json={"domain": "x"},
+            headers={"Content-Type": "application/json"},
+        )
+
+    def test_guarded_call_works_on_get_endpoint(self, mock_httpx):
+        """Regression: spend guard + GET endpoint end-to-end (describe fetched once)."""
+        from praisonai_tools.registry_proxy import RegistryProxyTool
+
+        describe_resp = Mock()
+        describe_resp.json.return_value = {
+            "id": "diffbot.people.enrich", "method": "GET", "price_per_call": 0.05
+        }
+        describe_resp.raise_for_status.return_value = None
+        call_resp = Mock()
+        call_resp.json.return_value = {"data": "ok", "price_per_call": 0.05}
+        call_resp.raise_for_status.return_value = None
+        client = Mock()
+        client.get.side_effect = [describe_resp, call_resp]
+        mock_httpx.Client.return_value.__enter__.return_value = client
+
+        tool = RegistryProxyTool(
+            proxy_url="https://r.example.com", max_session_spend=1.0
+        )
+        result = tool.call("diffbot.people.enrich", {"query": "type=email"})
+
+        assert result["data"] == "ok"
+        assert tool._session_spend == pytest.approx(0.05)
+        client.request.assert_not_called()
+        # describe reused from the guard: exactly one describe + one GET call.
+        assert client.get.call_count == 2
+        assert client.get.call_args_list[1].kwargs["params"] == {"query": "type=email"}
 
 
 class TestErrorTaxonomy:
@@ -213,11 +404,11 @@ class TestErrorTaxonomy:
         resp.status_code = 402
         resp.text = "Payment Required"
         client = Mock()
-        client.post.side_effect = mock_httpx.HTTPStatusError("402", response=resp)
+        client.request.side_effect = mock_httpx.HTTPStatusError("402", response=resp)
         mock_httpx.Client.return_value.__enter__.return_value = client
 
         tool = RegistryProxyTool(proxy_url="https://r.example.com")
-        result = tool.call("seo.backlinks", {})
+        result = tool.call("seo.backlinks", {}, method="POST")
         assert "Insufficient balance" in result["error"]
 
     def test_upstream_4xx_passthrough(self, mock_httpx):
@@ -227,11 +418,11 @@ class TestErrorTaxonomy:
         resp.status_code = 404
         resp.text = "Not Found"
         client = Mock()
-        client.post.side_effect = mock_httpx.HTTPStatusError("404", response=resp)
+        client.request.side_effect = mock_httpx.HTTPStatusError("404", response=resp)
         mock_httpx.Client.return_value.__enter__.return_value = client
 
         tool = RegistryProxyTool(proxy_url="https://r.example.com")
-        result = tool.call("seo.backlinks", {})
+        result = tool.call("seo.backlinks", {}, method="POST")
         assert "HTTP 404" in result["error"]
 
     def test_timeout_error(self, mock_httpx):
@@ -299,7 +490,7 @@ class TestSpendGuards:
         call_resp.raise_for_status.return_value = None
         client = Mock()
         client.get.return_value = describe_resp
-        client.post.return_value = call_resp
+        client.request.return_value = call_resp
         mock_httpx.Client.return_value.__enter__.return_value = client
 
         tool = RegistryProxyTool(proxy_url="https://r.example.com", max_session_spend=1.0)
@@ -320,7 +511,7 @@ class TestSpendGuards:
         call_resp.raise_for_status.return_value = None
         client = Mock()
         client.get.return_value = describe_resp
-        client.post.return_value = call_resp
+        client.request.return_value = call_resp
         mock_httpx.Client.return_value.__enter__.return_value = client
 
         tool = RegistryProxyTool(proxy_url="https://r.example.com", max_session_spend=1.0)
@@ -355,7 +546,7 @@ class TestSpendGuards:
         call_resp.raise_for_status.return_value = None
         client = Mock()
         client.get.return_value = describe_resp
-        client.post.return_value = call_resp
+        client.request.return_value = call_resp
         mock_httpx.Client.return_value.__enter__.return_value = client
 
         first = registry_call(
@@ -410,8 +601,28 @@ class TestDecoratedFunctions:
             max_cost_per_call=0.1,
             max_session_spend=1.0,
             auth_header=None,
+            describe_path=None,
         )
-        instance.call.assert_called_once_with("seo.backlinks", {"domain": "x"})
+        instance.call.assert_called_once_with("seo.backlinks", {"domain": "x"}, None)
+
+    @patch("praisonai_tools.registry_proxy.registry_proxy.RegistryProxyTool")
+    def test_registry_call_function_passes_method(self, mock_cls):
+        from praisonai_tools.registry_proxy import registry_call
+
+        instance = Mock()
+        instance.call.return_value = {"data": "ok"}
+        mock_cls.return_value = instance
+
+        registry_call(
+            "diffbot.people.enrich",
+            {"query": "type=email"},
+            proxy_url="https://r",
+            token="t",
+            method="GET",
+        )
+        instance.call.assert_called_once_with(
+            "diffbot.people.enrich", {"query": "type=email"}, "GET"
+        )
 
 
 def test_smoke_import():

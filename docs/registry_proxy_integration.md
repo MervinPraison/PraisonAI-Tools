@@ -35,6 +35,9 @@ export TOOL_PROXY_TOKEN="your-proxy-token"
 # Default is "Authorization" (sent as "Bearer <token>"); any other name (e.g.
 # "X-Treg-Token") sends the raw token in that header.
 export TOOL_PROXY_AUTH_HEADER="Authorization"
+# Optional: override the describe route for registries with a different layout.
+# Must contain "{tool_id}"; defaults to the live registry route below.
+export TOOL_PROXY_DESCRIBE_PATH="/catalog/endpoints/{tool_id}"
 ```
 
 ```python
@@ -72,6 +75,21 @@ vendor-specific configuration. Guards **fail closed**: if a budget is set but
 the price cannot be validated, the call is denied. Cumulative `max_session_spend`
 persists across separate `registry_call` invocations within the same process,
 scoped per `(proxy_url, token)` so distinct accounts never share a budget.
+
+## HTTP methods
+
+The registry enforces each endpoint's declared HTTP method on `/call/{id}`.
+`registry_call` derives the method automatically from `registry_describe`
+(the endpoint doc carries `method`): `GET` endpoints send `params` as the query
+string, `POST`/`PUT` send them as a JSON body. Pass `method="GET"` explicitly to
+skip the describe lookup when you already know the method.
+
+## Passthrough-URL calls
+
+Passthrough-URL calls require the upstream to be **registered on the registry
+first**. Loopback/private upstreams (e.g. `127.0.0.1`, RFC-1918 addresses) are
+**refused by the registry's SSRF guard by design** — the base URL must be a
+public `http(s)` address. This is registry-side policy, not a connector setting.
 
 ## Credential safety
 
