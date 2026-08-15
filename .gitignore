@@ -24,6 +24,9 @@ venv/
 .coverage
 htmlcov/
 
+# Tool auto-discovery cache (generated at import time)
+._discovery_cache_v*.json
+
 # Lock files
 poetry.lock
 uv.lock
