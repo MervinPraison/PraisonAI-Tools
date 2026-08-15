@@ -5,13 +5,30 @@ on:
     branches:
       - main
     paths:
-      - 'praisonai_tools/docs_generator/**'
+      - 'praisonai_tools/**'
+      - 'pyproject.toml'
+      - 'scripts/generate_reference_docs.py'
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+    branches:
+      - main
   repository_dispatch:
     types: [trigger-docs-generation]
   workflow_dispatch:
 
 jobs:
   generate-docs:
+    if: |
+      github.event_name != 'workflow_run' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.event == 'push' &&
+        !startsWith(github.event.workflow_run.head_commit.message, 'docs: auto-generate')
+      )
     runs-on: ubuntu-latest
     steps:
       - name: Checkout PraisonAI Tools

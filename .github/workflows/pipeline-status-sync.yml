@@ -3,9 +3,13 @@ name: Pipeline Status Sync
 # Sync pipeline/* stage and blocker labels on open internal PRs.
 
 on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
   schedule:
     - cron: '*/10 * * * *'
-  workflow_dispatch:
 
 permissions:
   pull-requests: read
