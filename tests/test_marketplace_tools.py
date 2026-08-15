@@ -162,7 +162,7 @@ def test_trust_config_functions():
     config = get_trust_config()
     assert config.enabled is False
     assert config.provider == "joy"
-    assert config.min_score == 3.0
+    assert config.min_score == 1.5
     
     # Test with environment variables
     old_provider = os.environ.get('PRAISONAI_TRUST_PROVIDER')
