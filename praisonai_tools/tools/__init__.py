@@ -566,18 +566,33 @@ _TOOL_MAP = {
 
 # Lazy imports for tools to avoid loading dependencies until needed
 def __getattr__(name):
-    """Lazy load tool classes."""
-    if name in _TOOL_MAP:
-        module_name = _TOOL_MAP[name]
-        from importlib import import_module
-        
+    """Lazy load tool classes.
+
+    Resolution order:
+    1. The explicit ``_TOOL_MAP`` (covers helper functions and tools that live
+       in nested subpackages such as ``praisonai_tools.n8n``).
+    2. A source-derived scan of ``*_tool.py`` files (``catalogue`` module). This
+       means dropping a new ``*_tool.py`` that defines a ``*Tool`` class makes
+       that class importable with no edit to ``_TOOL_MAP``.
+    """
+    from importlib import import_module
+
+    module_name = _TOOL_MAP.get(name)
+    if module_name is None and name.endswith("Tool"):
+        from praisonai_tools.catalogue import _scan_source_tree
+
+        derived = _scan_source_tree().get(name)
+        if derived is not None:
+            module_name = derived[0]
+
+    if module_name is not None:
         # Handle absolute module paths (e.g., praisonai_tools.n8n.n8n_workflow)
         if module_name.startswith("praisonai_tools."):
             module = import_module(module_name)
         else:
             # Handle relative module paths within tools package
             module = import_module(f".{module_name}", __package__)
-        
+
         return getattr(module, name)
 
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
