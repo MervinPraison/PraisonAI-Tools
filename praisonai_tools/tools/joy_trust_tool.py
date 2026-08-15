@@ -28,7 +28,7 @@ Usage:
 Environment Variables:
     JOY_TRUST_API_KEY: Joy Trust API key (optional)
     PRAISONAI_TRUST_PROVIDER: Set to 'joy' to enable automatic trust verification
-    PRAISONAI_TRUST_MIN_SCORE: Minimum trust score threshold (default: 3.0)
+    PRAISONAI_TRUST_MIN_SCORE: Minimum trust score threshold (default: 1.5)
     PRAISONAI_TRUST_AUTO_VERIFY: Enable automatic handoff verification (default: true)
 """
 

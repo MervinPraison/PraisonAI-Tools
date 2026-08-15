@@ -197,7 +197,21 @@ class AgentFolioTool(BaseTool):
         task_description: str,
         required_trust_level: float = 70.0
     ) -> Dict[str, Any]:
-        """Comprehensive safety check before delegating tasks using all trust layers."""
+        """Comprehensive safety check before delegating tasks using all trust layers.
+
+        Args:
+            agent_name: Name/identifier of the agent to check
+            task_class: Type of task for scoped trust (e.g., "code_review")
+            task_description: Natural-language description of the task to delegate;
+                recorded in the returned ``task_specific`` verification layer
+            required_trust_level: Minimum trust level required (0-100, default: 70.0)
+
+        Returns:
+            Dictionary with ``safe_to_delegate``, ``behavioral_trust``,
+            ``risk_assessment``, ``recommendations``, ``verification_layers``
+            (including a ``task_specific`` layer that echoes ``task_description``)
+            and ``error``.
+        """
         behavioral_result = self.check_behavioral_trust(
             agent_name=agent_name,
             task_class=task_class,
@@ -210,7 +224,15 @@ class AgentFolioTool(BaseTool):
                 "behavioral_trust": 0.0,
                 "risk_assessment": "high",
                 "recommendations": ["Unable to verify behavioral trust - do not delegate"],
-                "verification_layers": {"behavioral": behavioral_result},
+                "verification_layers": {
+                    "behavioral": behavioral_result,
+                    "task_specific": {
+                        "task_class": task_class,
+                        "task_description": task_description,
+                        "required_level": required_trust_level,
+                        "meets_requirement": False
+                    }
+                },
                 "error": f"Behavioral trust check failed: {behavioral_result['error']}"
             }
         
@@ -247,6 +269,7 @@ class AgentFolioTool(BaseTool):
                 "behavioral": behavioral_result,
                 "task_specific": {
                     "task_class": task_class,
+                    "task_description": task_description,
                     "required_level": required_trust_level,
                     "meets_requirement": meets_threshold
                 }

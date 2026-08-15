@@ -242,6 +242,44 @@ def test_enhanced_joy_trust_real_api():
     assert "recommendation" in safety_result
 
 
+def test_verify_delegation_safety_echoes_task_description():
+    """task_description must be recorded in the task_specific verification layer."""
+    from praisonai_tools.tools.agentfolio_tool import AgentFolioTool
+
+    tool = AgentFolioTool()
+    task_description = "Review Python code for security issues"
+
+    # Force the behavioral check to succeed deterministically without network
+    tool.check_behavioral_trust = lambda **kwargs: {
+        "behavioral_score": 90.0,
+        "meets_threshold": True,
+        "error": None,
+    }
+
+    result = tool.verify_delegation_safety(
+        agent_name="example_agent",
+        task_class="code_review",
+        task_description=task_description,
+        required_trust_level=70.0,
+    )
+
+    task_specific = result["verification_layers"]["task_specific"]
+    assert task_specific["task_description"] == task_description
+
+    # And on the error branch too
+    tool.check_behavioral_trust = lambda **kwargs: {"error": "boom"}
+    error_result = tool.verify_delegation_safety(
+        agent_name="example_agent",
+        task_class="code_review",
+        task_description=task_description,
+        required_trust_level=70.0,
+    )
+    assert (
+        error_result["verification_layers"]["task_specific"]["task_description"]
+        == task_description
+    )
+
+
 def test_tools_work_without_httpx():
     """Test that tools give proper error when httpx is not installed."""
     # This would need mocking httpx import to test properly
