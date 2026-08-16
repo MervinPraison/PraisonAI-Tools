@@ -490,6 +490,110 @@ class TestCall:
         assert client.get.call_args_list[1].kwargs["params"] == {"query": "type=email"}
 
 
+# The live registry (v0.11.0) nests the endpoint fields under an ``endpoint``
+# key and expresses cost as a structured object; fixtures mirror that shape so
+# unit tests exercise the real wire schema, not a flattened approximation.
+_LIVE_ENDPOINT_DOC = {
+    "endpoint": {
+        "id": "diffbot.people.enrich",
+        "method": "GET",
+        "cost": {
+            "type": "per_call",
+            "value": 25,
+            "currency": "credit",
+            "per": 1,
+            "usd": 0.0299,
+        },
+    },
+    "provider": {},
+    "siblings": [],
+    "call_template": "…",
+    "example_response": {},
+    "hints": [],
+}
+
+
+class TestExtractors:
+    def test_extract_method_nested_endpoint_envelope(self):
+        from praisonai_tools.registry_proxy import RegistryProxyTool
+
+        assert RegistryProxyTool._extract_method(
+            {"endpoint": {"method": "GET"}}
+        ) == "GET"
+        # Flat form still works.
+        assert RegistryProxyTool._extract_method({"method": "post"}) == "POST"
+        # Absent -> None (default POST applies downstream).
+        assert RegistryProxyTool._extract_method({"endpoint": {}}) is None
+        assert RegistryProxyTool._extract_method({}) is None
+
+    def test_extract_price_structured_cost_usd(self):
+        from praisonai_tools.registry_proxy import RegistryProxyTool
+
+        # Nested endpoint.cost.usd is preferred (guard budgets are USD).
+        assert RegistryProxyTool._extract_price(_LIVE_ENDPOINT_DOC) == 0.0299
+        assert RegistryProxyTool._extract_price(
+            {"cost": {"usd": 0.0299, "value": 25}}
+        ) == 0.0299
+        # Flat numeric forms unchanged.
+        assert RegistryProxyTool._extract_price({"price_per_call": 0.05}) == 0.05
+        assert RegistryProxyTool._extract_price({"price": 0.02}) == 0.02
+        assert RegistryProxyTool._extract_price({"cost": 0.03}) == 0.03
+        # Nested flat number under the envelope.
+        assert RegistryProxyTool._extract_price(
+            {"endpoint": {"price_per_call": 0.07}}
+        ) == 0.07
+        # Non-numeric/absent -> None (fail-closed downstream).
+        assert RegistryProxyTool._extract_price({"cost": {"value": 25}}) is None
+        assert RegistryProxyTool._extract_price({}) is None
+
+
+class TestLiveEnvelope:
+    def test_call_auto_derives_get_from_live_shape(self, mock_httpx):
+        """The live nested envelope must yield an auto-derived GET (no method=)."""
+        from praisonai_tools.registry_proxy import RegistryProxyTool
+
+        describe_resp = Mock()
+        describe_resp.json.return_value = _LIVE_ENDPOINT_DOC
+        describe_resp.raise_for_status.return_value = None
+        call_resp = Mock()
+        call_resp.json.return_value = {"data": {"name": "Jane"}}
+        call_resp.raise_for_status.return_value = None
+        client = Mock()
+        client.get.side_effect = [describe_resp, call_resp]
+        mock_httpx.Client.return_value.__enter__.return_value = client
+
+        tool = RegistryProxyTool(proxy_url="https://r.example.com", token="t")
+        result = tool.call("diffbot.people.enrich", {"query": "type=email"})
+
+        assert result["data"]["name"] == "Jane"
+        client.request.assert_not_called()
+        assert client.get.call_count == 2
+        call_args = client.get.call_args_list[1]
+        assert call_args.args[0] == "https://r.example.com/call/diffbot.people.enrich"
+        assert call_args.kwargs["params"] == {"query": "type=email"}
+
+    def test_guard_quotes_real_price_from_live_shape(self, mock_httpx):
+        """Guard must quote the structured cost's usd, not fail-closed."""
+        from praisonai_tools.registry_proxy import RegistryProxyTool
+
+        describe_resp = Mock()
+        describe_resp.json.return_value = _LIVE_ENDPOINT_DOC
+        describe_resp.raise_for_status.return_value = None
+        client = Mock()
+        client.get.return_value = describe_resp
+        mock_httpx.Client.return_value.__enter__.return_value = client
+
+        tool = RegistryProxyTool(
+            proxy_url="https://r.example.com", max_cost_per_call=0.01
+        )
+        result = tool.call("diffbot.people.enrich", {"query": "type=email"})
+
+        assert "exceeds max_cost_per_call" in result["error"]
+        assert "0.0299" in result["error"]
+        assert "cannot enforce" not in result["error"]
+        client.request.assert_not_called()
+
+
 class TestErrorTaxonomy:
     def test_auth_error(self, mock_httpx):
         from praisonai_tools.registry_proxy import RegistryProxyTool

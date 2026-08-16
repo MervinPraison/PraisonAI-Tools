@@ -223,12 +223,30 @@ class RegistryProxyTool(BaseTool):
             return {"error": str(exc)}
 
     @staticmethod
-    def _extract_method(data: Any) -> Optional[str]:
+    def _unwrap_envelope(data: Any) -> Any:
+        """Return the dict that carries the endpoint fields.
+
+        The live registry nests ``method``/``cost`` under an ``endpoint`` key
+        (``{"endpoint": {...}, "provider": {}, ...}``); flatter registry
+        implementations put them at the top level. Prefer ``data["endpoint"]``
+        when it is a dict, else use ``data`` itself.
+        """
+        if not isinstance(data, dict):
+            return data
+        endpoint = data.get("endpoint")
+        if isinstance(endpoint, dict):
+            return endpoint
+        return data
+
+    @classmethod
+    def _extract_method(cls, data: Any) -> Optional[str]:
         """Read the HTTP method from a describe response, if present.
 
-        The live registry's endpoint doc carries ``method: "GET"`` (or POST/PUT);
-        the registry enforces the declared method on ``/call/{id}``.
+        The live registry's endpoint doc carries ``method: "GET"`` (or POST/PUT)
+        nested under ``endpoint``; the registry enforces the declared method on
+        ``/call/{id}``. Flat implementations expose it at the top level.
         """
+        data = cls._unwrap_envelope(data)
         if not isinstance(data, dict):
             return None
         method = data.get("method")
@@ -236,18 +254,26 @@ class RegistryProxyTool(BaseTool):
             return method.strip().upper()
         return None
 
-    @staticmethod
-    def _extract_price(data: Any) -> Any:
-        """Read a price from a response, tolerating field-name variation.
+    @classmethod
+    def _extract_price(cls, data: Any) -> Any:
+        """Read a price from a response, tolerating field-name/shape variation.
 
-        Tries ``price_per_call`` then ``price`` then ``cost`` so the budget check
-        and spend recording share the same tolerance against the live schema.
+        Unwraps the ``endpoint`` envelope, then tries ``price_per_call`` then
+        ``price`` then ``cost`` so the budget check and spend recording share the
+        same tolerance against the live schema. ``cost`` may be a structured
+        object (``{"value": 25, "currency": "credit", "usd": 0.0299, ...}``); in
+        that case prefer ``usd`` since the guard budgets are in USD (``value`` is
+        in provider credits). Flat numeric forms are returned unchanged.
         """
+        data = cls._unwrap_envelope(data)
         if not isinstance(data, dict):
             return None
         for key in ("price_per_call", "price", "cost"):
             if key in data:
-                return data[key]
+                value = data[key]
+                if isinstance(value, dict):
+                    return value.get("usd")
+                return value
         return None
 
     def _check_budget(self, tool_id: str):
