@@ -22,6 +22,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: generate-docs-praisonaidocs
+  cancel-in-progress: false
+
 jobs:
   generate-docs:
     if: |
@@ -87,5 +91,6 @@ jobs:
             echo "No changes to commit"
           else
             git commit -m "docs: auto-generate SDK reference documentation"
-            git push
+            git pull --rebase origin main
+            git push origin main
           fi
