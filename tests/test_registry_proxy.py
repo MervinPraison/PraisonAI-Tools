@@ -746,6 +746,43 @@ class TestSpendGuards:
         assert "cannot enforce" in result["error"]
         client.request.assert_not_called()
 
+    @pytest.mark.parametrize("bad_price", ["NaN", "Infinity", "-Infinity", -0.01])
+    def test_non_finite_or_negative_price_fails_closed(self, mock_httpx, bad_price):
+        """NaN/inf/negative prices must be rejected, not silently bypass the guard."""
+        from praisonai_tools.registry_proxy import RegistryProxyTool
+
+        describe_resp = Mock()
+        describe_resp.json.return_value = {"price_per_call": bad_price}
+        describe_resp.raise_for_status.return_value = None
+        client = Mock()
+        client.get.return_value = describe_resp
+        mock_httpx.Client.return_value.__enter__.return_value = client
+
+        tool = RegistryProxyTool(proxy_url="https://r.example.com", max_cost_per_call=0.10)
+        result = tool.call("seo.backlinks", {})
+        assert "cannot enforce" in result["error"]
+        client.request.assert_not_called()
+
+    def test_non_finite_response_charge_does_not_corrupt_spend(self, mock_httpx):
+        """A NaN/inf charge in the call response must not poison cumulative spend."""
+        from praisonai_tools.registry_proxy import RegistryProxyTool
+
+        describe_resp = Mock()
+        describe_resp.json.return_value = {"price_per_call": 0.20}
+        describe_resp.raise_for_status.return_value = None
+        call_resp = Mock()
+        call_resp.json.return_value = {"data": "ok", "price_per_call": "NaN"}
+        call_resp.raise_for_status.return_value = None
+        client = Mock()
+        client.get.return_value = describe_resp
+        client.request.return_value = call_resp
+        mock_httpx.Client.return_value.__enter__.return_value = client
+
+        tool = RegistryProxyTool(proxy_url="https://r.example.com", max_session_spend=1.0)
+        result = tool.call("seo.backlinks", {})
+        assert result["data"] == "ok"
+        assert tool._session_spend == 0.20
+
     def test_session_spend_persists_across_registry_call(self, mock_httpx):
         """max_session_spend must accumulate across separate registry_call calls."""
         from praisonai_tools.registry_proxy import registry_call

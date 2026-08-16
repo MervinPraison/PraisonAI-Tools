@@ -19,6 +19,7 @@ Design notes:
 """
 
 import os
+import math
 import logging
 from typing import Any, Dict, Optional
 from urllib.parse import quote
@@ -306,6 +307,16 @@ class RegistryProxyTool(BaseTool):
                     "invalid, cannot enforce the configured spend guard."
                 )
             }, None, described
+        # Fail closed on non-finite (NaN/inf) or negative prices: NaN comparisons
+        # are always false, so an unvalidated NaN would silently bypass both the
+        # per-call and session guards and then corrupt ``_session_spend``.
+        if not math.isfinite(price) or price < 0:
+            return {
+                "error": (
+                    "Denied: price (price_per_call/price/cost) is missing or "
+                    "invalid, cannot enforce the configured spend guard."
+                )
+            }, None, described
         if self.max_cost_per_call is not None and price > self.max_cost_per_call:
             return {
                 "error": (
@@ -395,10 +406,16 @@ class RegistryProxyTool(BaseTool):
         # still accrues when the response omits cost fields.
         charged = self._extract_price(result)
         try:
-            self._session_spend += float(charged)
+            charged = float(charged)
+            if not math.isfinite(charged) or charged < 0:
+                raise ValueError("non-finite or negative charge")
         except (TypeError, ValueError):
-            if quoted_price is not None:
-                self._session_spend += quoted_price
+            # The response omitted a usable charge; fall back to the finite,
+            # non-negative price validated at budget-check time so a malformed
+            # (NaN/inf/negative) response cannot corrupt cumulative spend.
+            charged = quoted_price
+        if charged is not None:
+            self._session_spend += charged
         return result
 
 
