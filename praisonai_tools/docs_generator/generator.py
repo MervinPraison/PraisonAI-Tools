@@ -2456,11 +2456,12 @@ class TypeScriptDocParser:
 class MDXGenerator:
     """Generate MDX documentation files."""
     
-    def __init__(self, output_dir: Path, package_name: str, config: Dict[str, Any], layout: LayoutType = LayoutType.LEGACY):
+    def __init__(self, output_dir: Path, package_name: str, config: Dict[str, Any], layout: LayoutType = LayoutType.LEGACY, docs_root: Optional[Path] = None):
         self.output_dir = output_dir
         self.package_name = package_name
         self.config = config
         self.layout = layout
+        self.docs_root = docs_root or output_dir
         self.generated_files = set()  # Use set for faster lookups and cleanup
         # Index for "Used By" cross-references: {function_name: [(caller_name, caller_path), ...]}
         self.used_by_index: Dict[str, List[Tuple[str, str]]] = {}
@@ -2578,8 +2579,7 @@ class MDXGenerator:
         return generated
 
     def _track_file(self, path: Path):
-        docs_root = Path("/Users/praison/PraisonAIDocs")
-        rel_path = str(path.relative_to(docs_root))
+        rel_path = str(path.relative_to(self.docs_root))
         nav_path = rel_path.replace('.mdx', '').replace('\\', '/')
         self.generated_files.add(nav_path)
     
@@ -3202,7 +3202,7 @@ class ReferenceDocsGenerator:
             workspace_parser = RustWorkspaceParser(config["source"])
             # Parse all crates in the workspace
             all_modules = workspace_parser.parse_all()
-            generator = MDXGenerator(config["output"], package_name, config, layout=self.layout)
+            generator = MDXGenerator(config["output"], package_name, config, layout=self.layout, docs_root=self.docs_root)
             generated = 0
             for crate_name, modules in all_modules.items():
                 print(f"  Crate: {crate_name} ({len(modules)} modules)")
@@ -3228,7 +3228,7 @@ class ReferenceDocsGenerator:
         else:
             parser = PythonDocParser(config["source"], config["import_prefix"])
         
-        generator = MDXGenerator(config["output"], package_name, config, layout=self.layout)
+        generator = MDXGenerator(config["output"], package_name, config, layout=self.layout, docs_root=self.docs_root)
         modules = parser.get_modules()
         print(f"Found {len(modules)} modules")
         
@@ -3272,14 +3272,13 @@ class ReferenceDocsGenerator:
 
     def cleanup_orphaned_files(self, output_dir: Path, current_files: set):
         """Delete MDX files that are no longer part of the generated set."""
-        docs_root = Path("/Users/praison/PraisonAIDocs")
         for sub_dir in ["functions", "classes", "modules"]:
             target_dir = output_dir / sub_dir
             if not target_dir.exists():
                 continue
                 
             for mdx_file in target_dir.glob("*.mdx"):
-                rel_path = str(mdx_file.relative_to(docs_root))
+                rel_path = str(mdx_file.relative_to(self.docs_root))
                 nav_path = rel_path.replace('.mdx', '').replace('\\', '/')
                 if nav_path not in current_files:
                     print(f"    Deleting orphaned file: {mdx_file.name}")
