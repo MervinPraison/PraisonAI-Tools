@@ -3327,9 +3327,11 @@ class ReferenceDocsGenerator:
             
             with open(self.docs_json_path, 'w') as f:
                 json.dump(docs_config, f, indent=2)
-                
-        except Exception:
-            pass
+            print(f"  Updated docs.json: {len(unique_pages)} pages for {package_name}")
+
+        except Exception as exc:
+            print(f"  Error updating docs.json for {package_name}: {exc}")
+            raise
 
 if __name__ == "__main__":
     import argparse
