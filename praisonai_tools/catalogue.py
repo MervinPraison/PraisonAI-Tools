@@ -55,6 +55,7 @@ _MODULE_EXTRAS = {
     "langextract_tool": ("langextract",),
     "swarmscore_tool": ("swarmscore",),
     "composio_tool": ("composio",),
+    "context_tool": ("context",),
 }
 
 
