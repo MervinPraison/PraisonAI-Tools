@@ -3327,9 +3327,16 @@ class ReferenceDocsGenerator:
             
             with open(self.docs_json_path, 'w') as f:
                 json.dump(docs_config, f, indent=2)
-                
-        except Exception:
-            pass
+
+            if self.layout == LayoutType.GRANULAR:
+                page_count = sum(len(group.get('pages', [])) for group in package_group['pages'])
+            else:
+                page_count = len(package_group['pages'])
+            print(f"  Updated docs.json: {page_count} pages for {package_name}")
+
+        except Exception as exc:
+            print(f"  Error updating docs.json for {package_name}: {exc}")
+            raise
 
 if __name__ == "__main__":
     import argparse
