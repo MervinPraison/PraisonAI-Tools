@@ -3125,7 +3125,15 @@ class ReferenceDocsGenerator:
         layout: LayoutType = LayoutType.GRANULAR
     ):
         self.docs_root = Path(docs_root)
-        self.docs_json_path = self.docs_root / "docs.json"
+        # Mintlify subpath hosting uses docs/docs.json (see PraisonAIDocs migrate script).
+        docs_json_in_docs = self.docs_root / "docs" / "docs.json"
+        docs_json_at_root = self.docs_root / "docs.json"
+        if docs_json_in_docs.exists():
+            self.docs_json_path = docs_json_in_docs
+        elif docs_json_at_root.exists():
+            self.docs_json_path = docs_json_at_root
+        else:
+            self.docs_json_path = docs_json_in_docs
         self.layout = layout
         
         # Base source root - default to local development path if not provided
