@@ -65,6 +65,18 @@ class TestSerplySearch:
             SerplyTool(api_key="k").search("python", max_results=50)
         assert get.call_args.kwargs["params"]["num"] == 10
 
+    def test_negative_max_results_is_clamped_to_one(self):
+        payload = {"results": [{"title": "a", "link": "u", "description": "d", "position": 1}] * 3}
+        with patch("requests.get", return_value=_response(payload)) as get:
+            results = SerplyTool(api_key="k").search("python", max_results=-1)
+        assert get.call_args.kwargs["params"]["num"] == 1
+        assert len(results) == 1
+
+    def test_zero_max_results_is_clamped_to_one(self):
+        with patch("requests.get", return_value=_response({"results": []})) as get:
+            SerplyTool(api_key="k").news("python", max_results=0)
+        assert get.call_args.kwargs["params"]["num"] == 1
+
     def test_http_error_is_reported(self):
         bad = _response({"detail": "Invalid API key"}, ok=False, status=401, text='{"detail":"Invalid API key"}')
         with patch("requests.get", return_value=bad):

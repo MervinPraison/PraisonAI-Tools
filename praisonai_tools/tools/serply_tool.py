@@ -29,6 +29,15 @@ SERPLY_BASE_URL = "https://api.serply.io/v1"
 _MAX_PAGE_SIZE = 10
 
 
+def _page_size(max_results: Any) -> int:
+    """Clamp a requested result count to the 1..10 range the API serves."""
+    try:
+        n = int(max_results)
+    except (TypeError, ValueError):
+        return _MAX_PAGE_SIZE
+    return max(1, min(n, _MAX_PAGE_SIZE))
+
+
 class SerplyTool(BaseTool):
     """Tool for Google web, news, and scholar search using Serply."""
 
@@ -71,7 +80,7 @@ class SerplyTool(BaseTool):
             response = requests.get(
                 f"{SERPLY_BASE_URL}/{endpoint}/",
                 headers={"X-Api-Key": self.api_key, "Accept": "application/json"},
-                params={"q": query, "num": min(num, _MAX_PAGE_SIZE)},
+                params={"q": query, "num": num},
                 timeout=10,
             )
             if not response.ok:
@@ -85,6 +94,7 @@ class SerplyTool(BaseTool):
         if not query:
             return [{"error": "query is required"}]
 
+        max_results = _page_size(max_results)
         result = self._request("search", query, max_results)
         if "error" in result:
             return [result]
@@ -104,6 +114,7 @@ class SerplyTool(BaseTool):
         if not query:
             return [{"error": "query is required"}]
 
+        max_results = _page_size(max_results)
         result = self._request("news", query, max_results)
         if "error" in result:
             return [result]
@@ -125,6 +136,7 @@ class SerplyTool(BaseTool):
         if not query:
             return [{"error": "query is required"}]
 
+        max_results = _page_size(max_results)
         result = self._request("scholar", query, max_results)
         if "error" in result:
             return [result]
