@@ -8,6 +8,7 @@ from praisonai_tools import (
     ContextBrandToolkit,
     ContextParse,
     ContextSearch,
+    ContextScrape,
     ContextToolkit,
     ContextWebToolkit,
 )
@@ -142,18 +143,41 @@ def test_path_query_header_and_options_mapping():
     assert request["json"]["input"]["urls"] == ["https://example.com"]
 
 
-def test_parse_accepts_path_or_base64(tmp_path):
+def test_parse_accepts_base64_without_local_file_access():
     client = _Client({"markdown": "hello"})
-    source = tmp_path / "hello.txt"
-    source.write_text("hello")
     tool = ContextParse(api_key="test", client=client)
 
+    assert "file_path" not in tool.parameters["properties"]
+    assert tool.run(file_base64=base64.b64encode(b"world").decode()) == {"markdown": "hello"}
+    assert client.calls[0]["content"] == b"world"
+
+
+def test_parse_local_files_require_a_bounded_upload_directory(tmp_path):
+    upload_dir = tmp_path / "uploads"
+    upload_dir.mkdir()
+    source = upload_dir / "hello.txt"
+    source.write_text("hello")
+    outside = tmp_path / "secret.txt"
+    outside.write_text("secret")
+    client = _Client({"markdown": "hello"})
+
+    with pytest.raises(ValueError, match="upload_dir"):
+        ContextParse(api_key="test", client=client, allow_local_files=True)
+    with pytest.raises(ValueError, match="Local file access is disabled"):
+        ContextParse(api_key="test", client=client).run(file_path=str(source))
+
+    tool = ContextParse(
+        api_key="test",
+        client=client,
+        allow_local_files=True,
+        upload_dir=upload_dir,
+    )
+    assert "file_path" in tool.parameters["properties"]
     assert tool.run(file_path=str(source), extension="txt") == {"markdown": "hello"}
     assert client.calls[0]["content"] == b"hello"
     assert dict(client.calls[0]["params"])["extension"] == "txt"
-
-    tool.run(file_base64=base64.b64encode(b"world").decode())
-    assert client.calls[1]["content"] == b"world"
+    with pytest.raises(ValueError, match="configured upload directory"):
+        tool.run(file_path=str(outside))
 
 
 def test_browser_actions_are_hidden_by_default():
@@ -169,6 +193,9 @@ def test_browser_actions_are_hidden_by_default():
     assert "actions" in enabled_scrape.parameters["properties"]
     with pytest.raises(ValueError, match="Browser actions are disabled"):
         safe_scrape.run(url="https://example.com", options={"actions": [{"type": "click"}]})
+
+    assert "actions" not in ContextScrape(api_key="test").parameters["properties"]
+    assert "actions" not in ContextTool("web-scrape-markdown", api_key="test").parameters["properties"]
 
 
 def test_configuration_and_input_errors_are_clear(monkeypatch):
