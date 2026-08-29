@@ -11,7 +11,6 @@ import binascii
 import copy
 import os
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote, urlparse
 
@@ -325,8 +324,6 @@ class ContextTool(BaseTool):
         client: Any = None,
         allow_insecure_http: bool = False,
         allow_browser_actions: bool = False,
-        allow_local_files: bool = False,
-        upload_dir: Optional[str | Path] = None,
     ):
         if endpoint not in _ENDPOINTS:
             raise ValueError(f"Unknown Context.dev endpoint: {endpoint}")
@@ -336,11 +333,6 @@ class ContextTool(BaseTool):
         self.timeout = timeout
         self.client = client
         self.allow_browser_actions = allow_browser_actions
-        self.allow_local_files = allow_local_files
-        self.upload_dir = Path(upload_dir).expanduser().resolve() if upload_dir else None
-        if endpoint == "parse-document" and allow_local_files:
-            if self.upload_dir is None or not self.upload_dir.is_dir():
-                raise ValueError("upload_dir must be an existing directory when local file access is enabled.")
         spec = _ENDPOINTS[endpoint]
         self.name = f"context_{endpoint.replace('-', '_')}"
         self.description = spec.description
@@ -350,8 +342,6 @@ class ContextTool(BaseTool):
             "openWorldHint": spec.open_world,
         }
         properties = copy.deepcopy(spec.properties or {})
-        if endpoint == "parse-document" and allow_local_files:
-            properties["file_path"] = _string("Path to a file inside the configured upload directory.")
         if endpoint in ACTION_ENDPOINTS and not allow_browser_actions:
             properties.pop("actions", None)
             self.annotations = {**self.annotations, "readOnlyHint": True, "destructiveHint": False}
@@ -382,25 +372,14 @@ class ContextTool(BaseTool):
     def _binary_body(self, arguments: Dict[str, Any]) -> bytes:
         file_path = arguments.pop("file_path", None)
         encoded = arguments.pop("file_base64", None)
-        if file_path and encoded:
-            raise ValueError("Provide either file_path or file_base64, not both.")
         if file_path:
-            if not self.allow_local_files or self.upload_dir is None:
-                raise ValueError("Local file access is disabled. Use file_base64 or explicitly configure an upload directory.")
-            try:
-                path = Path(file_path).expanduser().resolve(strict=True)
-                path.relative_to(self.upload_dir)
-            except (FileNotFoundError, ValueError) as exc:
-                raise ValueError("file_path must resolve to a file inside the configured upload directory.") from exc
-            if not path.is_file():
-                raise ValueError(f"File not found: {path}")
-            return path.read_bytes()
+            raise ValueError("Local file paths are not supported. Use file_base64.")
         if encoded:
             try:
                 return base64.b64decode(encoded, validate=True)
             except (binascii.Error, ValueError) as exc:
                 raise ValueError("file_base64 must contain valid base64-encoded bytes.") from exc
-        raise ValueError("Provide file_path or file_base64.")
+        raise ValueError("Provide file_base64.")
 
     def run(self, **kwargs: Any) -> Any:
         spec = _ENDPOINTS[self.endpoint]
@@ -519,8 +498,6 @@ class _ContextToolkitBase:
         allow_insecure_http: bool = False,
         include_write_tools: bool = False,
         allow_browser_actions: bool = False,
-        allow_local_files: bool = False,
-        upload_dir: Optional[str | Path] = None,
     ):
         self.api_key = api_key
         self.api_base = api_base
@@ -529,8 +506,6 @@ class _ContextToolkitBase:
         self.allow_insecure_http = allow_insecure_http
         self.include_write_tools = include_write_tools
         self.allow_browser_actions = allow_browser_actions
-        self.allow_local_files = allow_local_files
-        self.upload_dir = upload_dir
 
     def get_tools(self) -> List[ContextTool]:
         endpoint_names = [
@@ -546,8 +521,6 @@ class _ContextToolkitBase:
                 client=self.client,
                 allow_insecure_http=self.allow_insecure_http,
                 allow_browser_actions=self.allow_browser_actions,
-                allow_local_files=self.allow_local_files,
-                upload_dir=self.upload_dir,
             )
             for name in endpoint_names
         ]

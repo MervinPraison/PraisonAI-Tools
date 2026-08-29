@@ -152,32 +152,9 @@ def test_parse_accepts_base64_without_local_file_access():
     assert client.calls[0]["content"] == b"world"
 
 
-def test_parse_local_files_require_a_bounded_upload_directory(tmp_path):
-    upload_dir = tmp_path / "uploads"
-    upload_dir.mkdir()
-    source = upload_dir / "hello.txt"
-    source.write_text("hello")
-    outside = tmp_path / "secret.txt"
-    outside.write_text("secret")
-    client = _Client({"markdown": "hello"})
-
-    with pytest.raises(ValueError, match="upload_dir"):
-        ContextParse(api_key="test", client=client, allow_local_files=True)
-    with pytest.raises(ValueError, match="Local file access is disabled"):
-        ContextParse(api_key="test", client=client).run(file_path=str(source))
-
-    tool = ContextParse(
-        api_key="test",
-        client=client,
-        allow_local_files=True,
-        upload_dir=upload_dir,
-    )
-    assert "file_path" in tool.parameters["properties"]
-    assert tool.run(file_path=str(source), extension="txt") == {"markdown": "hello"}
-    assert client.calls[0]["content"] == b"hello"
-    assert dict(client.calls[0]["params"])["extension"] == "txt"
-    with pytest.raises(ValueError, match="configured upload directory"):
-        tool.run(file_path=str(outside))
+def test_parse_rejects_local_file_paths():
+    with pytest.raises(ValueError, match="Local file paths are not supported"):
+        ContextParse(api_key="test", client=_Client()).run(file_path="secret.txt")
 
 
 def test_browser_actions_are_hidden_by_default():
