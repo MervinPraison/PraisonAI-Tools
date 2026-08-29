@@ -13,7 +13,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 from praisonai_tools.tools.base import BaseTool
 
@@ -323,6 +323,7 @@ class ContextTool(BaseTool):
         api_base: Optional[str] = None,
         timeout: float = DEFAULT_TIMEOUT_SECONDS,
         client: Any = None,
+        allow_insecure_http: bool = False,
         allow_browser_actions: bool = False,
         allow_local_files: bool = False,
         upload_dir: Optional[str | Path] = None,
@@ -331,7 +332,7 @@ class ContextTool(BaseTool):
             raise ValueError(f"Unknown Context.dev endpoint: {endpoint}")
         self.endpoint = endpoint
         self.api_key = api_key
-        self.api_base = (api_base or os.getenv("CONTEXT_API_BASE") or DEFAULT_API_BASE).rstrip("/")
+        self.api_base = self._validated_api_base(api_base, allow_insecure_http)
         self.timeout = timeout
         self.client = client
         self.allow_browser_actions = allow_browser_actions
@@ -369,6 +370,15 @@ class ContextTool(BaseTool):
             raise ValueError("Context.dev API key missing. Pass api_key or set CONTEXT_DEV_API_KEY.")
         return value.strip()
 
+    def _validated_api_base(self, api_base: Optional[str], allow_insecure_http: bool) -> str:
+        value = (api_base or os.getenv("CONTEXT_API_BASE") or DEFAULT_API_BASE).rstrip("/")
+        parsed = urlparse(value)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            raise ValueError("Context.dev API base must be a valid HTTP(S) URL.")
+        if parsed.scheme == "http" and not allow_insecure_http:
+            raise ValueError("Context.dev API base must use HTTPS unless allow_insecure_http is enabled.")
+        return value
+
     def _binary_body(self, arguments: Dict[str, Any]) -> bytes:
         file_path = arguments.pop("file_path", None)
         encoded = arguments.pop("file_base64", None)
@@ -403,7 +413,11 @@ class ContextTool(BaseTool):
         overlap = set(arguments).intersection(options)
         if overlap:
             raise ValueError(f"Duplicate values in options: {', '.join(sorted(overlap))}")
-        if self.endpoint in ACTION_ENDPOINTS and not self.allow_browser_actions and "actions" in options:
+        if (
+            self.endpoint in ACTION_ENDPOINTS
+            and not self.allow_browser_actions
+            and ("actions" in arguments or "actions" in options)
+        ):
             raise ValueError("Browser actions are disabled for this tool instance.")
         arguments = {**arguments, **options}
         missing = [field for field in spec.required if arguments.get(field) is None]
@@ -502,6 +516,7 @@ class _ContextToolkitBase:
         api_base: Optional[str] = None,
         timeout: float = DEFAULT_TIMEOUT_SECONDS,
         client: Any = None,
+        allow_insecure_http: bool = False,
         include_write_tools: bool = False,
         allow_browser_actions: bool = False,
         allow_local_files: bool = False,
@@ -511,6 +526,7 @@ class _ContextToolkitBase:
         self.api_base = api_base
         self.timeout = timeout
         self.client = client
+        self.allow_insecure_http = allow_insecure_http
         self.include_write_tools = include_write_tools
         self.allow_browser_actions = allow_browser_actions
         self.allow_local_files = allow_local_files
@@ -528,6 +544,7 @@ class _ContextToolkitBase:
                 api_base=self.api_base,
                 timeout=self.timeout,
                 client=self.client,
+                allow_insecure_http=self.allow_insecure_http,
                 allow_browser_actions=self.allow_browser_actions,
                 allow_local_files=self.allow_local_files,
                 upload_dir=self.upload_dir,

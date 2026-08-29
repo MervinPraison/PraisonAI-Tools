@@ -193,9 +193,19 @@ def test_browser_actions_are_hidden_by_default():
     assert "actions" in enabled_scrape.parameters["properties"]
     with pytest.raises(ValueError, match="Browser actions are disabled"):
         safe_scrape.run(url="https://example.com", options={"actions": [{"type": "click"}]})
+    with pytest.raises(ValueError, match="Browser actions are disabled"):
+        safe_scrape.run(url="https://example.com", actions=[{"type": "click"}])
 
     assert "actions" not in ContextScrape(api_key="test").parameters["properties"]
     assert "actions" not in ContextTool("web-scrape-markdown", api_key="test").parameters["properties"]
+
+    client = _Client()
+    ContextScrape(
+        api_key="test",
+        client=client,
+        allow_browser_actions=True,
+    ).run(url="https://example.com", actions=[{"type": "click"}])
+    assert ("actions[type]", "click") in client.calls[0]["params"]
 
 
 def test_brand_retrieve_preserves_the_top_level_request_body():
@@ -220,6 +230,26 @@ def test_configuration_and_input_errors_are_clear(monkeypatch):
         ContextSearch(api_key="test", client=_Client()).run()
     with pytest.raises(ValueError, match="Duplicate values"):
         ContextSearch(api_key="test", client=_Client()).run(query="a", options={"query": "b"})
+
+
+def test_api_base_requires_https_by_default():
+    with pytest.raises(ValueError, match="must use HTTPS"):
+        ContextSearch(
+            api_key="test",
+            api_base="http://127.0.0.1:8080/v1",
+            client=_Client(),
+        )
+
+    client = _Client()
+    tool = ContextSearch(
+        api_key="test",
+        api_base="http://127.0.0.1:8080/v1",
+        client=client,
+        allow_insecure_http=True,
+    )
+    tool.run(query="test")
+
+    assert client.calls[0]["url"] == "http://127.0.0.1:8080/v1/web/search"
 
 
 def test_catalog_is_json_serializable():
