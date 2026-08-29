@@ -198,6 +198,19 @@ def test_browser_actions_are_hidden_by_default():
     assert "actions" not in ContextTool("web-scrape-markdown", api_key="test").parameters["properties"]
 
 
+def test_brand_retrieve_preserves_the_top_level_request_body():
+    client = _Client()
+    body = {"type": "by_domain", "domain": "context.dev"}
+    tool = ContextTool("brand-retrieve-unified", api_key="test", client=client)
+
+    tool.run(body=body)
+
+    assert client.calls[0]["method"] == "POST"
+    assert client.calls[0]["json"] == body
+    with pytest.raises(ValueError, match="options are not supported"):
+        tool.run(body=body, options={"timeoutMS": 1000})
+
+
 def test_configuration_and_input_errors_are_clear(monkeypatch):
     monkeypatch.delenv("CONTEXT_DEV_API_KEY", raising=False)
     monkeypatch.delenv("CONTEXT_API_KEY", raising=False)

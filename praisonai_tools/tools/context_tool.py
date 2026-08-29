@@ -194,7 +194,7 @@ _ENDPOINTS: Dict[str, _Endpoint] = {
     ),
     "brand-retrieve-unified": _Endpoint(
         "POST", "/brand/retrieve", "Retrieve logos, colors, fonts, descriptions, socials, links, industry, and other brand intelligence.", "brand",
-        ("body",), {"body": _object("Exactly one brand lookup type and its value."), "options": COMMON_OPTIONS}, open_world=True,
+        ("body",), {"body": _object("Exactly one brand lookup type and its value.")}, open_world=True,
     ),
     "web-styleguide": _Endpoint(
         "GET", "/web/styleguide", "Extract a website's visual style guide, including colors and design tokens.", "brand",
@@ -398,6 +398,8 @@ class ContextTool(BaseTool):
         options = arguments.pop("options", {})
         if options and not isinstance(options, dict):
             raise ValueError("options must be an object.")
+        if options and "options" not in (spec.properties or {}):
+            raise ValueError(f"options are not supported by {self.endpoint}.")
         overlap = set(arguments).intersection(options)
         if overlap:
             raise ValueError(f"Duplicate values in options: {', '.join(sorted(overlap))}")
