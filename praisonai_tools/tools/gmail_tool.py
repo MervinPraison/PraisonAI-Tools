@@ -32,15 +32,20 @@ class GmailTool(BaseTool):
         self,
         credentials_file: Optional[str] = None,
         token_file: Optional[str] = None,
+        auth: Optional[Any] = None,
     ):
         self.credentials_file = credentials_file or os.getenv("GMAIL_CREDENTIALS_FILE", "credentials.json")
         self.token_file = token_file or os.getenv("GMAIL_TOKEN_FILE", "token.json")
+        self.auth = auth
         self._service = None
         super().__init__()
     
     @property
     def service(self):
         if self._service is None:
+            if self.auth is not None:
+                self._service = self.auth.build_service("gmail", "v1", ["gmail"])
+                return self._service
             try:
                 from google.oauth2.credentials import Credentials
                 from google_auth_oauthlib.flow import InstalledAppFlow

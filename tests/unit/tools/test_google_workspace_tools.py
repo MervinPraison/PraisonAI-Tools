@@ -232,6 +232,66 @@ class TestGoogleSlidesTool:
         assert result["slide_id"].startswith("slide_")
 
 
+# ── Existing tools accept shared auth (backward compatible) ─────────
+
+
+class TestExistingToolsAcceptAuth:
+    """The four pre-existing Google tools opt into the shared auth via auth=."""
+
+    def _assert_uses_shared_auth(self, tool, api, version, service):
+        auth = MagicMock()
+        auth.build_service.return_value = "SVC"
+        tool.auth = auth
+        tool._service = None
+        assert tool.service == "SVC"
+        auth.build_service.assert_called_once_with(api, version, [service])
+
+    def test_gmail_uses_shared_auth(self):
+        from praisonai_tools.tools.gmail_tool import GmailTool
+
+        auth = MagicMock()
+        auth.build_service.return_value = "SVC"
+        tool = GmailTool(auth=auth)
+        assert tool.service == "SVC"
+        auth.build_service.assert_called_once_with("gmail", "v1", ["gmail"])
+
+    def test_drive_uses_shared_auth(self):
+        from praisonai_tools.tools.google_drive_tool import GoogleDriveTool
+
+        auth = MagicMock()
+        auth.build_service.return_value = "SVC"
+        tool = GoogleDriveTool(auth=auth)
+        assert tool.service == "SVC"
+        auth.build_service.assert_called_once_with("drive", "v3", ["drive"])
+
+    def test_calendar_uses_shared_auth(self):
+        from praisonai_tools.tools.google_calendar_tool import GoogleCalendarTool
+
+        auth = MagicMock()
+        auth.build_service.return_value = "SVC"
+        tool = GoogleCalendarTool(auth=auth)
+        assert tool.service == "SVC"
+        auth.build_service.assert_called_once_with("calendar", "v3", ["calendar"])
+
+    def test_sheets_uses_shared_auth(self):
+        from praisonai_tools.tools.google_sheets_tool import GoogleSheetsTool
+
+        auth = MagicMock()
+        auth.build_service.return_value = "SVC"
+        tool = GoogleSheetsTool(auth=auth)
+        assert tool.service == "SVC"
+        auth.build_service.assert_called_once_with("sheets", "v4", ["sheets"])
+
+    def test_legacy_construction_still_works(self):
+        from praisonai_tools.tools.gmail_tool import GmailTool
+        from praisonai_tools.tools.google_drive_tool import GoogleDriveTool
+        from praisonai_tools.tools.google_calendar_tool import GoogleCalendarTool
+        from praisonai_tools.tools.google_sheets_tool import GoogleSheetsTool
+
+        for cls in (GmailTool, GoogleDriveTool, GoogleCalendarTool, GoogleSheetsTool):
+            assert cls().auth is None
+
+
 # ── Discovery ───────────────────────────────────────────────────────
 
 
