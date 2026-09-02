@@ -627,6 +627,26 @@ github.create_issue(repo="owner/repo", title="Bug", body="Description")
 prs = github.list_pull_requests(repo="owner/repo")
 ```
 
+Jira (sprint planning, epics, worklogs) — install extras with `pip install "praisonai-tools[jira]"`:
+
+```python
+from praisonai_tools import JiraTool
+
+jira = JiraTool()  # Uses JIRA_URL, JIRA_EMAIL, JIRA_API_TOKEN env vars
+
+# Sprint planning
+sprint = jira.get_active_sprint(board_id=5)
+jira.move_issues_to_sprint(sprint_id=sprint["id"], issue_keys=["PROJ-1", "PROJ-2"])
+
+# Epic tracking
+epics = jira.list_epics(board_id=5)
+issues = jira.get_epic_issues(epic_key="PROJ-10")
+
+# Worklog + paginated search
+jira.log_work(issue_key="PROJ-1", time_spent="2h 30m", comment="Investigation")
+all_open = jira.search_all(jql="project = PROJ AND status = Open")  # auto-paginated
+```
+
 ### AI/Media Tools
 
 ```python
