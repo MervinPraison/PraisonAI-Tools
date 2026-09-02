@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   sync:
-    uses: MervinPraison/github-automation-template/.github/workflows/pipeline-status-sync-callable.yml@v1.1.1
+    uses: MervinPraison/github-automation-template/.github/workflows/pipeline-status-sync-callable.yml@v1.1.2
     secrets: inherit
     with:
-      hub_ref: v1.1.1
+      hub_ref: v1.1.2

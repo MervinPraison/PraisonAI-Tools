@@ -1,7 +1,7 @@
 name: Claude Assistant
 
 # Local override: tools-specific Claude prompts (hub callable is SDK-oriented).
-# See automation.meta.json — other workflows use github-automation-template hub v1.1.1.
+# See automation.meta.json — other workflows use github-automation-template hub v1.1.2.
 
 on:
   issue_comment:

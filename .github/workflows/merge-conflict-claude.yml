@@ -25,9 +25,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: MervinPraison/github-automation-template/.github/actions/hub-setup@v1.1.1
+      - uses: MervinPraison/github-automation-template/.github/actions/hub-setup@v1.1.2
         with:
-          hub_ref: v1.1.1
+          hub_ref: v1.1.2
       - name: Detect conflicting PRs and trigger Claude
         uses: actions/github-script@v7
         with:

@@ -3,7 +3,7 @@
   "stack": "claude",
   "profile": "tools",
   "mode": "hub",
-  "hubRef": "v1.1.1",
-  "templateVersion": "1.1.1",
+  "hubRef": "v1.1.2",
+  "templateVersion": "1.1.2",
   "installedAt": "2026-09-02T12:05:12Z"
 }
