@@ -88,6 +88,10 @@ meeting = [
 stripe = [
     "requests>=2.28.0",
 ]
+jira = [
+    "jira>=3.5.0",
+    "requests>=2.31.0",
+]
 
 [project.urls]
 Homepage = "https://docs.praison.ai"
