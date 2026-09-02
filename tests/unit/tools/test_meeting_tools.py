@@ -290,6 +290,67 @@ class TestIndexAndSearch:
     def test_search_requires_query(self):
         assert "error" in mt.search_meetings.__wrapped__("")[0]
 
+    def test_segments_map_to_chunk_timestamps(self):
+        coll = _FakeCollection()
+        mid = mt.save_meeting.__wrapped__(title="Timed")["meeting_id"]
+        segments = [
+            {"start": 0.0, "end": 5.0, "text": "apple " * 200},
+            {"start": 5.0, "end": 12.0, "text": "banana " * 200},
+        ]
+        transcript = " ".join(s["text"].strip() for s in segments)
+        with patch.object(mt, "_get_vector_collection", return_value=coll), patch.object(
+            mt, "_embed", side_effect=self._embed_map()
+        ):
+            mt.index_meeting.__wrapped__(mid, transcript=transcript, segments=segments)
+            results = mt.search_meetings.__wrapped__("banana", limit=1)
+
+        assert results[0]["meeting_id"] == mid
+        # The best match ("banana") must carry a non-zero timestamp derived
+        # from the second segment, not the recording start.
+        assert results[0]["timestamp_start"] > 0.0
+        assert results[0]["timestamp_end"] >= results[0]["timestamp_start"]
+
+    def test_failed_reindex_preserves_existing_chunks(self):
+        coll = _FakeCollection()
+        mid = mt.save_meeting.__wrapped__(title="M")["meeting_id"]
+        with patch.object(mt, "_get_vector_collection", return_value=coll), patch.object(
+            mt, "_embed", side_effect=self._embed_map()
+        ):
+            mt.index_meeting.__wrapped__(mid, transcript="apple " * 600)
+        assert len(coll.store) > 0
+        original = dict(coll.store)
+
+        def boom(_texts):
+            raise RuntimeError("embedding backend down")
+
+        with patch.object(mt, "_get_vector_collection", return_value=coll), patch.object(
+            mt, "_embed", side_effect=boom
+        ):
+            result = mt.index_meeting.__wrapped__(mid, transcript="apple " * 600)
+
+        assert "error" in result
+        # Previous chunks must survive a failed re-index.
+        assert coll.store == original
+
+    def test_search_score_bounded_for_large_distance(self):
+        coll = _FakeCollection()
+        mid = mt.save_meeting.__wrapped__(title="Far")["meeting_id"]
+
+        def far_embed(texts):
+            # Query and doc are far apart -> squared-L2 distance > 1.
+            return [[10.0, 10.0] for _ in texts]
+
+        with patch.object(mt, "_get_vector_collection", return_value=coll), patch.object(
+            mt, "_embed", side_effect=lambda t: [[0.0, 0.0] for _ in t]
+        ):
+            mt.index_meeting.__wrapped__(mid, transcript="apple pie")
+        with patch.object(mt, "_get_vector_collection", return_value=coll), patch.object(
+            mt, "_embed", side_effect=far_embed
+        ):
+            results = mt.search_meetings.__wrapped__("pie", limit=1)
+
+        assert 0.0 < results[0]["score"] <= 1.0
+
 
 # ── Lazy import hygiene ─────────────────────────────────────────────
 
@@ -321,4 +382,6 @@ def test_all_tools_are_registerable():
         "index_meeting",
         "search_meetings",
     ):
-        assert getattr(praisonai_tools, name) is not None
+        exported = getattr(praisonai_tools, name, None)
+        assert exported is not None, f"{name} is not exported"
+        assert exported is getattr(mt, name), f"{name} export is shadowed"

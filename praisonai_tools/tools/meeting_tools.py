@@ -44,6 +44,7 @@ import logging
 import os
 import sqlite3
 import uuid
+from contextlib import closing
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -162,26 +163,74 @@ def _embed(texts: List[str]) -> List[List[float]]:
 # ── Chunking helpers ────────────────────────────────────────────────
 
 
-def _chunk_text(text: str, size_tokens: int, overlap_tokens: int) -> List[str]:
-    """Split text into overlapping chunks by approximate token size.
+def _chunk_spans(text: str, size_tokens: int, overlap_tokens: int) -> List[tuple]:
+    """Split text into overlapping windows, returning (chunk, char_start, char_end).
 
     Uses a deterministic character-window approximation so no tokenizer
-    dependency is needed. Returns a list of non-empty chunk strings.
+    dependency is needed. Character offsets refer to the pre-strip window and
+    let callers map each chunk back to source positions (e.g. segment times).
     """
     if not text:
         return []
     size = max(1, size_tokens * _CHARS_PER_TOKEN)
     overlap = max(0, min(overlap_tokens * _CHARS_PER_TOKEN, size - 1))
     step = size - overlap
-    chunks: List[str] = []
+    spans: List[tuple] = []
     start = 0
     length = len(text)
     while start < length:
-        chunk = text[start : start + size].strip()
+        end = min(start + size, length)
+        chunk = text[start:end].strip()
         if chunk:
-            chunks.append(chunk)
+            spans.append((chunk, start, end))
         start += step
-    return chunks
+    return spans
+
+
+def _chunk_text(text: str, size_tokens: int, overlap_tokens: int) -> List[str]:
+    """Split text into overlapping chunks by approximate token size.
+
+    Returns a list of non-empty chunk strings (see :func:`_chunk_spans`).
+    """
+    return [chunk for chunk, _s, _e in _chunk_spans(text, size_tokens, overlap_tokens)]
+
+
+def _segment_char_offsets(segments: List[Dict[str, Any]]) -> List[tuple]:
+    """Return (char_start, char_end, seg_start, seg_end) for concatenated segments.
+
+    The transcript indexed here is assumed to be the segment texts joined by a
+    single space, matching how ``transcribe_file`` emits ``segments``.
+    """
+    offsets: List[tuple] = []
+    pos = 0
+    for i, seg in enumerate(segments):
+        seg_text = str(seg.get("text", "")).strip()
+        if i > 0:
+            pos += 1  # the joining space
+        char_start = pos
+        pos += len(seg_text)
+        offsets.append(
+            (char_start, pos, float(seg.get("start", 0.0)), float(seg.get("end", 0.0)))
+        )
+    return offsets
+
+
+def _timestamps_for_span(
+    char_start: int, char_end: int, seg_offsets: List[tuple]
+) -> tuple:
+    """Map a chunk's char span to the (start, end) time of the segments it covers."""
+    if not seg_offsets:
+        return 0.0, 0.0
+    start_time: Optional[float] = None
+    end_time: Optional[float] = None
+    for cs, ce, s_start, s_end in seg_offsets:
+        if ce > char_start and cs < char_end:  # overlap
+            if start_time is None:
+                start_time = s_start
+            end_time = s_end
+    if start_time is None:
+        return 0.0, 0.0
+    return start_time, end_time if end_time is not None else start_time
 
 
 # ── LLM JSON helpers ────────────────────────────────────────────────
@@ -309,8 +358,7 @@ def save_meeting(
 
     created_at = datetime.now(timezone.utc).isoformat()
     try:
-        conn = _connect()
-        with conn:
+        with closing(_connect()) as conn, conn:
             conn.execute(
                 "INSERT INTO meetings (meeting_id, title, source, metadata, created_at) "
                 "VALUES (?, ?, ?, ?, ?)",
@@ -322,7 +370,6 @@ def save_meeting(
                     created_at,
                 ),
             )
-        conn.close()
     except Exception as exc:  # noqa: BLE001
         logger.error("save_meeting error: %s", exc)
         return {"error": str(exc)}
@@ -342,11 +389,10 @@ def get_meeting(meeting_id: str) -> Dict[str, Any]:
     if not meeting_id:
         return {"error": "meeting_id is required"}
     try:
-        conn = _connect()
-        row = conn.execute(
-            "SELECT * FROM meetings WHERE meeting_id = ?", (meeting_id,)
-        ).fetchone()
-        conn.close()
+        with closing(_connect()) as conn:
+            row = conn.execute(
+                "SELECT * FROM meetings WHERE meeting_id = ?", (meeting_id,)
+            ).fetchone()
     except Exception as exc:  # noqa: BLE001
         logger.error("get_meeting error: %s", exc)
         return {"error": str(exc)}
@@ -370,13 +416,12 @@ def list_meetings(limit: int = 20, offset: int = 0) -> List[Dict[str, Any]]:
     try:
         limit = max(0, int(limit))
         offset = max(0, int(offset))
-        conn = _connect()
-        rows = conn.execute(
-            "SELECT * FROM meetings ORDER BY created_at DESC, meeting_id DESC "
-            "LIMIT ? OFFSET ?",
-            (limit, offset),
-        ).fetchall()
-        conn.close()
+        with closing(_connect()) as conn:
+            rows = conn.execute(
+                "SELECT * FROM meetings ORDER BY created_at DESC, meeting_id DESC "
+                "LIMIT ? OFFSET ?",
+                (limit, offset),
+            ).fetchall()
     except Exception as exc:  # noqa: BLE001
         logger.error("list_meetings error: %s", exc)
         return [{"error": str(exc)}]
@@ -512,16 +557,25 @@ def extract_action_items(transcript: str) -> Dict[str, Any]:
 
 
 @tool
-def index_meeting(meeting_id: str, transcript: Optional[str] = None) -> Dict[str, Any]:
+def index_meeting(
+    meeting_id: str,
+    transcript: Optional[str] = None,
+    segments: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
     """Chunk, embed and upsert a meeting transcript into the vector store.
 
-    Idempotent: any existing chunks for ``meeting_id`` are deleted first, so
-    re-indexing after an update never duplicates chunks.
+    Idempotent: existing chunks for ``meeting_id`` are replaced only *after* the
+    new embeddings are computed, so a failed re-index never leaves the meeting
+    unsearchable.
 
     Args:
         meeting_id: The meeting identifier.
         transcript: Optional transcript text. If omitted, the transcript is read
             from the stored meeting metadata (``metadata['transcript']``).
+        segments: Optional ``transcribe_file`` segments (``start``/``end``/``text``).
+            When provided, each indexed chunk is tagged with the real
+            ``timestamp_start``/``timestamp_end`` of the segments it covers.
+            Falls back to stored ``metadata['segments']`` when omitted.
 
     Returns:
         Dict ``{"chunks_indexed": N}`` or ``{"error": "..."}``.
@@ -535,32 +589,44 @@ def index_meeting(meeting_id: str, transcript: Optional[str] = None) -> Dict[str
 
     text = transcript
     title = meeting.get("title", "")
+    meta = meeting.get("metadata") or {}
     if not text:
-        text = (meeting.get("metadata") or {}).get("transcript")
+        text = meta.get("transcript")
     if not text or not str(text).strip():
         return {"error": "No transcript available to index"}
 
+    if segments is None:
+        segments = meta.get("segments")
+    seg_offsets = _segment_char_offsets(segments) if segments else []
+
     try:
         collection = _get_vector_collection()
-        # Delete existing chunks for this meeting so re-index is idempotent.
-        collection.delete(where={"meeting_id": meeting_id})
 
-        chunks = _chunk_text(text, _CHUNK_SIZE_TOKENS, _CHUNK_OVERLAP_TOKENS)
-        if not chunks:
+        spans = _chunk_spans(text, _CHUNK_SIZE_TOKENS, _CHUNK_OVERLAP_TOKENS)
+        if not spans:
             return {"chunks_indexed": 0}
 
+        chunks = [c for c, _s, _e in spans]
+        # Embed first; only replace existing chunks once embedding succeeds so a
+        # failure never destroys the previously searchable version.
         embeddings = _embed(chunks)
+
         ids = [f"{meeting_id}:{i}" for i in range(len(chunks))]
-        metadatas = [
-            {
-                "chunk_index": i,
-                "meeting_id": meeting_id,
-                "timestamp_end": 0.0,
-                "timestamp_start": 0.0,
-                "title": title,
-            }
-            for i in range(len(chunks))
-        ]
+        metadatas = []
+        for i, (_chunk, cs, ce) in enumerate(spans):
+            ts_start, ts_end = _timestamps_for_span(cs, ce, seg_offsets)
+            metadatas.append(
+                {
+                    "chunk_index": i,
+                    "meeting_id": meeting_id,
+                    "timestamp_end": ts_end,
+                    "timestamp_start": ts_start,
+                    "title": title,
+                }
+            )
+
+        # Delete existing chunks for this meeting so re-index is idempotent.
+        collection.delete(where={"meeting_id": meeting_id})
         collection.add(
             ids=ids,
             documents=chunks,
@@ -588,8 +654,9 @@ def search_meetings(query: str, limit: int = 5) -> List[Dict[str, Any]]:
         limit: Maximum number of results to return (default 5).
 
     Returns:
-        A list of ``{meeting_id, title, snippet, score, timestamp_start}`` dicts
-        ranked by relevance (best first), or ``[{"error": "..."}]`` on failure.
+        A list of ``{meeting_id, title, snippet, score, timestamp_start,
+        timestamp_end}`` dicts ranked by relevance (best first), or
+        ``[{"error": "..."}]`` on failure.
     """
     if not query or not query.strip():
         return [{"error": "query is required"}]
@@ -614,13 +681,18 @@ def search_meetings(query: str, limit: int = 5) -> List[Dict[str, Any]]:
     for i, doc in enumerate(documents):
         meta = metadatas[i] if i < len(metadatas) else {}
         distance = distances[i] if i < len(distances) else None
-        score = round(1.0 - distance, 6) if distance is not None else None
+        # Chroma's default space is squared-L2 (unbounded above). Map to a
+        # bounded, monotonically decreasing relevance score in (0, 1].
+        score = (
+            round(1.0 / (1.0 + float(distance)), 6) if distance is not None else None
+        )
         snippet = (doc or "")[:280]
         items.append(
             {
                 "meeting_id": meta.get("meeting_id"),
                 "score": score,
                 "snippet": snippet,
+                "timestamp_end": meta.get("timestamp_end", 0.0),
                 "timestamp_start": meta.get("timestamp_start", 0.0),
                 "title": meta.get("title"),
             }
