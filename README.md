@@ -675,6 +675,11 @@ chat.create_webhook_message("https://chat.googleapis.com/v1/spaces/...", "Deploy
 > Never commit `service_account.json` or the cached token — add them to
 > `.gitignore`.
 
+The existing `GmailTool`, `GoogleSheetsTool`, `GoogleDriveTool` and
+`GoogleCalendarTool` also accept the same optional `auth=` parameter so they can
+share one session; their original per-tool `credentials_*` parameters remain
+fully backward compatible.
+
 ### AI/Media Tools
 
 ```python
