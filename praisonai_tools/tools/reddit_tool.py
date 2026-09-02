@@ -17,6 +17,17 @@ Environment Variables:
     REDDIT_CLIENT_ID: Reddit API client ID
     REDDIT_CLIENT_SECRET: Reddit API client secret
     REDDIT_USER_AGENT: User agent string (optional)
+    REDDIT_USERNAME: Reddit username (required for write actions)
+    REDDIT_PASSWORD: Reddit password (required for write actions)
+    REDDIT_ALLOW_WRITE: Set to "1" to enable write actions (post/comment)
+
+Write actions (submit_post, post_comment) are disabled by default to reduce
+spam/abuse surface. They are only permitted when ``REDDIT_ALLOW_WRITE=1`` (or
+``allow_write=True``) and Reddit account credentials are configured. You are
+responsible for complying with Reddit's API terms when enabling writes.
+
+Reddit rate-limits misconfigured clients aggressively. Use a descriptive
+User-Agent referencing your app id, e.g. ``script:my-app:v1.0 (by /u/you)``.
 """
 
 import os
@@ -39,6 +50,9 @@ class RedditTool(BaseTool):
         client_id: Optional[str] = None,
         client_secret: Optional[str] = None,
         user_agent: Optional[str] = None,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        allow_write: Optional[bool] = None,
     ):
         """Initialize RedditTool.
         
@@ -46,12 +60,29 @@ class RedditTool(BaseTool):
             client_id: Reddit API client ID
             client_secret: Reddit API client secret
             user_agent: User agent string
+            username: Reddit username (required for write actions)
+            password: Reddit password (required for write actions)
+            allow_write: Enable write actions. Defaults to the
+                ``REDDIT_ALLOW_WRITE`` env var ("1"/"true" enables).
         """
         self.client_id = client_id or os.getenv("REDDIT_CLIENT_ID")
         self.client_secret = client_secret or os.getenv("REDDIT_CLIENT_SECRET")
-        self.user_agent = user_agent or os.getenv("REDDIT_USER_AGENT", "PraisonAI/1.0")
+        self.user_agent = user_agent or os.getenv("REDDIT_USER_AGENT") or self._default_user_agent()
+        self.username = username or os.getenv("REDDIT_USERNAME")
+        self.password = password or os.getenv("REDDIT_PASSWORD")
+        if allow_write is None:
+            allow_write = os.getenv("REDDIT_ALLOW_WRITE", "").lower() in ("1", "true", "yes")
+        self.allow_write = allow_write
         self._reddit = None
         super().__init__()
+    
+    def _default_user_agent(self) -> str:
+        """Build a compliant User-Agent referencing the app id.
+        
+        Reddit recommends ``<platform>:<app id>:<version> (by /u/<user>)``.
+        """
+        app_id = self.client_id or "unknown"
+        return f"script:praisonai-{app_id}:1.0 (by PraisonAI)"
     
     @property
     def reddit(self):
@@ -65,12 +96,30 @@ class RedditTool(BaseTool):
             if not self.client_id or not self.client_secret:
                 raise ValueError("REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET required")
             
-            self._reddit = praw.Reddit(
-                client_id=self.client_id,
-                client_secret=self.client_secret,
-                user_agent=self.user_agent,
-            )
+            kwargs = {
+                "client_id": self.client_id,
+                "client_secret": self.client_secret,
+                "user_agent": self.user_agent,
+            }
+            if self.username and self.password:
+                kwargs["username"] = self.username
+                kwargs["password"] = self.password
+            
+            self._reddit = praw.Reddit(**kwargs)
         return self._reddit
+    
+    def _check_write_allowed(self) -> Optional[Dict[str, Any]]:
+        """Return an error dict if write actions are not permitted, else None."""
+        if not self.allow_write:
+            return {
+                "error": "Write actions disabled. Set REDDIT_ALLOW_WRITE=1 to enable "
+                "posting/commenting.",
+            }
+        if not self.username or not self.password:
+            return {
+                "error": "REDDIT_USERNAME and REDDIT_PASSWORD required for write actions.",
+            }
+        return None
     
     def run(
         self,
@@ -98,6 +147,15 @@ class RedditTool(BaseTool):
             return self.get_comments(post_id=post_id, limit=limit)
         elif action == "subreddit_info":
             return self.get_subreddit_info(subreddit=subreddit)
+        elif action == "post_comment":
+            return self.post_comment(post_id=post_id, body=kwargs.get("body"))
+        elif action == "submit_post":
+            return self.submit_post(
+                subreddit=subreddit,
+                title=kwargs.get("title"),
+                body=kwargs.get("body"),
+                url=kwargs.get("url"),
+            )
         else:
             return {"error": f"Unknown action: {action}"}
     
@@ -282,6 +340,83 @@ class RedditTool(BaseTool):
             }
         except Exception as e:
             logger.error(f"Reddit get_subreddit_info error: {e}")
+            return {"error": str(e)}
+    
+    def post_comment(self, post_id: str, body: str) -> Dict[str, Any]:
+        """Reply with a comment to a post (write action).
+        
+        Gated behind ``REDDIT_ALLOW_WRITE=1`` and account credentials.
+        
+        Args:
+            post_id: Reddit post ID to comment on
+            body: Comment text
+            
+        Returns:
+            Result with the new comment id, or an error dict
+        """
+        denied = self._check_write_allowed()
+        if denied:
+            return denied
+        if not post_id:
+            return {"error": "post_id is required"}
+        if not body:
+            return {"error": "body is required"}
+        
+        try:
+            submission = self.reddit.submission(id=post_id)
+            comment = submission.reply(body)
+            return {
+                "success": True,
+                "id": comment.id,
+                "permalink": f"https://reddit.com{comment.permalink}",
+            }
+        except Exception as e:
+            logger.error(f"Reddit post_comment error: {e}")
+            return {"error": str(e)}
+    
+    def submit_post(
+        self,
+        subreddit: str,
+        title: str,
+        body: Optional[str] = None,
+        url: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Submit a new post to a subreddit (write action).
+        
+        Gated behind ``REDDIT_ALLOW_WRITE=1`` and account credentials.
+        
+        Args:
+            subreddit: Target subreddit name
+            title: Post title
+            body: Self-post text (mutually exclusive with url)
+            url: Link URL (mutually exclusive with body)
+            
+        Returns:
+            Result with the new post id, or an error dict
+        """
+        denied = self._check_write_allowed()
+        if denied:
+            return denied
+        if not subreddit:
+            return {"error": "subreddit is required"}
+        if not title:
+            return {"error": "title is required"}
+        if url and body:
+            return {"error": "provide either body or url, not both"}
+        
+        try:
+            sub = self.reddit.subreddit(subreddit)
+            if url:
+                submission = sub.submit(title, url=url)
+            else:
+                submission = sub.submit(title, selftext=body or "")
+            return {
+                "success": True,
+                "id": submission.id,
+                "permalink": f"https://reddit.com{submission.permalink}",
+            }
+        except Exception as e:
+            logger.error(f"Reddit submit_post error: {e}")
             return {"error": str(e)}
     
     def _format_post(self, post, include_body: bool = False) -> Dict[str, Any]:
