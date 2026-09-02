@@ -130,6 +130,7 @@ jobs:
             if (!isPR) {
               core.setOutput('is_pr', 'false');
               core.setOutput('is_fork', 'false');
+              core.setOutput('can_push_fork', 'false');
               core.setOutput('merge_state', '');
               return;
             }
@@ -163,28 +164,43 @@ jobs:
             core.setOutput('head_repo', pr.data.head.repo?.full_name || '');
             core.setOutput('merge_state', mergeState);
             const baseRepo = `${context.repo.owner}/${context.repo.repo}`;
+            const maintainerCanModify = pr.data.maintainer_can_modify === true;
             if (pr.data.head.repo && pr.data.head.repo.full_name !== baseRepo) {
               core.setOutput('is_fork', 'true');
+              core.setOutput('can_push_fork', String(maintainerCanModify));
+              core.setOutput('fork_repo', pr.data.head.repo.full_name);
               return;
             }
             core.setOutput('is_fork', 'false');
+            core.setOutput('can_push_fork', 'false');
 
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          persist-credentials: false
           fetch-depth: 0
           token: ${{ secrets.GH_TOKEN }}
-          ref: ${{ steps.check_fork.outputs.is_pr == 'true' && format('refs/pull/{0}/head', steps.check_fork.outputs.pr_number) || github.event.repository.default_branch }}
 
-      - name: Fetch PR branch
-        if: steps.check_fork.outputs.is_pr == 'true' && steps.check_fork.outputs.is_fork != 'true'
+      - name: Fetch PR branch and setup remote
+        if: steps.check_fork.outputs.is_pr == 'true'
         env:
           PR_BRANCH: ${{ steps.check_fork.outputs.pr_branch }}
           PR_NUMBER: ${{ steps.check_fork.outputs.pr_number }}
+          IS_FORK: ${{ steps.check_fork.outputs.is_fork }}
+          CAN_PUSH_FORK: ${{ steps.check_fork.outputs.can_push_fork }}
+          FORK_REPO: ${{ steps.check_fork.outputs.fork_repo }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           git fetch origin "pull/${PR_NUMBER}/head:${PR_BRANCH}"
           git checkout "${PR_BRANCH}"
           git fetch origin main
+
+          if [ "${IS_FORK}" = "true" ] && [ "${CAN_PUSH_FORK}" = "true" ]; then
+            git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${FORK_REPO}.git"
+          elif [ "${IS_FORK}" = "true" ]; then
+            # Block push: trick claude-code-action's `git fetch origin <branch>`
+            git remote set-url origin "file://$(pwd)"
+          fi
 
       - name: Run Claude Code Action
         uses: anthropics/claude-code-action@beta
@@ -199,8 +215,8 @@ jobs:
           allowed_bots: "praisonai-triage-agent[bot]"
           timeout_minutes: "30"
           direct_prompt: |
-            ${{ steps.check_fork.outputs.is_fork == 'true' && 'CRITICAL: FORK PR — comment only, do not push.\n\n' || (steps.check_fork.outputs.is_pr == 'true' && 'NOTE: Internal PR on MervinPraison/PraisonAI-Tools — you may push to this branch.\n\n' || '') }}
-            ${{ steps.check_fork.outputs.is_pr == 'true' && format('CONTEXT: PR #{0} on branch {1}. merge_state={2}.\n\n', steps.check_fork.outputs.pr_number, steps.check_fork.outputs.pr_branch, steps.check_fork.outputs.merge_state) || '' }}
+            ${{ steps.check_fork.outputs.is_fork == 'true' && steps.check_fork.outputs.can_push_fork != 'true' && 'CRITICAL: FORK PR without maintainer edits — review and comment only, do not push.\n\n' || (steps.check_fork.outputs.can_push_fork == 'true' && format('NOTE: Fork PR with maintainer edits — push to {0} branch {1}.\n\n', steps.check_fork.outputs.fork_repo, steps.check_fork.outputs.pr_branch) || (steps.check_fork.outputs.is_pr == 'true' && steps.check_fork.outputs.is_fork != 'true' && 'NOTE: Internal PR on MervinPraison/PraisonAI-Tools — you may push to this branch.\n\n' || '')) }}
+            ${{ steps.check_fork.outputs.is_pr == 'true' && format('CONTEXT: PR #{0} on branch {1}. head.repo={2}, is_fork={3}, merge_state={4}.\n\n', steps.check_fork.outputs.pr_number, steps.check_fork.outputs.pr_branch, steps.check_fork.outputs.head_repo, steps.check_fork.outputs.is_fork, steps.check_fork.outputs.merge_state) || '' }}
             You are implementing changes in MervinPraison/PraisonAI-Tools (Python tools for PraisonAI). Follow README.md and existing patterns under `praisonai_tools/`.
 
             Primary scope: `praisonai_tools/`, `tests/`, `examples/`, `docs/`. Do not change `praisonaiagents` in this repo (it is not vendored here).
