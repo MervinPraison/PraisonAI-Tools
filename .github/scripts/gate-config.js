@@ -4,6 +4,7 @@
 
 module.exports = {
   repoFullName: 'MervinPraison/PraisonAI-Tools',
+  triggerLogins: ['MervinPraison', 'github-actions[bot]'],
   productPathPrefixes: ['praisonai_tools/', 'tests/'],
   // Workflows stay gated; pyproject.toml is normal for optional tool deps.
   sensitivePathPatterns: [
