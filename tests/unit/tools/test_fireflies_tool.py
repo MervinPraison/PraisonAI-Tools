@@ -94,6 +94,32 @@ class TestGraphQL:
         with patch("requests.post", side_effect=RuntimeError("net")):
             assert tool._graphql("q") == {"error": "net"}
 
+    def test_rejects_non_https_url(self):
+        tool = FirefliesTool(api_key="x", api_url="http://insecure.local/graphql")
+        with patch("requests.post") as post:
+            result = tool._graphql("query { x }")
+        post.assert_not_called()
+        assert result == {"error": "FIREFLIES_API_URL must use HTTPS"}
+
+    def test_rate_limit_from_graphql_payload(self):
+        tool = FirefliesTool(api_key="x")
+        payload = {
+            "errors": [{"extensions": {"metadata": {"retryAfter": 30}}}]
+        }
+        resp = _mock_response(payload, status_code=429)
+        with patch("requests.post", return_value=resp):
+            result = tool._graphql("query { x }")
+        assert result["status_code"] == 429
+        assert result["retry_after"] == "30"
+
+    def test_generic_http_error_surfaces_status(self):
+        tool = FirefliesTool(api_key="x")
+        resp = _mock_response({"data": {"transcripts": None}}, status_code=500)
+        with patch("requests.post", return_value=resp):
+            result = tool._graphql("query { x }")
+        assert result["status_code"] == 500
+        assert "HTTP 500" in result["error"]
+
 
 # ── list_recent_meetings ────────────────────────────────────────────
 
@@ -139,6 +165,14 @@ class TestListRecentMeetings:
         tool = FirefliesTool(api_key="x")
         with patch("requests.post", side_effect=RuntimeError("net")):
             assert tool.list_recent_meetings() == [{"error": "net"}]
+
+    def test_limit_clamped_to_50(self):
+        tool = FirefliesTool(api_key="x")
+        with patch(
+            "requests.post", return_value=_mock_response({"data": {"transcripts": []}})
+        ) as post:
+            tool.list_recent_meetings(limit=500)
+        assert post.call_args.kwargs["json"]["variables"]["limit"] == 50
 
 
 # ── get_transcript ──────────────────────────────────────────────────

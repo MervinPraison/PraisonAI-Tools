@@ -58,6 +58,10 @@ class FirefliesTool(BaseTool):
         if not self.api_key:
             return {"error": "FIREFLIES_API_KEY required"}
 
+        # Never transmit the API key over a plaintext endpoint.
+        if not self.api_url.lower().startswith("https://"):
+            return {"error": "FIREFLIES_API_URL must use HTTPS"}
+
         try:
             import requests
         except ImportError:
@@ -82,7 +86,7 @@ class FirefliesTool(BaseTool):
                 "status_code": resp.status_code,
             }
         if resp.status_code == 429:
-            retry_after = resp.headers.get("Retry-After")
+            retry_after = resp.headers.get("Retry-After") or self._graphql_retry_after(resp)
             error = {"error": "Fireflies rate limit exceeded", "status_code": 429}
             if retry_after:
                 error["retry_after"] = retry_after
@@ -99,7 +103,27 @@ class FirefliesTool(BaseTool):
         if payload.get("errors"):
             messages = [e.get("message", "unknown error") for e in payload["errors"]]
             return {"error": "; ".join(messages)}
+        # Surface any remaining HTTP failure instead of letting an error body be
+        # normalized into an empty/missing result by the operation handlers.
+        if resp.status_code >= 400:
+            return {
+                "error": f"Fireflies request failed (HTTP {resp.status_code})",
+                "status_code": resp.status_code,
+            }
         return payload
+
+    @staticmethod
+    def _graphql_retry_after(resp) -> Optional[str]:
+        """Extract retryAfter from a GraphQL 429 body when the header is absent."""
+        try:
+            body = resp.json()
+        except Exception:
+            return None
+        for err in body.get("errors") or []:
+            metadata = ((err.get("extensions") or {}).get("metadata")) or {}
+            if metadata.get("retryAfter"):
+                return str(metadata["retryAfter"])
+        return None
 
     def run(
         self,
@@ -140,6 +164,7 @@ class FirefliesTool(BaseTool):
             }
         }
         """
+        limit = max(1, min(limit, 50))  # Fireflies caps page size at 50.
         variables: Dict[str, Any] = {"limit": limit}
         if after is not None:
             try:
@@ -211,6 +236,7 @@ class FirefliesTool(BaseTool):
         if not keywords:
             return [{"error": "keywords required"}]
 
+        limit = max(1, min(limit, 50))  # Fireflies caps page size at 50.
         query = """
         query($keyword: String, $limit: Int) {
             transcripts(keyword: $keyword, limit: $limit) {
