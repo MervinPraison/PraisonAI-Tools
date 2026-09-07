@@ -43,7 +43,11 @@ class RedditTool(BaseTool):
     """Tool for interacting with Reddit."""
     
     name = "reddit"
-    description = "Search Reddit, get posts from subreddits, and read comments."
+    description = (
+        "Search Reddit, get posts from subreddits, and read comments. "
+        "Can also comment on posts and submit new posts when write actions "
+        "are enabled (REDDIT_ALLOW_WRITE=1 with account credentials)."
+    )
     
     def __init__(
         self,
