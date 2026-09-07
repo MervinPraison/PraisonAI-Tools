@@ -137,6 +137,32 @@ class TestSprintOperations:
             assert len(issues) == 1
             assert issues[0]["key"] == "P-1"
 
+    @patch.dict(os.environ, ENV)
+    def test_get_sprint_issues_paginates(self):
+        from praisonai_tools import JiraTool
+
+        jira = JiraTool()
+        pages = [
+            {
+                "issues": [
+                    {"key": "P-1", "fields": {"summary": "S1", "status": {"name": "To Do"}}}
+                ],
+                "isLast": False,
+            },
+            {
+                "issues": [
+                    {"key": "P-2", "fields": {"summary": "S2", "status": {"name": "Done"}}}
+                ],
+                "isLast": True,
+            },
+        ]
+        with patch.object(jira, "_agile_request", side_effect=pages) as mock_req:
+            issues = jira.get_sprint_issues(sprint_id=42)
+            assert [i["key"] for i in issues] == ["P-1", "P-2"]
+            assert mock_req.call_count == 2
+            # second call must advance startAt past the first page
+            assert mock_req.call_args_list[1][1]["params"]["startAt"] == 1
+
 
 class TestEpicOperations:
     @patch.dict(os.environ, ENV)
@@ -397,6 +423,32 @@ class TestAttachments:
         jira = JiraTool()
         result = jira.upload_attachment(issue_key="P-1", file_path="/no/such/file")
         assert "error" in result
+
+    @patch.dict(os.environ, ENV)
+    def test_upload_attachment_drops_json_content_type(self):
+        import tempfile
+
+        from praisonai_tools import JiraTool
+
+        jira = JiraTool()
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = '[{"id": "9", "filename": "a.txt"}]'
+        mock_response.json.return_value = [{"id": "9", "filename": "a.txt"}]
+        mock_session.post.return_value = mock_response
+        jira._session = mock_session
+
+        with tempfile.NamedTemporaryFile(suffix=".txt") as fh:
+            fh.write(b"hello")
+            fh.flush()
+            result = jira.upload_attachment(issue_key="P-1", file_path=fh.name)
+
+        assert result["success"] is True
+        # multipart upload must NOT force the session's JSON content type
+        headers = mock_session.post.call_args[1]["headers"]
+        assert headers["Content-Type"] is None
+        assert headers["X-Atlassian-Token"] == "no-check"
+        assert "files" in mock_session.post.call_args[1]
 
 
 class TestWatchers:
