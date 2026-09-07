@@ -85,7 +85,7 @@ meeting = [
     "chromadb>=0.4.0",
 ]
 stripe = [
-    "stripe>=7.0.0,<13.0.0",
+    "requests>=2.28.0",
 ]
 
 [project.urls]

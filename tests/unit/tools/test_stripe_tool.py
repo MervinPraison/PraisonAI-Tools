@@ -6,9 +6,10 @@ from unittest.mock import MagicMock, patch
 from praisonai_tools.tools.stripe_tool import StripeTool, get_stripe_customer
 
 
-def _mock_response(payload):
+def _mock_response(payload, status_code=200):
     resp = MagicMock()
     resp.json.return_value = payload
+    resp.status_code = status_code
     return resp
 
 
@@ -88,6 +89,17 @@ class TestGetCustomer:
         ):
             result = tool.get_customer(customer_id="cus_1")
         assert result["error"].startswith("API request failed")
+
+    def test_non_2xx_without_error_object_is_failure(self):
+        # A non-2xx response whose body lacks Stripe's usual ``error`` object
+        # must not be treated as a successful payload.
+        tool = StripeTool(api_key="sk_test_x")
+        with patch(
+            "requests.request",
+            return_value=_mock_response({"unexpected": "shape"}, status_code=502),
+        ):
+            result = tool.get_customer(customer_id="cus_1")
+        assert result == {"error": "Stripe API returned HTTP 502"}
 
 
 # ── get_payment_intent ──────────────────────────────────────────────

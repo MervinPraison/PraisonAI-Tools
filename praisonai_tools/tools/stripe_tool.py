@@ -139,6 +139,15 @@ class StripeTool(BaseTool):
             )
             return {"error": message}
 
+        # Defensive: a non-2xx status without Stripe's usual ``error`` object
+        # must not be treated as a successful payload.
+        if resp.status_code >= 400:
+            logger.error(
+                "Stripe HTTP error: op=%s mode=%s status=%s",
+                endpoint, self._mode(), resp.status_code,
+            )
+            return {"error": f"Stripe API returned HTTP {resp.status_code}"}
+
         obj_id = body.get("id") if isinstance(body, dict) else None
         logger.info(
             "Stripe op=%s mode=%s idempotency_key=%s object_id=%s",
