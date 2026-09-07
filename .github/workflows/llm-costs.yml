@@ -2,7 +2,9 @@ name: LLM Cost Analysis
 
 on:
   pull_request:
-    branches: [main, master]
+    branches: [main]
+    paths:
+      - "**.py"
 
 permissions:
   contents: read
