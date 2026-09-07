@@ -175,6 +175,38 @@ class TestPipelines:
         assert out == [{"id": "default"}]
 
 
+# ── properties ──────────────────────────────────────────────────────
+class TestProperties:
+    def test_create_property_derives_type_from_field_type(self):
+        tool = HubSpotTool(access_token="x")
+        with patch(
+            "requests.request", return_value=_mock_response({"name": "score"})
+        ) as req:
+            tool.create_property(
+                object_type="contacts",
+                name="score",
+                label="Score",
+                field_type="number",
+            )
+        body = req.call_args.kwargs["json"]
+        assert body["type"] == "number"
+        assert body["fieldType"] == "number"
+
+    def test_create_property_defaults_type_to_string(self):
+        tool = HubSpotTool(access_token="x")
+        with patch(
+            "requests.request", return_value=_mock_response({"name": "note"})
+        ) as req:
+            tool.create_property(
+                object_type="contacts",
+                name="note",
+                label="Note",
+                field_type="text",
+            )
+        body = req.call_args.kwargs["json"]
+        assert body["type"] == "string"
+
+
 # ── search_crm ──────────────────────────────────────────────────────
 class TestSearchCrm:
     def test_requires_query(self):
