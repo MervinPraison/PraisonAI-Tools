@@ -95,6 +95,43 @@ class JiraTool(BaseTool):
             logger.error(f"Jira Agile API error: {self._mask(str(e))}")
             return {"error": self._mask(str(e))}
 
+    def _agile_paginate(
+        self,
+        endpoint: str,
+        key: str,
+        params: Optional[Dict] = None,
+    ) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
+        """Fetch every page from a paginated Agile API endpoint.
+
+        The Agile API returns results in pages using ``startAt``/``maxResults``
+        and signals the end with ``isLast``. This walks all pages so callers
+        that advertise "all" results actually return them.
+
+        Args:
+            endpoint: Agile API endpoint (e.g. '/sprint/42/issue')
+            key: Response key holding the page items ('issues' or 'values')
+            params: Optional query params (startAt is managed internally)
+
+        Returns:
+            List of raw items, or a ``{"error": ...}`` dict on failure.
+        """
+        collected: List[Dict[str, Any]] = []
+        start_at = 0
+        query = dict(params or {})
+        query.setdefault("maxResults", 50)
+        while True:
+            query["startAt"] = start_at
+            result = self._agile_request(endpoint, params=query)
+            if "error" in result:
+                return result
+            page = result.get(key, [])
+            collected.extend(page)
+            # Missing ``isLast`` is treated as the final page.
+            if not page or result.get("isLast", True):
+                break
+            start_at += len(page)
+        return collected
+
     def _mask(self, message: str) -> str:
         """Mask the API token in any message to avoid leaking secrets."""
         if message and self.api_token:
@@ -751,8 +788,10 @@ class JiraTool(BaseTool):
         if state:
             params["state"] = state
 
-        result = self._agile_request(f"/board/{board_id}/sprint", params=params)
-        if "error" in result:
+        result = self._agile_paginate(
+            f"/board/{board_id}/sprint", "values", params=params
+        )
+        if isinstance(result, dict):
             return [result]
 
         return [
@@ -764,7 +803,7 @@ class JiraTool(BaseTool):
                 "endDate": s.get("endDate"),
                 "goal": s.get("goal"),
             }
-            for s in result.get("values", [])
+            for s in result
         ]
 
     def get_active_sprint(self, board_id: int) -> Dict[str, Any]:
@@ -894,14 +933,14 @@ class JiraTool(BaseTool):
         if not sprint_id:
             return [{"error": "sprint_id is required"}]
 
-        params = {"maxResults": 100}
+        params = {}
         if jql:
             params["jql"] = jql
 
-        result = self._agile_request(
-            f"/sprint/{sprint_id}/issue", params=params
+        result = self._agile_paginate(
+            f"/sprint/{sprint_id}/issue", "issues", params=params
         )
-        if "error" in result:
+        if isinstance(result, dict):
             return [result]
 
         return [
@@ -910,7 +949,7 @@ class JiraTool(BaseTool):
                 "summary": i.get("fields", {}).get("summary"),
                 "status": i.get("fields", {}).get("status", {}).get("name"),
             }
-            for i in result.get("issues", [])
+            for i in result
         ]
 
     # ==================== Epic Operations ====================
@@ -931,8 +970,10 @@ class JiraTool(BaseTool):
             return [{"error": "board_id is required"}]
 
         params = {"done": str(done).lower()}
-        result = self._agile_request(f"/board/{board_id}/epic", params=params)
-        if "error" in result:
+        result = self._agile_paginate(
+            f"/board/{board_id}/epic", "values", params=params
+        )
+        if isinstance(result, dict):
             return [result]
 
         return [
@@ -943,7 +984,7 @@ class JiraTool(BaseTool):
                 "summary": e.get("summary"),
                 "done": e.get("done"),
             }
-            for e in result.get("values", [])
+            for e in result
         ]
 
     def get_epic(self, epic_key: str) -> Dict[str, Any]:
@@ -1011,10 +1052,8 @@ class JiraTool(BaseTool):
         if not epic_key:
             return [{"error": "epic_key is required"}]
 
-        result = self._agile_request(
-            f"/epic/{epic_key}/issue", params={"maxResults": 100}
-        )
-        if "error" in result:
+        result = self._agile_paginate(f"/epic/{epic_key}/issue", "issues")
+        if isinstance(result, dict):
             return [result]
 
         return [
@@ -1023,7 +1062,7 @@ class JiraTool(BaseTool):
                 "summary": i.get("fields", {}).get("summary"),
                 "status": i.get("fields", {}).get("status", {}).get("name"),
             }
-            for i in result.get("issues", [])
+            for i in result
         ]
 
     def link_issue_to_epic(
@@ -1163,10 +1202,16 @@ class JiraTool(BaseTool):
         name = filename or os.path.basename(file_path)
         try:
             with open(file_path, "rb") as fh:
+                # The shared session pins Content-Type to application/json;
+                # setting it to None here lets requests build the correct
+                # multipart/form-data body with its own boundary.
                 response = self.session.post(
                     url,
                     files={"file": (name, fh)},
-                    headers={"X-Atlassian-Token": "no-check"},
+                    headers={
+                        "X-Atlassian-Token": "no-check",
+                        "Content-Type": None,
+                    },
                 )
             response.raise_for_status()
             data = response.json() if response.text else []
