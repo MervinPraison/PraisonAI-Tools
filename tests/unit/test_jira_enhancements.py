@@ -295,6 +295,34 @@ class TestWorklog:
             assert len(worklogs) == 1
             assert worklogs[0]["author"] == "Ann"
 
+    @patch.dict(os.environ, ENV)
+    def test_get_worklogs_paginates(self):
+        from praisonai_tools import JiraTool
+
+        jira = JiraTool()
+        pages = [
+            {
+                "total": 2,
+                "worklogs": [
+                    {"id": "1", "author": {"displayName": "Ann"}, "timeSpent": "1h",
+                     "started": "2026-01-01", "comment": "x"}
+                ],
+            },
+            {
+                "total": 2,
+                "worklogs": [
+                    {"id": "2", "author": {"displayName": "Bob"}, "timeSpent": "2h",
+                     "started": "2026-01-02", "comment": "y"}
+                ],
+            },
+        ]
+        with patch.object(jira, "_rest_request", side_effect=pages) as mock_req:
+            worklogs = jira.get_worklogs(issue_key="P-1")
+            assert [w["id"] for w in worklogs] == ["1", "2"]
+            assert mock_req.call_count == 2
+            # second call must advance startAt past the first page
+            assert mock_req.call_args_list[1][1]["params"]["startAt"] == 1
+
 
 class TestIssueLinks:
     @patch.dict(os.environ, ENV)
