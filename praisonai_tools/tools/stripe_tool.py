@@ -273,7 +273,7 @@ class StripeTool(BaseTool):
             }
             for link in result.get("data", [])
         ]
-        return self._banner({"mode": self._mode(), "payment_links": links})
+        return self._banner({"payment_links": links})
 
     # ------------------------------------------------------------------
     # Phase 2 — Mutations with guardrails
