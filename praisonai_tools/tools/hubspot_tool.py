@@ -554,10 +554,22 @@ class HubSpotTool(BaseTool):
         """Create a custom property."""
         if not name or not label:
             return {"error": "name and label required"}
+        # HubSpot needs both the data ``type`` and the widget ``fieldType``.
+        # Derive a sensible ``type`` from the field type so numeric/date/enum
+        # properties aren't silently created as strings.
+        field_to_type = {
+            "number": "number",
+            "date": "date",
+            "datetime": "datetime",
+            "booleancheckbox": "bool",
+            "checkbox": "enumeration",
+            "select": "enumeration",
+            "radio": "enumeration",
+        }
         payload = {
             "name": name,
             "label": label,
-            "type": "string",
+            "type": field_to_type.get(field_type, "string"),
             "fieldType": field_type,
             "groupName": group_name,
         }
