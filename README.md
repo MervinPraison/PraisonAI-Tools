@@ -646,6 +646,23 @@ videos = yt.search("python tutorial", limit=5)
 transcript = yt.get_transcript("dQw4w9WgXcQ")
 ```
 
+### Meeting Intelligence Tools
+
+```python
+from praisonai_tools import FirefliesTool
+
+# Fireflies.ai meeting intelligence (curated GraphQL operations)
+fireflies = FirefliesTool()  # Uses FIREFLIES_API_KEY env var
+meetings = fireflies.list_recent_meetings(limit=5)
+meetings = fireflies.list_recent_meetings(limit=5, after="5")  # cursor pagination
+transcript = fireflies.get_transcript(meeting_id="abc123")
+results = fireflies.search(keywords="roadmap")
+```
+
+`FirefliesTool` distinguishes a missing key (`{"error": "FIREFLIES_API_KEY required"}`)
+from a rejected key (HTTP 401/403), and surfaces `retry_after` on rate limits.
+Set `FIREFLIES_API_URL` to override the endpoint (previews/proxies).
+
 ### Data Tools
 
 ```python
@@ -669,6 +686,7 @@ air = weather.get_air_quality("Tokyo")
 | TTSTool | `OPENAI_API_KEY` or `ELEVENLABS_API_KEY` |
 | YouTubeTool | `YOUTUBE_API_KEY` |
 | WeatherTool | `OPENWEATHER_API_KEY` |
+| FirefliesTool | `FIREFLIES_API_KEY` (optional `FIREFLIES_API_URL`) |
 | SwarmScoreTool | None (uses public API) |
 
 ### Using with PraisonAI Agents
