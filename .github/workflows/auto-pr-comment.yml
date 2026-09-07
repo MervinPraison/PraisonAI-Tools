@@ -18,11 +18,16 @@ env:
 
 permissions:
   issues: write
-  pull-requests: read
+  pull-requests: write
 
 jobs:
   review-chain:
-    uses: MervinPraison/github-automation-template/.github/workflows/review-chain-callable.yml@v1.1.2
+    # Grant union of callee job permissions (repos with default_workflow_permissions: read
+    # reject reusable calls when the caller ceiling is lower than any callee job).
+    permissions:
+      issues: write
+      pull-requests: write
+    uses: MervinPraison/github-automation-template/.github/workflows/review-chain-callable.yml@v1.1.6
     secrets: inherit
     with:
-      hub_ref: v1.1.2
+      hub_ref: v1.1.6

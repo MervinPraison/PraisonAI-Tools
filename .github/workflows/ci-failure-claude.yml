@@ -2,7 +2,7 @@ name: Auto CI Failure → Claude
 
 on:
   workflow_run:
-    workflows: [CI, CI]
+    workflows: [CI, Optimized Test Suite]
     types: [completed]
   pull_request:
     types: [opened, synchronize, reopened]
@@ -25,8 +25,8 @@ permissions:
 
 jobs:
   detect-and-trigger:
-    uses: MervinPraison/github-automation-template/.github/workflows/ci-failure-claude-callable.yml@v1.1.2
+    uses: MervinPraison/github-automation-template/.github/workflows/ci-failure-claude-callable.yml@v1.1.6
     secrets: inherit
     with:
-      hub_ref: v1.1.2
+      hub_ref: v1.1.6
       pr_number: ${{ github.event.inputs.pr_number || '' }}
