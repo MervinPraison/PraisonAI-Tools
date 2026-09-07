@@ -52,6 +52,22 @@ class TestRequest:
             result = tool._request("GET", "/x")
         assert result == {"ok": True}
 
+    def test_retry_after_http_date_falls_back_to_backoff(self):
+        # A non-numeric Retry-After (HTTP-date form) must not crash the request.
+        tool = HubSpotTool(access_token="x", max_retries=1)
+        responses = [
+            _mock_response(
+                None,
+                status_code=429,
+                headers={"Retry-After": "Wed, 21 Oct 2026 07:28:00 GMT"},
+            ),
+            _mock_response({"ok": True}),
+        ]
+        with patch("requests.request", side_effect=responses), patch("time.sleep") as slp:
+            result = tool._request("GET", "/x")
+        assert result == {"ok": True}
+        assert slp.call_args.args[0] == 1  # 2 ** attempt(0)
+
     def test_http_error_returns_message(self):
         tool = HubSpotTool(access_token="x")
         with patch(
@@ -112,8 +128,10 @@ class TestDeals:
         with patch("requests.request", return_value=_mock_response({"ok": True})) as req:
             tool.associate_deal_with_contact(deal_id="2", contact_id="1")
         url = req.call_args.args[1]
-        assert "/deals/2/associations/contacts/1" in url
-        assert req.call_args.kwargs["json"][0]["associationTypeId"] == 3
+        # v3 individual-association endpoint carries the type id in the URL path,
+        # not the request body.
+        assert url.endswith("/deals/2/associations/contacts/1/3")
+        assert req.call_args.kwargs["json"] is None
 
 
 # ── Activities use v3 CRM objects (not legacy /engagements/v1) ───────
@@ -126,6 +144,16 @@ class TestActivities:
         body = req.call_args.kwargs["json"]
         assert body["properties"]["hs_call_body"] == "Discovery call"
         assert body["associations"][0]["to"]["id"] == "1"
+
+    def test_log_meeting_duration_sets_end_time(self):
+        tool = HubSpotTool(access_token="x")
+        with patch("requests.request", return_value=_mock_response({"id": "9"})) as req:
+            tool.log_meeting(
+                contact_id="1", title="Sync", start_time="1000", duration_ms=1800000
+            )
+        props = req.call_args.kwargs["json"]["properties"]
+        assert props["hs_meeting_start_time"] == 1000
+        assert props["hs_meeting_end_time"] == 1000 + 1800000
 
     def test_create_note_associates_multiple_objects(self):
         tool = HubSpotTool(access_token="x")

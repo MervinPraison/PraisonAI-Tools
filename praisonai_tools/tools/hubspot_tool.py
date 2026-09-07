@@ -107,7 +107,12 @@ class HubSpotTool(BaseTool):
 
             if resp.status_code == 429 and attempt < self.max_retries:
                 retry_after = resp.headers.get("Retry-After")
-                delay = float(retry_after) if retry_after else 2 ** attempt
+                # Retry-After may be seconds (numeric) or an HTTP-date; fall back
+                # to exponential backoff when it isn't a plain number.
+                try:
+                    delay = float(retry_after) if retry_after else 2 ** attempt
+                except ValueError:
+                    delay = 2 ** attempt
                 time.sleep(delay)
                 continue
 
@@ -458,7 +463,11 @@ class HubSpotTool(BaseTool):
         if body is not None:
             props["hs_meeting_body"] = body
         if duration_ms is not None:
-            props["hs_meeting_end_time"] = None  # duration handled by end time
+            start_ms = self._to_ms(props["hs_timestamp"])
+            if start_ms is None:
+                start_ms = self._now_ms()
+            props["hs_meeting_start_time"] = start_ms
+            props["hs_meeting_end_time"] = start_ms + duration_ms
         return self._create_activity(
             "meetings", props, contact_id, ASSOC_MEETING_TO_CONTACT
         )
@@ -560,6 +569,14 @@ class HubSpotTool(BaseTool):
         return int(time.time() * 1000)
 
     @staticmethod
+    def _to_ms(value: Any) -> Optional[int]:
+        """Convert an epoch-millisecond timestamp to int; None if not numeric."""
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
     def _assoc_block(to_type: str, to_id: str, type_id: int) -> Dict[str, Any]:
         return {
             "to": {"id": to_id},
@@ -574,16 +591,11 @@ class HubSpotTool(BaseTool):
     def _associate(
         self, from_type: str, from_id: str, to_type: str, to_id: str, type_id: int
     ) -> Dict[str, Any]:
-        payload = [
-            {
-                "associationCategory": "HUBSPOT_DEFINED",
-                "associationTypeId": type_id,
-            }
-        ]
+        # The v3 individual-association endpoint takes the association type id in
+        # the URL path; it must not be sent in the request body.
         return self._request(
             "PUT",
-            f"/crm/v3/objects/{from_type}/{from_id}/associations/{to_type}/{to_id}",
-            payload,
+            f"/crm/v3/objects/{from_type}/{from_id}/associations/{to_type}/{to_id}/{type_id}",
         )
 
     def _create_activity(
