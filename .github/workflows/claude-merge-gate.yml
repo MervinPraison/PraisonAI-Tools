@@ -43,9 +43,9 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
-      - uses: MervinPraison/github-automation-template/.github/actions/hub-setup@v1.1.2
+      - uses: MervinPraison/github-automation-template/.github/actions/hub-setup@v1.1.6
         with:
-          hub_ref: v1.1.2
+          hub_ref: v1.1.6
       - name: Generate GitHub App token
         id: app-token
         uses: actions/create-github-app-token@v1
@@ -81,9 +81,15 @@ jobs:
 
   merge-gate:
     if: github.event_name != 'workflow_run'
-    uses: MervinPraison/github-automation-template/.github/workflows/claude-merge-gate-callable.yml@v1.1.2
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: read
+      id-token: write
+    uses: MervinPraison/github-automation-template/.github/workflows/claude-merge-gate-callable.yml@v1.1.6
     secrets: inherit
     with:
-      hub_ref: v1.1.2
+      hub_ref: v1.1.6
       pr_number: ${{ github.event.inputs.pr_number || github.event.client_payload.pr_number || '' }}
       merge_method: ${{ github.event.inputs.merge_method || 'merge' }}
