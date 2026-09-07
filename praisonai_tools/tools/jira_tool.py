@@ -1309,20 +1309,34 @@ class JiraTool(BaseTool):
         if not issue_key:
             return [{"error": "issue_key is required"}]
 
-        result = self._rest_request(f"/issue/{issue_key}/worklog")
-        if "error" in result:
-            return [result]
+        # The worklog endpoint pages with startAt/maxResults/total; walk every
+        # page so the documented "all worklogs" contract actually holds.
+        worklogs: List[Dict[str, Any]] = []
+        start_at = 0
+        while True:
+            result = self._rest_request(
+                f"/issue/{issue_key}/worklog",
+                params={"startAt": start_at, "maxResults": 100},
+            )
+            if "error" in result:
+                return [result]
 
-        return [
-            {
-                "id": w.get("id"),
-                "author": w.get("author", {}).get("displayName"),
-                "timeSpent": w.get("timeSpent"),
-                "started": w.get("started"),
-                "comment": w.get("comment"),
-            }
-            for w in result.get("worklogs", [])
-        ]
+            page = result.get("worklogs", [])
+            worklogs.extend(
+                {
+                    "id": w.get("id"),
+                    "author": w.get("author", {}).get("displayName"),
+                    "timeSpent": w.get("timeSpent"),
+                    "started": w.get("started"),
+                    "comment": w.get("comment"),
+                }
+                for w in page
+            )
+
+            start_at += len(page)
+            if not page or start_at >= result.get("total", 0):
+                break
+        return worklogs
 
     # ==================== Issue Links ====================
 
