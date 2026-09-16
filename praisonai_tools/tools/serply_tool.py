@@ -82,8 +82,11 @@ class SerplyTool(BaseTool):
                 headers={"X-Api-Key": self.api_key, "Accept": "application/json"},
                 params={"q": query, "num": num},
                 timeout=10,
+                # Never follow redirects: requests forwards custom headers such as
+                # X-Api-Key to the redirect target, which would leak the key.
+                allow_redirects=False,
             )
-            if not response.ok:
+            if response.status_code != 200:
                 return {"error": f"Serply API error {response.status_code}: {response.text[:200]}"}
             return response.json()
         except Exception as e:
