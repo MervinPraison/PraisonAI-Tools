@@ -25,8 +25,8 @@ permissions:
 
 jobs:
   detect-and-trigger:
-    uses: MervinPraison/github-automation-template/.github/workflows/ci-failure-claude-callable.yml@v1.1.8
+    uses: MervinPraison/github-automation-template/.github/workflows/ci-failure-claude-callable.yml@v1.1.9
     secrets: inherit
     with:
-      hub_ref: v1.1.8
+      hub_ref: v1.1.9
       pr_number: ${{ github.event.inputs.pr_number || '' }}
