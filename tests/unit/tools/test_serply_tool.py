@@ -84,6 +84,12 @@ class TestSerplySearch:
         assert len(results) == 1
         assert results[0]["error"].startswith("Serply API error 401")
 
+    def test_any_2xx_status_is_treated_as_success(self):
+        payload = {"results": [{"title": "T", "link": "https://example.com", "description": "D", "position": 1}]}
+        with patch("requests.get", return_value=_response(payload, status=201)):
+            results = SerplyTool(api_key="k").search("python")
+        assert results == [{"title": "T", "url": "https://example.com", "snippet": "D", "position": 1}]
+
     def test_redirects_are_not_followed(self):
         redirect = _response({}, ok=True, status=302, text="")
         with patch("requests.get", return_value=redirect) as get:

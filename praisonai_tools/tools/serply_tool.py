@@ -86,7 +86,7 @@ class SerplyTool(BaseTool):
                 # X-Api-Key to the redirect target, which would leak the key.
                 allow_redirects=False,
             )
-            if response.status_code != 200:
+            if not 200 <= response.status_code < 300:
                 return {"error": f"Serply API error {response.status_code}: {response.text[:200]}"}
             return response.json()
         except Exception as e:
