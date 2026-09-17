@@ -89,6 +89,23 @@ class TestGoogleWorkspaceAuth:
             auth.get_credentials()
         adc.assert_called_once()
 
+    def test_credentials_use_full_service_scopes(self, tmp_path):
+        """The single cached credential must carry the union of all scopes the
+        auth instance covers, even when build_service asks for one service."""
+        auth = GoogleWorkspaceAuth(
+            services=["docs", "drive"],
+            credentials_file=str(tmp_path / "missing.json"),
+            token_file=str(tmp_path / "missing_token.json"),
+        )
+        with patch.object(
+            auth, "_default_credentials", return_value="ADC"
+        ) as adc:
+            # Mimics a Docs tool building its Docs client first.
+            auth.get_credentials(["docs"])
+        requested_scopes = adc.call_args.args[0]
+        assert "https://www.googleapis.com/auth/documents" in requested_scopes
+        assert "https://www.googleapis.com/auth/drive" in requested_scopes
+
     def test_resolve_auth_reuses_provided(self):
         shared = GoogleWorkspaceAuth(services=["docs"])
         assert resolve_auth(shared, ["docs"]) is shared

@@ -115,7 +115,11 @@ class GoogleWorkspaceAuth:
         if self._credentials is not None:
             return self._credentials
 
-        scopes = self.scopes_for(services)
+        # A single credential is cached and reused for every service this auth
+        # instance covers, so it must carry the union of scopes for all of them
+        # (e.g. Docs tools also touch Drive for export). Prefer the full,
+        # construction-time service set over the narrow per-call ``services``.
+        scopes = self.scopes_for(self.services or services)
 
         # Mode 1: Service Account (server-safe, no browser).
         if self.service_account_file:
