@@ -32,15 +32,20 @@ class GoogleCalendarTool(BaseTool):
         self,
         credentials_path: Optional[str] = None,
         token_path: Optional[str] = None,
+        auth: Optional[Any] = None,
     ):
         self.credentials_path = credentials_path or os.getenv("GOOGLE_CALENDAR_CREDENTIALS", "credentials.json")
         self.token_path = token_path or os.getenv("GOOGLE_CALENDAR_TOKEN", "token.json")
+        self.auth = auth
         self._service = None
         super().__init__()
     
     @property
     def service(self):
         if self._service is None:
+            if self.auth is not None:
+                self._service = self.auth.build_service("calendar", "v3", ["calendar"])
+                return self._service
             try:
                 from google.oauth2.credentials import Credentials
                 from google_auth_oauthlib.flow import InstalledAppFlow

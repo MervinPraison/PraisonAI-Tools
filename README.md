@@ -627,6 +627,59 @@ github.create_issue(repo="owner/repo", title="Bug", body="Description")
 prs = github.list_pull_requests(repo="owner/repo")
 ```
 
+### Google Workspace Tools
+
+New tools — `GoogleDocsTool`, `GoogleSlidesTool`, `GoogleTasksTool`, `GoogleChatTool` —
+plus a shared authentication layer so an agent authenticates once and reuses the
+same token across every Google service.
+
+Install the optional extra:
+
+```bash
+pip install 'praisonai-tools[google-workspace]'
+```
+
+```python
+from praisonai_tools import (
+    GoogleDocsTool, GoogleSlidesTool, GoogleTasksTool, GoogleChatTool,
+)
+from praisonai_tools.tools._google_auth import GoogleWorkspaceAuth
+
+# Share one auth session across tools (authenticate once)
+auth = GoogleWorkspaceAuth(services=["docs", "tasks", "chat", "slides"])
+
+docs = GoogleDocsTool(auth=auth)
+doc = docs.create_document("Weekly Summary")
+docs.insert_text(doc["document_id"], "Highlights of the week...")
+
+tasks = GoogleTasksTool(auth=auth)
+lists = tasks.list_task_lists()
+tasks.create_task(lists[0]["id"], "Ship the report", due="2026-05-15T00:00:00Z")
+
+# Google Chat via incoming webhook — no auth required
+chat = GoogleChatTool()
+chat.create_webhook_message("https://chat.googleapis.com/v1/spaces/...", "Deploy done")
+```
+
+**Authentication modes** (tried in order by `GoogleWorkspaceAuth`):
+
+1. **Service Account** — set `GOOGLE_SERVICE_ACCOUNT_FILE` to your
+   `service_account.json`. Server-safe, no browser. For acting as a user, enable
+   domain-wide delegation and set `GOOGLE_WORKSPACE_SUBJECT` to the user's email.
+2. **OAuth 2.0** — set `GOOGLE_CREDENTIALS_FILE` (OAuth client). A browser opens
+   once; the token is cached in `GOOGLE_TOKEN_FILE`
+   (default `~/.praisonai/google_token.json`) and shared by all tools.
+3. **Application Default Credentials** — automatic in GCP environments
+   (Cloud Run, GCE, …).
+
+> Never commit `service_account.json` or the cached token — add them to
+> `.gitignore`.
+
+The existing `GmailTool`, `GoogleSheetsTool`, `GoogleDriveTool` and
+`GoogleCalendarTool` also accept the same optional `auth=` parameter so they can
+share one session; their original per-tool `credentials_*` parameters remain
+fully backward compatible.
+
 ### AI/Media Tools
 
 ```python
