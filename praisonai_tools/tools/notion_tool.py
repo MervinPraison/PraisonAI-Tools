@@ -209,8 +209,8 @@ def markdown_to_blocks(markdown: str) -> List[Dict[str, Any]]:
             blocks.append(todo(stripped[6:], checked))
         elif stripped.startswith("- ") or stripped.startswith("* "):
             blocks.extend(bulleted_list([stripped[2:]]))
-        elif len(stripped) > 2 and stripped[0].isdigit() and stripped[1:3] == ". ":
-            blocks.extend(numbered_list([stripped[3:]]))
+        elif ". " in stripped and stripped.split(". ", 1)[0].isdigit():
+            blocks.extend(numbered_list([stripped.split(". ", 1)[1]]))
         else:
             blocks.append(paragraph(stripped))
         i += 1

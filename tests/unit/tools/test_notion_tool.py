@@ -127,6 +127,14 @@ class TestMarkdownConversion:
         assert blocks[0]["type"] == "bulleted_list_item"
         assert blocks[1]["type"] == "numbered_list_item"
 
+    def test_multi_digit_numbered_list(self):
+        blocks = markdown_to_blocks("1. first\n10. tenth")
+        assert [b["type"] for b in blocks] == [
+            "numbered_list_item",
+            "numbered_list_item",
+        ]
+        assert blocks[1]["numbered_list_item"]["rich_text"][0]["text"]["content"] == "tenth"
+
     def test_todo(self):
         blocks = markdown_to_blocks("- [x] done\n- [ ] pending")
         assert blocks[0]["to_do"]["checked"] is True
