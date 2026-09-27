@@ -43,7 +43,9 @@ Environment Variables:
         root-agent form of POST /auth for how to obtain one).
     SALT_API_BASE: Override the API base URL (defaults to
         https://saltapp.ai/api/v1; useful against a self-hosted or staging
-        Salt instance).
+        Salt instance). Must be https:// — the API key travels as a
+        header on every request and the tool refuses to construct a
+        client pointed at a plain-HTTP base.
 
 Security notes:
     * The API key is read from the environment only and never logged.
@@ -82,7 +84,14 @@ class SaltTool(BaseTool):
 
     def __init__(self, api_key: Optional[str] = None, api_base: Optional[str] = None):
         self.api_key = api_key or os.getenv("SALT_API_KEY")
-        self.api_base = (api_base or os.getenv("SALT_API_BASE") or DEFAULT_API_BASE).rstrip("/")
+        resolved_base = (api_base or os.getenv("SALT_API_BASE") or DEFAULT_API_BASE).rstrip("/")
+        if not resolved_base.startswith("https://"):
+            raise ValueError(
+                "SALT_API_BASE (or api_base) must start with https:// — the "
+                "Salt API key is sent as a header on every request and must "
+                "never be sent to a plain-HTTP endpoint."
+            )
+        self.api_base = resolved_base
         super().__init__()
 
     # ------------------------------------------------------------------
@@ -143,10 +152,19 @@ class SaltTool(BaseTool):
 
         if resp.status_code >= 400:
             message = body.get("error") if isinstance(body, dict) else None
-            if not message and isinstance(body, dict):
-                message = "; ".join(body.get("errors", [])) or None
+            errors = body.get("errors") if isinstance(body, dict) else None
+            if not message and isinstance(errors, list) and errors and all(
+                isinstance(e, str) for e in errors
+            ):
+                message = "; ".join(errors)
             logger.error("Salt API error: op=%s status=%s", endpoint, resp.status_code)
-            return {"error": message or f"Salt API returned HTTP {resp.status_code}"}
+            result = {"error": message or f"Salt API returned HTTP {resp.status_code}"}
+            if not message and isinstance(body, dict) and body:
+                # errors wasn't a plain list of strings (or was absent) —
+                # still hand the caller the raw error body rather than
+                # silently dropping it.
+                result["details"] = body
+            return result
 
         logger.info("Salt op=%s status=%s", endpoint, resp.status_code)
         return body if isinstance(body, dict) else {"result": body}

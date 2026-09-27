@@ -45,6 +45,22 @@ class TestKeyHandling:
             tool = SaltTool(api_key="sk_x")
             assert tool.api_base == "https://staging.saltapp.ai/api/v1"
 
+    def test_rejects_non_https_api_base(self):
+        with patch.dict(os.environ, {}, clear=True):
+            try:
+                SaltTool(api_key="sk_x", api_base="http://staging.saltapp.ai/api/v1")
+                assert False, "expected ValueError for a non-HTTPS api_base"
+            except ValueError as e:
+                assert "https" in str(e).lower()
+
+    def test_rejects_non_https_api_base_from_env(self):
+        with patch.dict(os.environ, {"SALT_API_BASE": "http://example.com"}, clear=True):
+            try:
+                SaltTool(api_key="sk_x")
+                assert False, "expected ValueError for a non-HTTPS SALT_API_BASE"
+            except ValueError:
+                pass
+
 
 # ── create_card ──────────────────────────────────────────────────────
 
@@ -85,6 +101,14 @@ class TestCreateCard:
         with patch("requests.request", return_value=_mock_response(payload, status_code=422)):
             result = tool.create_card(chat_id=1, blocks=[{}])
         assert result == {"error": "block 0: unknown type nil"}
+
+    def test_non_list_errors_falls_back_without_crashing(self):
+        tool = SaltTool(api_key="sk_x")
+        payload = {"errors": {"blocks": ["unknown type nil"]}}
+        with patch("requests.request", return_value=_mock_response(payload, status_code=422)):
+            result = tool.create_card(chat_id=1, blocks=[{}])
+        assert result["error"] == "Salt API returned HTTP 422"
+        assert result["details"] == payload
 
 
 # ── read_card ────────────────────────────────────────────────────────
