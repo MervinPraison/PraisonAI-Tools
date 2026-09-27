@@ -120,7 +120,7 @@ class SaltTool(BaseTool):
 
         requests = self._import_requests()
         if requests is None:
-            return {"error": "requests package is not installed"}
+            return {"error": "requests package is not installed (pip install 'praisonai-tools[salt]')"}
 
         headers = {"api-key": self.api_key}
 
