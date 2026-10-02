@@ -663,6 +663,21 @@ results = fireflies.search(keywords="roadmap")
 from a rejected key (HTTP 401/403), and surfaces `retry_after` on rate limits.
 Set `FIREFLIES_API_URL` to override the endpoint (previews/proxies).
 
+### Search Tools
+
+```python
+from praisonai_tools import LinkUpTool, linkup_search, linkup_fetch
+
+# LinkUp web search and page fetch (https://docs.linkup.so)
+linkup = LinkUpTool()  # Uses LINKUP_API_KEY env var
+results = linkup.search("latest AI news", depth="standard")
+answer = linkup.search("Who won the 2024 Nobel Prize in Physics?", output_type="sourcedAnswer")
+page = linkup.fetch("https://example.com", render_js=False)  # {"url": ..., "markdown": ...}
+```
+
+`linkup_search` and `linkup_fetch` are plain functions that can be passed directly to an agent's `tools`.
+Get an API key at [app.linkup.so](https://app.linkup.so).
+
 ### Data Tools
 
 ```python
@@ -687,6 +702,7 @@ air = weather.get_air_quality("Tokyo")
 | YouTubeTool | `YOUTUBE_API_KEY` |
 | WeatherTool | `OPENWEATHER_API_KEY` |
 | FirefliesTool | `FIREFLIES_API_KEY` (optional `FIREFLIES_API_URL`) |
+| LinkUpTool | `LINKUP_API_KEY` |
 | SwarmScoreTool | None (uses public API) |
 
 ### Using with PraisonAI Agents
