@@ -20,6 +20,7 @@ import json
 import logging
 import os
 from typing import Any, Dict, List, Optional, Union
+from urllib.request import HTTPRedirectHandler
 
 from praisonai_tools.tools.base import BaseTool
 
@@ -44,6 +45,19 @@ def _truncate_text(value: Any, limit: int) -> str:
     return text
 
 
+class _NoRedirect(HTTPRedirectHandler):
+    """Redirect handler that refuses to follow any redirect.
+
+    Keenable never redirects. Following a 3xx would resend ``X-API-Key`` to
+    whatever host it points at, so the redirect is dropped (urllib then raises
+    the 3xx as an error, surfaced to the caller) and no second request is sent.
+    """
+
+    def redirect_request(self, *args, **kwargs):
+        """Return ``None`` so urllib does not issue a follow-up request."""
+        return None
+
+
 class KeenableSearchTool(BaseTool):
     """Tool for keyless (or keyed) web search using Keenable."""
 
@@ -51,6 +65,12 @@ class KeenableSearchTool(BaseTool):
     description = "Search the web using Keenable (keyless; an API key raises limits)."
 
     def __init__(self, api_key: Optional[str] = None):
+        """Create the tool, resolving the API key from the argument or env.
+
+        Args:
+            api_key: Optional Keenable API key. Falls back to the
+                ``KEENABLE_API_KEY`` environment variable; keyless if unset.
+        """
         self.api_key = (api_key or os.getenv("KEENABLE_API_KEY") or "").strip()
         super().__init__()
 
@@ -86,13 +106,7 @@ class KeenableSearchTool(BaseTool):
             return []
 
         from urllib.error import URLError
-        from urllib.request import HTTPRedirectHandler, Request, build_opener
-
-        # Keenable never redirects. Following one would resend X-API-Key to
-        # wherever it points, so a 3xx is turned into an error and surfaces here.
-        class _NoRedirect(HTTPRedirectHandler):
-            def redirect_request(self, *args, **kwargs):
-                return None
+        from urllib.request import Request, build_opener
 
         headers = {
             "Content-Type": "application/json",
