@@ -10,6 +10,7 @@ Usage:
 
 Environment Variables:
     SERPER_API_KEY: Serper API key
+    SERPER_BASE_URL: Optional Serper-compatible API base URL
 """
 
 import os
@@ -60,8 +61,9 @@ class SerperTool(BaseTool):
             return {"error": "SERPER_API_KEY not configured"}
         
         try:
+            base_url = os.getenv("SERPER_BASE_URL") or "https://google.serper.dev"
             response = requests.post(
-                f"https://google.serper.dev/{endpoint}",
+                f"{base_url.rstrip('/')}/{endpoint}",
                 headers={"X-API-KEY": self.api_key, "Content-Type": "application/json"},
                 json={"q": query, "num": num},
                 timeout=10,

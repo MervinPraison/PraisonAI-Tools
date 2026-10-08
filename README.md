@@ -782,3 +782,7 @@ MIT License - see [LICENSE](LICENSE) for details.
 - [PyPI](https://pypi.org/project/praisonai-tools/)
 - [GitHub](https://github.com/MervinPraison/PraisonAI-Tools)
 - [Issues](https://github.com/MervinPraison/PraisonAI-Tools/issues)
+
+## Search endpoint configuration
+
+Support any Serper.dev-compatible endpoint (like litescrape.com, serpbase.dev, serpensapi.org, and others). Set `SERPER_BASE_URL` to the provider base URL (without `/search`, `/news`, or `/images`) and `SERPER_API_KEY` to its API key. The selected search route is appended automatically; the default remains `https://google.serper.dev`.
