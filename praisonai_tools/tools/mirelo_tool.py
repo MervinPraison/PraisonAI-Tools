@@ -13,6 +13,7 @@ Environment Variables:
 
 import json
 import logging
+import mimetypes
 import os
 import shutil
 import subprocess
@@ -157,10 +158,11 @@ class MireloTool(BaseTool):
         """Upload a local file via /v3/assets. Returns the asset id or an error dict."""
         import requests
 
+        content_type = mimetypes.guess_type(path)[0] or "video/mp4"
         resp = requests.post(
             f"{BASE_URL}/v3/assets",
             headers=self._get_headers(),
-            json={"content_type": "video/mp4"},
+            json={"content_type": content_type},
             timeout=30,
         )
         if resp.status_code >= 400:
@@ -173,7 +175,7 @@ class MireloTool(BaseTool):
             up = requests.post(
                 ticket["upload_url"],
                 data=ticket.get("fields", {}),
-                files={"file": (os.path.basename(path), f, "video/mp4")},
+                files={"file": (os.path.basename(path), f, content_type)},
                 timeout=self.timeout,
             )
         if up.status_code >= 400:
@@ -209,11 +211,15 @@ class MireloTool(BaseTool):
 
         deadline = time.monotonic() + self.timeout
         while job.get("status") not in _FINAL_STATUSES:
-            if time.monotonic() > deadline:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
                 return {"error": f"Timed out waiting for Mirelo job {job.get('id')}", "job_id": job.get("id")}
-            time.sleep(_retry_after(resp))
+            time.sleep(min(_retry_after(resp), remaining))
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return {"error": f"Timed out waiting for Mirelo job {job.get('id')}", "job_id": job.get("id")}
             resp = requests.get(
-                urljoin(BASE_URL, job["urls"]["self"]), headers=self._get_headers(), timeout=60
+                urljoin(BASE_URL, job["urls"]["self"]), headers=self._get_headers(), timeout=min(60, remaining)
             )
             if resp.status_code >= 400:
                 return {"error": _error_message(resp), "job_id": job.get("id")}
@@ -228,15 +234,19 @@ class MireloTool(BaseTool):
         out_dir = output_dir or os.path.join(os.getcwd(), "mirelo_outputs")
         os.makedirs(out_dir, exist_ok=True)
         files = []
-        for i, file_url in enumerate(urls):
-            ext = os.path.splitext(file_url.split("?", 1)[0])[1] or ".bin"
-            path = os.path.join(out_dir, f"{job['id']}_{i}{ext}")
-            with requests.get(file_url, stream=True, timeout=120) as dl:
-                dl.raise_for_status()
-                with open(path, "wb") as f:
-                    for chunk in dl.iter_content(chunk_size=1 << 16):
-                        f.write(chunk)
-            files.append(path)
+        try:
+            for i, file_url in enumerate(urls):
+                ext = os.path.splitext(file_url.split("?", 1)[0])[1] or ".bin"
+                path = os.path.join(out_dir, f"{job['id']}_{i}{ext}")
+                with requests.get(file_url, stream=True, timeout=120) as dl:
+                    dl.raise_for_status()
+                    with open(path, "wb") as f:
+                        for chunk in dl.iter_content(chunk_size=1 << 16):
+                            f.write(chunk)
+                files.append(path)
+        except Exception as e:
+            # The job is paid for; return what we have so the caller can re-download from the URLs.
+            return {"error": f"Download failed: {e}", "files": files, "urls": urls, "status": status, "job_id": job.get("id")}
 
         result = {
             "files": files,

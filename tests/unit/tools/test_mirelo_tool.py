@@ -175,6 +175,43 @@ class TestVideoToSfx:
         assert mirelo_tool.time.sleep.call_args_list[0].args[0] == 30  # Retry-After capped
         assert len(result["files"]) == 1
 
+    def test_upload_uses_file_content_type(self, requests_mock, tmp_path):
+        post, _ = requests_mock
+        video = tmp_path / "clip.webm"
+        video.write_bytes(b"\x00" * 10)
+        ticket = {"id": "asset_1", "upload_url": "https://u/", "fields": {}, "max_bytes": 1000}
+        post.side_effect = [_resp(200, ticket), _resp(204), _resp(200, _job(outputs=[_output("succeeded")]))]
+
+        mirelo_video_to_sfx(str(video), duration_seconds=5, output_dir=str(tmp_path))
+
+        assets_call, upload_call, _ = post.call_args_list
+        assert assets_call.kwargs["json"] == {"content_type": "video/webm"}
+        assert upload_call.kwargs["files"]["file"][2] == "video/webm"
+
+    def test_poll_respects_timeout(self, requests_mock):
+        post, get = requests_mock
+        post.return_value = _resp(202, _job(status="queued"), headers={"Retry-After": "30"})
+        get.return_value = _resp(200, _job(status="running"))
+
+        with patch.object(mirelo_tool.time, "monotonic", side_effect=[0, 0, 1]):
+            result = MireloTool(timeout=1).video_to_sfx(VIDEO_URL, duration_seconds=5)
+
+        assert mirelo_tool.time.sleep.call_args.args[0] == 1  # capped at remaining time
+        assert "Timed out" in result["error"]
+        get.assert_not_called()
+
+    def test_download_failure_keeps_results(self, requests_mock, tmp_path):
+        post, get = requests_mock
+        post.return_value = _resp(200, _job(outputs=[_output("succeeded", "succeeded")]))
+        get.side_effect = [_download(), RuntimeError("boom")]
+
+        result = mirelo_video_to_sfx(VIDEO_URL, duration_seconds=5, num_variants=2, output_dir=str(tmp_path))
+
+        assert "boom" in result["error"]
+        assert len(result["files"]) == 1
+        assert len(result["urls"]) == 2
+        assert result["job_id"] == "job_1"
+
     def test_partially_succeeded(self, requests_mock, tmp_path):
         post, _ = requests_mock
         post.return_value = _resp(200, _job(status="partially_succeeded", outputs=[_output("succeeded", "failed")]))
