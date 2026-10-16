@@ -16,8 +16,8 @@ permissions:
 
 jobs:
   recover:
-    uses: MervinPraison/github-automation-template/.github/workflows/bot-pr-recovery-callable.yml@v1.1.14
+    uses: MervinPraison/github-automation-template/.github/workflows/bot-pr-recovery-callable.yml@v1.1.15
     secrets: inherit
     with:
-      hub_ref: v1.1.14
+      hub_ref: v1.1.15
       pr_number: ${{ github.event.inputs.pr_number || '' }}
