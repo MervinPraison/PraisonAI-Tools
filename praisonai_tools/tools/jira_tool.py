@@ -1029,8 +1029,9 @@ class JiraTool(BaseTool):
         if description:
             fields["description"] = description
 
+        # v2 accepts a plain-string description (v3 requires ADF).
         result = self._rest_request(
-            "/issue", method="POST", data={"fields": fields}
+            "/issue", method="POST", data={"fields": fields}, version="2"
         )
         if "error" in result:
             return result
@@ -1123,8 +1124,9 @@ class JiraTool(BaseTool):
                     fields.update(item["custom_fields"])
                 payload["issueUpdates"].append({"fields": fields})
 
+            # v2 accepts plain-string descriptions (v3 requires ADF).
             result = self._rest_request(
-                "/issue/bulk", method="POST", data=payload
+                "/issue/bulk", method="POST", data=payload, version="2"
             )
             if "error" in result:
                 created.append(result)
@@ -1285,8 +1287,9 @@ class JiraTool(BaseTool):
         if started:
             data["started"] = started
 
+        # v2 accepts a plain-string comment (v3 requires ADF).
         result = self._rest_request(
-            f"/issue/{issue_key}/worklog", method="POST", data=data
+            f"/issue/{issue_key}/worklog", method="POST", data=data, version="2"
         )
         if "error" in result:
             return result
@@ -1317,6 +1320,7 @@ class JiraTool(BaseTool):
             result = self._rest_request(
                 f"/issue/{issue_key}/worklog",
                 params={"startAt": start_at, "maxResults": 100},
+                version="2",  # plain-string comments, matching log_work
             )
             if "error" in result:
                 return [result]

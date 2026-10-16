@@ -278,6 +278,8 @@ class TestWorklog:
             assert result["timeSpent"] == "2h 30m"
             call = mock_req.call_args
             assert call[0][0] == "/issue/P-1/worklog"
+            # Plain-string comment requires REST v2 (v3 expects ADF).
+            assert call[1]["version"] == "2"
 
     @patch.dict(os.environ, ENV)
     def test_get_worklogs(self):
