@@ -39,6 +39,7 @@ from praisonai_tools.tools.base import BaseTool
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://api.hubapi.com"
+MAX_RETRY_DELAY_SECONDS = 60
 
 # HubSpot numeric association type IDs (default/unlabeled associations).
 ASSOC_CONTACT_TO_COMPANY = 279
@@ -113,8 +114,14 @@ class HubSpotTool(BaseTool):
                     delay = float(retry_after) if retry_after else 2 ** attempt
                 except ValueError:
                     delay = 2 ** attempt
+                # Guard against negative/huge server values blocking the agent.
+                if not 0 <= delay <= MAX_RETRY_DELAY_SECONDS:
+                    delay = min(2 ** attempt, MAX_RETRY_DELAY_SECONDS)
                 time.sleep(delay)
                 continue
+
+            if resp.status_code >= 400 and not resp.content:
+                return {"error": f"HTTP {resp.status_code}", "status_code": resp.status_code}
 
             if resp.status_code == 204 or not resp.content:
                 return {"success": True, "status_code": resp.status_code}
@@ -646,7 +653,10 @@ def hubspot_search_contacts(query: str) -> List[Dict[str, Any]]:
 
 
 def hubspot_create_contact(
-    email: str, firstname: str = "", lastname: str = "", company: str = ""
+    email: str,
+    firstname: Optional[str] = None,
+    lastname: Optional[str] = None,
+    company: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Create a HubSpot contact."""
     return HubSpotTool().create_contact(
@@ -655,7 +665,10 @@ def hubspot_create_contact(
 
 
 def hubspot_create_deal(
-    dealname: str, pipeline: str = "default", dealstage: str = "", amount: float = 0
+    dealname: str,
+    pipeline: str = "default",
+    dealstage: Optional[str] = None,
+    amount: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Create a HubSpot deal."""
     return HubSpotTool().create_deal(

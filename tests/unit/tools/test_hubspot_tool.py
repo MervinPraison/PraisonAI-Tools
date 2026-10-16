@@ -68,6 +68,30 @@ class TestRequest:
         assert result == {"ok": True}
         assert slp.call_args.args[0] == 1  # 2 ** attempt(0)
 
+    def test_negative_retry_after_is_clamped(self):
+        tool = HubSpotTool(access_token="x", max_retries=1)
+        responses = [
+            _mock_response(None, status_code=429, headers={"Retry-After": "-5"}),
+            _mock_response({"ok": True}),
+        ]
+        with patch("requests.request", side_effect=responses), patch("time.sleep") as slp:
+            tool._request("GET", "/x")
+        assert slp.call_args.args[0] == 1
+
+    def test_bodyless_error_is_not_success(self):
+        tool = HubSpotTool(access_token="x")
+        with patch("requests.request", return_value=_mock_response(None, status_code=404)):
+            result = tool._request("DELETE", "/x")
+        assert result == {"error": "HTTP 404", "status_code": 404}
+
+    def test_create_deal_helper_omits_unset_fields(self):
+        from praisonai_tools.tools.hubspot_tool import hubspot_create_deal
+        tool_req = "praisonai_tools.tools.hubspot_tool.HubSpotTool._request"
+        with patch.dict(os.environ, {"HUBSPOT_ACCESS_TOKEN": "x"}), patch(tool_req) as req:
+            hubspot_create_deal(dealname="D")
+        props = req.call_args.args[2]["properties"]
+        assert "dealstage" not in props and "amount" not in props
+
     def test_http_error_returns_message(self):
         tool = HubSpotTool(access_token="x")
         with patch(
@@ -243,4 +267,4 @@ class TestStandaloneHelpers:
     def test_create_contact_helper(self):
         with patch.object(HubSpotTool, "create_contact", return_value={"id": "1"}) as m:
             hubspot_create_contact(email="a@b.com", firstname="Al")
-        m.assert_called_once_with(email="a@b.com", firstname="Al", lastname="", company="")
+        m.assert_called_once_with(email="a@b.com", firstname="Al", lastname=None, company=None)
