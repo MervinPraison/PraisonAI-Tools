@@ -29,24 +29,6 @@ import os
 from importlib import util
 
 
-def _check_youdotcom_available() -> tuple[bool, Optional[str]]:
-    """Check if You.com SDK is available and API key is set.
-    
-    Returns:
-        Tuple of (is_available, error_message)
-    """
-    # Check if youdotcom package is installed
-    if util.find_spec("youdotcom") is None:
-        return False, "youdotcom package is not installed. Please install it using: pip install youdotcom"
-    
-    # Check if API key is set
-    api_key = os.environ.get("YDC_API_KEY")
-    if not api_key:
-        return False, "YDC_API_KEY environment variable is not set. Please set it to use You.com tools."
-    
-    return True, None
-
-
 class YouTools:
     """Comprehensive tools for web search and content using You.com API.
     
@@ -82,14 +64,13 @@ class YouTools:
     def _get_client(self):
         """Get or create You.com client."""
         if self._client is None:
-            is_available, error = _check_youdotcom_available()
-            if not is_available:
-                return None, error
-            
-            from youdotcom import You
+            if util.find_spec("youdotcom") is None:
+                return None, "youdotcom package is not installed. Please install it using: pip install youdotcom"
             api_key = self._get_api_key()
             if not api_key:
-                return None, "YDC_API_KEY not set"
+                return None, "YDC_API_KEY environment variable is not set. Please set it to use You.com tools."
+            
+            from youdotcom import You
             self._client = You(api_key_auth=api_key)
         return self._client, None
     
@@ -499,3 +480,5 @@ def ydc_images(
 
 # Alias for simple usage
 ydc = ydc_search
+
+__all__ = ["YouTools", "ydc_search", "ydc_contents", "ydc_news", "ydc_images", "ydc"]

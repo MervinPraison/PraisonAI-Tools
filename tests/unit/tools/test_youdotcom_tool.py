@@ -12,16 +12,35 @@ from praisonai_tools.tools.youdotcom_tool import (
 )
 
 
+_FIND_SPEC = "praisonai_tools.tools.youdotcom_tool.util.find_spec"
+
+
 def test_missing_api_key_returns_error(monkeypatch):
     monkeypatch.delenv("YDC_API_KEY", raising=False)
-    for fn, arg in (
-        (ydc_search, "q"),
-        (ydc_contents, "https://example.com"),
-        (ydc_news, "q"),
-        (ydc_images, "q"),
+    with patch(_FIND_SPEC, return_value=object()):
+        for fn, arg in (
+            (ydc_search, "q"),
+            (ydc_contents, "https://example.com"),
+            (ydc_news, "q"),
+            (ydc_images, "q"),
+        ):
+            result = fn(arg)
+            assert result == {
+                "error": "YDC_API_KEY environment variable is not set. Please set it to use You.com tools."
+            }
+
+
+def test_explicit_api_key_used_without_env(monkeypatch):
+    monkeypatch.delenv("YDC_API_KEY", raising=False)
+    fake_module = MagicMock()
+    with patch(_FIND_SPEC, return_value=object()), patch.dict(
+        "sys.modules", {"youdotcom": fake_module}
     ):
-        result = fn(arg)
-        assert "error" in result
+        client, error = YouTools(api_key="k")._get_client()
+
+    assert error is None
+    assert client is fake_module.You.return_value
+    fake_module.You.assert_called_once_with(api_key_auth="k")
 
 
 def test_ydc_alias():
@@ -59,3 +78,4 @@ def test_discovered_via_package():
 
     assert tools_pkg.YouTools is YouTools
     assert tools_pkg.ydc_search is ydc_search
+    assert tools_pkg.ydc is ydc_search
