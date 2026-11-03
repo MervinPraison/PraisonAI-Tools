@@ -596,6 +596,18 @@ python -m praisonai_tools.video render input.mp4 --timeline plan.json --output o
 
 This package also includes ready-to-use tools for common integrations:
 
+### Market sentiment research
+
+[AdanosTool](docs/adanos_integration.md) provides five research operations across
+Reddit Stocks, X Stocks, News Stocks, Polymarket Stocks, and Reddit Crypto.
+It uses a commercial, plan-limited provider and requires `ADANOS_API_KEY`.
+
+```python
+from praisonai_tools import AdanosTool
+
+result = AdanosTool()(source="news_stocks", operation="asset", asset="BRK")
+```
+
 ### Communication Tools
 
 ```python
