@@ -88,7 +88,7 @@ class AdanosTool(BaseTool):
         if not self._api_key:
             return ToolResult(None, success=False, error="Configure ADANOS_API_KEY or constructor api_key.")
         if (not isinstance(self._api_key, str) or not self._api_key.isascii()
-                or "\r" in self._api_key or "\n" in self._api_key):
+                or not self._api_key.isprintable() or self._api_key != self._api_key.strip()):
             return ToolResult(None, success=False, error="Invalid Adanos API key configuration.")
         try:
             if not isinstance(source, str) or source not in _SOURCES:

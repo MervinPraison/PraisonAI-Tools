@@ -1,15 +1,18 @@
 # Adanos market sentiment research
 
-[Adanos](https://adanos.org/) is a commercial, plan-limited data provider.
+[Adanos](https://adanos.com/) is a commercial, plan-limited data provider.
 An API key is required. Source availability, history, quotas, and rate limits
 depend on the account plan. This tool follows API 1.54.1.
-See the [API documentation](https://api.adanos.org/docs).
+See the [API documentation](https://api.adanos.com/docs) and
+[OpenAPI definition](https://api.adanos.com/openapi.json), which identifies
+`https://api.adanos.com` as the production server used by this tool.
 
 ## Use with a researcher
 
 Install `praisonai-tools[adanos]` and set `ADANOS_API_KEY` in the process
 environment. The key can also be passed to the constructor. It is not an agent
-tool parameter.
+tool parameter. Keys with leading or trailing whitespace, non-ASCII characters,
+or control characters are rejected locally without making an HTTP request.
 
 ```python
 from praisonaiagents import Agent

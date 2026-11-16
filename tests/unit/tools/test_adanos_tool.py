@@ -69,10 +69,6 @@ def payload(source, operation):
     if operation == "asset":
         return {**identity, "found": False, "buzz_score": None,
                 "sentiment_score": None, "period_days": 7}
-    if operation == "compare":
-        return {"period_days": 7, "tokens" if crypto else "stocks": []}
-    if operation == "search":
-        return {"query": "apple", "count": 0, "period_days": 7, "results": []}
     metrics = {"buzz_score": None, "active_tickers": 0,
                "positive_count": 0, "negative_count": 0, "neutral_count": 0,
                "bullish_pct": 0, "bearish_pct": 0, "trend_history": [], "drivers": []}
@@ -90,6 +86,14 @@ def payload(source, operation):
     if operation == "market_sentiment":
         return metrics
     metrics.update(identity, buzz_score=0, trend="stable", sentiment_score=0)
+    if operation == "compare":
+        return {"period_days": 7, "tokens" if crypto else "stocks": [metrics]}
+    if operation == "search":
+        activity = "trade_count" if source == "polymarket_stocks" else "mentions"
+        return {"query": "apple", "count": 1, "period_days": 7, "results": [{
+            **identity, "name": "Bitcoin" if crypto else "Apple",
+            "summary": {activity: 0, "buzz_score": None},
+        }]}
     return [metrics]
 
 
@@ -166,7 +170,11 @@ def test_unconfigured_has_no_network(tool_class, http):
     assert not http["clients"] and not http["requests"]
 
 
-@pytest.mark.parametrize("key", ["test-secret-\N{SNOWMAN}", "test-secret-\n", "test-secret-\r", 123])
+@pytest.mark.parametrize("key", [
+    "test-secret-\N{SNOWMAN}", "test-secret-\n", "test-secret-\r", 123,
+    " ", "  ", "test-secret ", " test-secret", "\ttest-secret",
+    "test-secret\tvalue", "test-secret\x00", "test-secret\x1f", "test-secret\x7f",
+])
 def test_invalid_key_never_leaks_or_requests(tool_class, http, key, caplog):
     result = tool_class(api_key=key).safe_run(source="reddit_stocks", operation="trending")
     assert not result.success and result.output is None
@@ -182,6 +190,51 @@ def test_env_key_and_per_call_cleanup(tool_class, http, monkeypatch):
     assert len(http["clients"]) == 2
     assert http["clients"][0] is not http["clients"][1]
     assert http["closed"] == 2
+
+
+def test_invalid_env_key_does_not_request(tool_class, http, monkeypatch):
+    monkeypatch.setenv("ADANOS_API_KEY", " test-secret ")
+    result = tool_class().safe_run(source="reddit_stocks", operation="trending")
+    assert not result.success and result.output is None
+    assert "test-secret" not in str(result.to_dict())
+    assert not http["clients"] and not http["requests"]
+
+
+@pytest.mark.parametrize("source", SOURCES)
+@pytest.mark.parametrize("operation", ["compare", "search"])
+def test_empty_results_are_valid(tool_class, http, source, operation):
+    data = payload(source, operation)
+    rows_key = "results" if operation == "search" else "tokens" if source == "reddit_crypto" else "stocks"
+    data[rows_key] = []
+    if operation == "search":
+        data["count"] = 0
+    http["response"] = httpx.Response(200, json=data)
+    args = {"query": "apple"} if operation == "search" else {"assets": ["BTC", "ETH"]}
+    result = tool_class(api_key=KEY).safe_run(source=source, operation=operation, **args)
+    assert result.success and result.output["data"] == data
+
+
+@pytest.mark.parametrize("source", SOURCES)
+@pytest.mark.parametrize("operation", ["compare", "search"])
+@pytest.mark.parametrize("identity_error", ["missing", "wrong_field", "non_string"])
+def test_results_require_each_rows_source_identity(tool_class, http, source, operation, identity_error):
+    data = payload(source, operation)
+    crypto = source == "reddit_crypto"
+    rows_key = "results" if operation == "search" else "tokens" if crypto else "stocks"
+    identity = "symbol" if crypto else "ticker"
+    invalid = dict(data[rows_key][0])
+    del invalid[identity]
+    if identity_error == "wrong_field":
+        invalid["ticker" if crypto else "symbol"] = "BTC" if crypto else "AAPL"
+    elif identity_error == "non_string":
+        invalid[identity] = 123
+    data[rows_key].append(invalid)
+    http["response"] = httpx.Response(200, json=data)
+    args = {"query": "apple"} if operation == "search" else {"assets": ["BTC", "ETH"]}
+    result = tool_class(api_key=KEY).safe_run(source=source, operation=operation, **args)
+    assert not result.success and result.output is None
+    assert result.error == "Adanos returned an unexpected response shape."
+    assert len(http["requests"]) == 1 and http["closed"] == 1
 
 
 @pytest.mark.parametrize("status", [200, 429])
