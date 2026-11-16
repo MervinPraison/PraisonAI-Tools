@@ -56,6 +56,7 @@ _MODULE_EXTRAS = {
     "swarmscore_tool": ("swarmscore",),
     "composio_tool": ("composio",),
     "stripe_tool": ("stripe",),
+    "mirelo_tool": ("mirelo",),
 }
 
 
