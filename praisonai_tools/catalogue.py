@@ -46,6 +46,7 @@ _TOOLS_DIR = os.path.join(os.path.dirname(__file__), "tools")
 # base dependencies). Keep this aligned with ``[project.optional-dependencies]``
 # in ``pyproject.toml``.
 _MODULE_EXTRAS = {
+    "context_tool": ("context",),
     "wordpress_tool": ("wordpress",),
     "pinchwork_tool": ("pinchwork", "marketplace"),
     "agentid_tool": ("agentid", "marketplace"),
