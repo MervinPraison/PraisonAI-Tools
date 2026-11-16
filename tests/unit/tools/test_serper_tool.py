@@ -28,20 +28,20 @@ class TestBaseUrlRouting:
     def test_custom_base_url(self):
         tool = SerperTool(api_key="k")
         requests = _mock_requests({"organic": []})
-        with patch.dict(os.environ, {"SERPER_BASE_URL": "https://litescrape.com"}, clear=True):
+        with patch.dict(os.environ, {"SERPER_BASE_URL": "https://serper-proxy.example.com"}, clear=True):
             with patch.dict("sys.modules", {"requests": requests}):
                 tool.search(query="python")
         url = requests.post.call_args.args[0]
-        assert url == "https://litescrape.com/search"
+        assert url == "https://serper-proxy.example.com/search"
 
     def test_trailing_slash_is_stripped(self):
         tool = SerperTool(api_key="k")
         requests = _mock_requests({"organic": []})
-        with patch.dict(os.environ, {"SERPER_BASE_URL": "https://litescrape.com/"}, clear=True):
+        with patch.dict(os.environ, {"SERPER_BASE_URL": "https://serper-proxy.example.com/"}, clear=True):
             with patch.dict("sys.modules", {"requests": requests}):
                 tool.search(query="python")
         url = requests.post.call_args.args[0]
-        assert url == "https://litescrape.com/search"
+        assert url == "https://serper-proxy.example.com/search"
 
     def test_custom_base_url_routes_news_and_images(self):
         tool = SerperTool(api_key="k")
