@@ -41,10 +41,8 @@ class ContextTool(BaseTool):
     }
 
     def __init__(self, api_key: Optional[str] = None):
-        """Use an explicit key, CONTEXT_DEV_API_KEY, or legacy CONTEXT_API_KEY."""
-        self.api_key = (
-            api_key or os.getenv("CONTEXT_DEV_API_KEY") or os.getenv("CONTEXT_API_KEY")
-        )
+        """Use an explicit key or CONTEXT_DEV_API_KEY."""
+        self.api_key = api_key or os.getenv("CONTEXT_DEV_API_KEY")
         super().__init__()
 
     def run(
@@ -89,7 +87,7 @@ class ContextTool(BaseTool):
             )
             response.raise_for_status()
             return response.json()
-        except httpx.HTTPError as error:
-            return {"error": f"Context.dev request failed: {error}"}
+        except httpx.HTTPError:
+            return {"error": "Context.dev request failed"}
         except ValueError:
             return {"error": "Context.dev returned invalid JSON"}

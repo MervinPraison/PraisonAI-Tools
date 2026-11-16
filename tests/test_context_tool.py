@@ -94,7 +94,9 @@ def test_key_precedence(monkeypatch, calls):
     assert ContextTool(api_key="explicit-key").api_key == "explicit-key"
     assert ContextTool().api_key == "preferred-key"
     monkeypatch.delenv("CONTEXT_DEV_API_KEY")
-    assert ContextTool().api_key == "legacy-key"
+    assert ContextTool().api_key is None
+    assert "error" in ContextTool().run(query="robotics")
+    assert not calls
 
 
 @pytest.mark.parametrize("status", [302, 401, 429, 500])
@@ -108,14 +110,27 @@ def test_http_errors_are_returned(monkeypatch, status):
     assert "fixture-key" not in result["error"]
 
 
+def test_malformed_key_is_not_exposed_in_protocol_error(monkeypatch):
+    key = "fixture-secret\n"
+
+    def post(*args, **kwargs):
+        header = kwargs["headers"]["Authorization"].encode()
+        raise httpx.LocalProtocolError(f"Illegal header value {header!r}")
+
+    monkeypatch.setattr(httpx, "post", post)
+    result = ContextTool(api_key=key).run(query="robotics")
+    assert result == {"error": "Context.dev request failed"}
+    assert "fixture-secret" not in str(result)
+
+
 def test_timeout_is_returned(monkeypatch):
     def post(*args, **kwargs):
         raise httpx.ReadTimeout("request timed out")
 
     monkeypatch.setattr(httpx, "post", post)
-    assert (
-        "timed out" in ContextTool(api_key="fixture-key").run(query="robotics")["error"]
-    )
+    assert ContextTool(api_key="fixture-key").run(query="robotics") == {
+        "error": "Context.dev request failed",
+    }
 
 
 def test_invalid_json_is_returned(monkeypatch):
