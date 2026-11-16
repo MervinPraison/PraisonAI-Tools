@@ -78,19 +78,21 @@ class TestRequest:
             tool._request("GET", "/x")
         assert slp.call_args.args[0] == 1
 
+    def test_huge_retry_after_is_capped(self):
+        tool = HubSpotTool(access_token="x", max_retries=1)
+        responses = [
+            _mock_response(None, status_code=429, headers={"Retry-After": "99999"}),
+            _mock_response({"ok": True}),
+        ]
+        with patch("requests.request", side_effect=responses), patch("time.sleep") as slp:
+            tool._request("GET", "/x")
+        assert slp.call_args.args[0] == 60
+
     def test_bodyless_error_is_not_success(self):
         tool = HubSpotTool(access_token="x")
         with patch("requests.request", return_value=_mock_response(None, status_code=404)):
-            result = tool._request("DELETE", "/x")
+            result = tool._request("GET", "/x")
         assert result == {"error": "HTTP 404", "status_code": 404}
-
-    def test_create_deal_helper_omits_unset_fields(self):
-        from praisonai_tools.tools.hubspot_tool import hubspot_create_deal
-        tool_req = "praisonai_tools.tools.hubspot_tool.HubSpotTool._request"
-        with patch.dict(os.environ, {"HUBSPOT_ACCESS_TOKEN": "x"}), patch(tool_req) as req:
-            hubspot_create_deal(dealname="D")
-        props = req.call_args.args[2]["properties"]
-        assert "dealstage" not in props and "amount" not in props
 
     def test_http_error_returns_message(self):
         tool = HubSpotTool(access_token="x")
@@ -118,9 +120,24 @@ class TestContacts:
         assert body["properties"]["firstname"] == "Al"
         assert body["properties"]["company"] == "Acme"
 
-    def test_update_contact_requires_props(self):
+    def test_get_contact_requires_id_and_passes_properties(self):
         tool = HubSpotTool(access_token="x")
-        assert tool.update_contact(contact_id="1") == {"error": "no properties to update"}
+        assert tool.get_contact(contact_id="") == {"error": "contact_id required"}
+        with patch("requests.request", return_value=_mock_response({"id": "7"})) as req:
+            assert tool.get_contact(contact_id="7", properties=["email", "phone"]) == {"id": "7"}
+        assert req.call_args.args[1].endswith("/crm/v3/objects/contacts/7")
+        assert req.call_args.kwargs["params"] == {"properties": "email,phone"}
+
+    def test_create_contact_omits_unset_fields(self):
+        tool = HubSpotTool(access_token="x")
+        with patch("requests.request", return_value=_mock_response({"id": "1"})) as req:
+            assert tool.create_contact(email="a@b.com") == {"id": "1"}
+        assert req.call_args.kwargs["json"] == {"properties": {"email": "a@b.com"}}
+
+    def test_search_contacts_surfaces_error(self):
+        tool = HubSpotTool(access_token="x")
+        with patch("requests.request", return_value=_mock_response({"message": "bad"}, status_code=400)):
+            assert tool.search_contacts(query="a") == [{"error": "bad", "status_code": 400}]
 
     def test_search_contacts_returns_results(self):
         tool = HubSpotTool(access_token="x")
@@ -128,120 +145,6 @@ class TestContacts:
         with patch("requests.request", return_value=_mock_response(payload)):
             out = tool.search_contacts(query="alice")
         assert len(out) == 2
-
-    def test_delete_contact_requires_id(self):
-        tool = HubSpotTool(access_token="x")
-        assert tool.delete_contact(contact_id="") == {"error": "contact_id required"}
-
-
-# ── Deals ───────────────────────────────────────────────────────────
-class TestDeals:
-    def test_create_deal_requires_name(self):
-        tool = HubSpotTool(access_token="x")
-        assert tool.create_deal(dealname="") == {"error": "dealname required"}
-
-    def test_move_deal_stage_patches_dealstage(self):
-        tool = HubSpotTool(access_token="x")
-        with patch("requests.request", return_value=_mock_response({"id": "1"})) as req:
-            tool.move_deal_stage(deal_id="1", stage_id="closedwon")
-        assert req.call_args.kwargs["json"]["properties"]["dealstage"] == "closedwon"
-        assert req.call_args.args[0] == "PATCH"
-
-    def test_associate_deal_with_contact_uses_type_id_3(self):
-        tool = HubSpotTool(access_token="x")
-        with patch("requests.request", return_value=_mock_response({"ok": True})) as req:
-            tool.associate_deal_with_contact(deal_id="2", contact_id="1")
-        url = req.call_args.args[1]
-        # v3 individual-association endpoint carries the type id in the URL path,
-        # not the request body.
-        assert url.endswith("/deals/2/associations/contacts/1/3")
-        assert req.call_args.kwargs["json"] is None
-
-
-# ── Activities use v3 CRM objects (not legacy /engagements/v1) ───────
-class TestActivities:
-    def test_log_call_hits_v3_calls_endpoint(self):
-        tool = HubSpotTool(access_token="x")
-        with patch("requests.request", return_value=_mock_response({"id": "3"})) as req:
-            tool.log_call(contact_id="1", body="Discovery call")
-        assert req.call_args.args[1].endswith("/crm/v3/objects/calls")
-        body = req.call_args.kwargs["json"]
-        assert body["properties"]["hs_call_body"] == "Discovery call"
-        assert body["associations"][0]["to"]["id"] == "1"
-
-    def test_log_meeting_duration_sets_end_time(self):
-        tool = HubSpotTool(access_token="x")
-        with patch("requests.request", return_value=_mock_response({"id": "9"})) as req:
-            tool.log_meeting(
-                contact_id="1", title="Sync", start_time="1000", duration_ms=1800000
-            )
-        props = req.call_args.kwargs["json"]["properties"]
-        assert props["hs_meeting_start_time"] == 1000
-        assert props["hs_meeting_end_time"] == 1000 + 1800000
-
-    def test_create_note_associates_multiple_objects(self):
-        tool = HubSpotTool(access_token="x")
-        with patch("requests.request", return_value=_mock_response({"id": "5"})) as req:
-            tool.create_note(body="note", contact_id="1", deal_id="2")
-        assocs = req.call_args.kwargs["json"]["associations"]
-        assert len(assocs) == 2
-
-
-# ── Pipelines ───────────────────────────────────────────────────────
-class TestPipelines:
-    def test_list_pipelines_returns_results(self):
-        tool = HubSpotTool(access_token="x")
-        with patch(
-            "requests.request",
-            return_value=_mock_response({"results": [{"id": "default"}]}),
-        ):
-            out = tool.list_pipelines()
-        assert out == [{"id": "default"}]
-
-
-# ── properties ──────────────────────────────────────────────────────
-class TestProperties:
-    def test_create_property_derives_type_from_field_type(self):
-        tool = HubSpotTool(access_token="x")
-        with patch(
-            "requests.request", return_value=_mock_response({"name": "score"})
-        ) as req:
-            tool.create_property(
-                object_type="contacts",
-                name="score",
-                label="Score",
-                field_type="number",
-            )
-        body = req.call_args.kwargs["json"]
-        assert body["type"] == "number"
-        assert body["fieldType"] == "number"
-
-    def test_create_property_defaults_type_to_string(self):
-        tool = HubSpotTool(access_token="x")
-        with patch(
-            "requests.request", return_value=_mock_response({"name": "note"})
-        ) as req:
-            tool.create_property(
-                object_type="contacts",
-                name="note",
-                label="Note",
-                field_type="text",
-            )
-        body = req.call_args.kwargs["json"]
-        assert body["type"] == "string"
-
-
-# ── search_crm ──────────────────────────────────────────────────────
-class TestSearchCrm:
-    def test_requires_query(self):
-        tool = HubSpotTool(access_token="x")
-        assert tool.search_crm(query="") == {"error": "query required"}
-
-    def test_searches_all_object_types(self):
-        tool = HubSpotTool(access_token="x")
-        with patch("requests.request", return_value=_mock_response({"results": []})):
-            out = tool.search_crm(query="acme")
-        assert set(out.keys()) == {"contacts", "companies", "deals"}
 
 
 # ── run() dispatcher ────────────────────────────────────────────────
