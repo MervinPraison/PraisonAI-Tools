@@ -26,11 +26,41 @@ from praisonai_tools.tools.base import BaseTool
 logger = logging.getLogger(__name__)
 
 
+_MD_PREFIX = {
+    "heading_1": "# ",
+    "heading_2": "## ",
+    "heading_3": "### ",
+    "bulleted_list_item": "- ",
+    "numbered_list_item": "1. ",
+    "quote": "> ",
+}
+
+
+def _blocks_to_markdown(blocks: List[Dict[str, Any]]) -> str:
+    """Convert Notion block dicts to a markdown string."""
+    lines: List[str] = []
+    for block in blocks:
+        btype = block.get("type", "")
+        data = block.get(btype) or {}
+        text = "".join(rt.get("plain_text", "") for rt in data.get("rich_text", []))
+        if btype == "to_do":
+            lines.append(f"- [{'x' if data.get('checked') else ' '}] {text}")
+        elif btype == "code":
+            lines.append(f"```{data.get('language', '')}\n{text}\n```")
+        elif btype == "divider":
+            lines.append("---")
+        elif btype in _MD_PREFIX:
+            lines.append(_MD_PREFIX[btype] + text)
+        elif text:
+            lines.append(text)
+    return "\n\n".join(lines)
+
+
 class NotionTool(BaseTool):
     """Tool for interacting with Notion."""
     
     name = "notion"
-    description = "Interact with Notion - search, create pages, query databases."
+    description = "Interact with Notion - search, read page content, create pages, query databases."
     
     def __init__(
         self,
@@ -101,6 +131,8 @@ class NotionTool(BaseTool):
             return self.search(query=query)
         elif action == "get_page":
             return self.get_page(page_id=page_id)
+        elif action == "get_page_content":
+            return self.get_page_content(page_id=page_id)
         elif action == "create_page":
             return self.create_page(parent_id=parent_id, title=title, content=content)
         elif action == "query_database":
@@ -200,6 +232,32 @@ class NotionTool(BaseTool):
             "properties": props,
         }
     
+    def get_page_content(self, page_id: str) -> Union[str, Dict[str, Any]]:
+        """Read a page's top-level blocks and return them as markdown.
+
+        Args:
+            page_id: Page ID
+
+        Returns:
+            Markdown string, or an error dict
+        """
+        if not page_id:
+            return {"error": "page_id is required"}
+
+        blocks: List[Dict[str, Any]] = []
+        endpoint = f"blocks/{page_id}/children?page_size=100"
+        while True:
+            result = self._request("GET", endpoint)
+            if "error" in result:
+                return result
+            blocks.extend(result.get("results", []))
+            cursor = result.get("next_cursor")
+            if not result.get("has_more") or not cursor:
+                break
+            endpoint = f"blocks/{page_id}/children?page_size=100&start_cursor={cursor}"
+
+        return _blocks_to_markdown(blocks)
+
     def create_page(
         self,
         parent_id: str,
