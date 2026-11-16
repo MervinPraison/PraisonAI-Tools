@@ -135,6 +135,14 @@ class TestContacts:
         assert req.call_args.args[1].endswith("/crm/v3/objects/contacts/7")
         assert req.call_args.kwargs["params"] == {"properties": "email,phone"}
 
+    def test_get_contact_escapes_id_in_path(self):
+        tool = HubSpotTool(access_token="t")
+        with patch("requests.request") as req:
+            req.return_value = _mock_response({"id": "x"})
+            tool.get_contact("../../../oauth/v1/x?a=1")
+            url = req.call_args.args[1]
+            assert url == "https://api.hubapi.com/crm/v3/objects/contacts/..%2F..%2F..%2Foauth%2Fv1%2Fx%3Fa%3D1"
+
     def test_create_contact_omits_unset_fields(self):
         tool = HubSpotTool(access_token="x")
         with patch("requests.request", return_value=_mock_response({"id": "1"})) as req:

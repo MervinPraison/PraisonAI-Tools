@@ -3,6 +3,7 @@
 import os
 import time
 from typing import Any, Dict, List, Optional, Union
+from urllib.parse import quote
 
 from praisonai_tools.tools.base import BaseTool
 
@@ -75,7 +76,7 @@ class HubSpotTool(BaseTool):
         if not contact_id:
             return {"error": "contact_id required"}
         params = {"properties": ",".join(properties)} if properties else None
-        return self._request("GET", f"/crm/v3/objects/contacts/{contact_id}", params=params)
+        return self._request("GET", f"/crm/v3/objects/contacts/{quote(str(contact_id), safe='')}", params=params)
 
     def search_contacts(self, query: str, limit: int = 20) -> List[Dict[str, Any]]:
         """Search contacts by free-text query."""
