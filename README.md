@@ -702,6 +702,7 @@ air = weather.get_air_quality("Tokyo")
 | YouTubeTool | `YOUTUBE_API_KEY` |
 | WeatherTool | `OPENWEATHER_API_KEY` |
 | FirefliesTool | `FIREFLIES_API_KEY` (optional `FIREFLIES_API_URL`) |
+| SerperTool | `SERPER_API_KEY` (optional `SERPER_BASE_URL` for a Serper-compatible endpoint; base URL without `/search`, defaults to `https://google.serper.dev`) |
 | LinkUpTool | `LINKUP_API_KEY` |
 | SwarmScoreTool | None (uses public API) |
 
