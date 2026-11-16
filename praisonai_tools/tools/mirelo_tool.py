@@ -48,7 +48,8 @@ class MireloTool(BaseTool):
                 if time.monotonic() + wait >= deadline:
                     return {"error": f"Timed out waiting for Mirelo job {job.get('id')}", "job_id": job.get("id")}
                 time.sleep(wait)
-                resp = requests.get(urljoin(BASE_URL, job["urls"]["self"]), headers=headers, timeout=60)
+                resp = requests.get(urljoin(BASE_URL, job["urls"]["self"]), headers=headers,
+                                    timeout=max(1, min(60, deadline - time.monotonic())))
             if resp.status_code >= 400:
                 return {"error": f"Mirelo API error {resp.status_code}: {resp.text[:200]}"}
             job = resp.json()
