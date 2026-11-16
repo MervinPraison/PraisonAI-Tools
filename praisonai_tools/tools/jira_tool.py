@@ -660,6 +660,8 @@ class JiraTool(BaseTool):
         Returns:
             Success/error dictionary
         """
+        if isinstance(issue_keys, str):
+            issue_keys = [k.strip() for k in issue_keys.split(",") if k.strip()]
         if not sprint_id or not issue_keys:
             return {"error": "sprint_id and issue_keys are required"}
 

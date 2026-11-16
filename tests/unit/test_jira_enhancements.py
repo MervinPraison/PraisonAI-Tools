@@ -147,3 +147,17 @@ class TestRunRouting:
         with patch.object(jira, "move_issues_to_sprint", return_value={}) as m:
             jira.run(action="move-issues-to-sprint", sprint_id=42, issue_keys=["P-1"])
             m.assert_called_once_with(sprint_id=42, issue_keys=["P-1"])
+
+
+class TestMoveIssuesStringInput:
+    @patch.dict(os.environ, ENV)
+    def test_move_issues_accepts_comma_string(self):
+        from praisonai_tools import JiraTool
+
+        jira = JiraTool()
+        with patch.object(jira, "_agile_request") as mock_req:
+            mock_req.return_value = {"success": True}
+            result = jira.move_issues_to_sprint(sprint_id=42, issue_keys="PROJ-1, PROJ-2")
+
+            assert result == {"success": True, "sprint_id": 42, "moved": 2}
+            assert mock_req.call_args[1]["data"] == {"issues": ["PROJ-1", "PROJ-2"]}
