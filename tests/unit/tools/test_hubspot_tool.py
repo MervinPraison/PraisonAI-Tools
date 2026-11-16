@@ -94,6 +94,13 @@ class TestRequest:
             result = tool._request("GET", "/x")
         assert result == {"error": "HTTP 404", "status_code": 404}
 
+    def test_malformed_json_on_success_is_error(self):
+        tool = HubSpotTool(access_token="x")
+        resp = _mock_response({})
+        resp.json.side_effect = ValueError("bad json")
+        with patch("requests.request", return_value=resp):
+            assert tool.search_contacts("a") == [{"error": "Invalid JSON response"}]
+
     def test_http_error_returns_message(self):
         tool = HubSpotTool(access_token="x")
         with patch(

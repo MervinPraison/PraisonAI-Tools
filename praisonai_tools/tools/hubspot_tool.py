@@ -30,7 +30,8 @@ class HubSpotTool(BaseTool):
             return {"error": "requests not installed. Install with: pip install requests"}
         if not self.access_token:
             return {"error": "HUBSPOT_ACCESS_TOKEN required"}
-        mask = lambda s: (s or "").replace(self.access_token, "***")
+        def mask(s):
+            return (s or "").replace(self.access_token, "***")
         headers = {"Authorization": f"Bearer {self.access_token}"}
         for attempt in range(self.max_retries + 1):
             try:
@@ -46,12 +47,12 @@ class HubSpotTool(BaseTool):
             try:
                 data = resp.json() if resp.content else {}
             except ValueError:
-                data = {}
+                data = None  # malformed JSON
             if resp.status_code >= 400:
                 msg = data.get("message") if isinstance(data, dict) else None
                 return {"error": mask(msg or f"HTTP {resp.status_code}"),
                         "status_code": resp.status_code}
-            return data
+            return data if data is not None else {"error": "Invalid JSON response"}
         return {"error": "Rate limited (429) after retries", "status_code": 429}
 
     def run(self, action: str = "search_contacts", **kwargs) -> Union[Dict, List[Dict]]:
