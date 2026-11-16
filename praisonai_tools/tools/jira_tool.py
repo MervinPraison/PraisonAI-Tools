@@ -158,6 +158,15 @@ class JiraTool(BaseTool):
             )
         elif action == "move_issue":
             return self.move_issue(issue_key=issue_key, status=kwargs.get("status"))
+        # Sprint actions
+        elif action == "list_sprints":
+            return self.list_sprints(board_id=board_id, state=kwargs.get("state", "active"))
+        elif action == "get_active_sprint":
+            return self.get_active_sprint(board_id=board_id)
+        elif action == "move_issues_to_sprint":
+            return self.move_issues_to_sprint(
+                sprint_id=kwargs.get("sprint_id"), issue_keys=kwargs.get("issue_keys")
+            )
         else:
             return {"error": f"Unknown action: {action}"}
     
@@ -594,6 +603,74 @@ class JiraTool(BaseTool):
             logger.error(f"Jira move_issue error: {e}")
             return {"error": str(e)}
 
+
+    # ==================== Sprint Operations ====================
+
+    def list_sprints(self, board_id: int, state: str = "active") -> List[Dict[str, Any]]:
+        """List all sprints on a Scrum board.
+
+        Args:
+            board_id: The board ID
+            state: Filter by state - 'active', 'future' or 'closed'
+
+        Returns:
+            List of sprints
+        """
+        if not board_id:
+            return [{"error": "board_id is required"}]
+
+        params = {"maxResults": 50, "startAt": 0}
+        if state:
+            params["state"] = state
+        sprints: List[Dict[str, Any]] = []
+        while True:
+            result = self._agile_request(f"/board/{board_id}/sprint", params=params)
+            if "error" in result:
+                return [result]
+            page = result.get("values", [])
+            sprints.extend(page)
+            if not page or result.get("isLast", True):
+                break
+            params["startAt"] += len(page)
+
+        return [
+            {
+                "id": s.get("id"),
+                "name": s.get("name"),
+                "state": s.get("state"),
+                "startDate": s.get("startDate"),
+                "endDate": s.get("endDate"),
+                "goal": s.get("goal"),
+            }
+            for s in sprints
+        ]
+
+    def get_active_sprint(self, board_id: int) -> Dict[str, Any]:
+        """Get the active sprint on a board, or an error dict if none."""
+        sprints = self.list_sprints(board_id=board_id, state="active")
+        return sprints[0] if sprints else {"error": "no active sprint"}
+
+    def move_issues_to_sprint(self, sprint_id: int, issue_keys: List[str]) -> Dict[str, Any]:
+        """Move issues into a sprint.
+
+        Args:
+            sprint_id: The sprint ID
+            issue_keys: Issue keys (e.g. ['PROJ-1', 'PROJ-2'])
+
+        Returns:
+            Success/error dictionary
+        """
+        if isinstance(issue_keys, str):
+            issue_keys = [k.strip() for k in issue_keys.split(",") if k.strip()]
+        if not sprint_id or not issue_keys:
+            return {"error": "sprint_id and issue_keys are required"}
+
+        result = self._agile_request(
+            f"/sprint/{sprint_id}/issue", method="POST", data={"issues": issue_keys}
+        )
+        if "error" in result:
+            return result
+        return {"success": True, "sprint_id": sprint_id, "moved": len(issue_keys)}
 
 # ==================== Standalone Tool Functions ====================
 
