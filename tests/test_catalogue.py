@@ -61,6 +61,7 @@ def test_extras_are_populated_for_optional_tools():
 
     assert "SwarmScoreTool" in by_name
     assert "swarmscore" in entries["SwarmScoreTool"].extras
+    assert entries["WebRouterTool"].extras == ("webrouter",)
 
 
 def test_entries_have_summary_and_module():
