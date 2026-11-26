@@ -665,6 +665,22 @@ Set `FIREFLIES_API_URL` to override the endpoint (previews/proxies).
 
 ### Search Tools
 
+Install `praisonai-tools[webrouter]` for search and page extraction with backend fallback:
+
+```python
+from praisonai_tools import WebRouterTool, webrouter_search, webrouter_extract
+
+results = webrouter_search("What is quantum computing?")
+page = webrouter_extract("https://example.com")
+# Select backends explicitly, or leave both as "auto".
+web = WebRouterTool(provider="you-mcp", extract_provider="jina")
+```
+
+Pass `webrouter_search` and `webrouter_extract` directly to an agent's `tools`.
+No API key is required. By default, WebRouter uses configured provider keys from
+the process environment (those calls may be billed), then falls back to keyless
+backends. Set `provider` and `extract_provider` to choose specific backends.
+
 ```python
 from praisonai_tools import LinkUpTool, linkup_search, linkup_fetch
 
