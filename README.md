@@ -665,7 +665,7 @@ Set `FIREFLIES_API_URL` to override the endpoint (previews/proxies).
 
 ### Search Tools
 
-Install `praisonai-tools[webrouter]` for search and page extraction with backend fallback:
+On Python 3.11 or later, install `praisonai-tools[webrouter]` for search and page extraction with backend fallback:
 
 ```python
 from praisonai_tools import WebRouterTool, webrouter_search, webrouter_extract
